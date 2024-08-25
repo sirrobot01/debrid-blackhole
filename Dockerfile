@@ -21,4 +21,4 @@ FROM scratch
 COPY --from=builder /blackhole /blackhole
 
 # Run
-CMD ["/blackhole", "--config", "/app/config.json"]
+# CMD ["/blackhole", "--config", "/app/config.json"]
