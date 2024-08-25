@@ -1,0 +1,11 @@
+data/
+config.json
+docker-compose.yml
+.idea/
+.DS_Store
+*.torrent
+*.magnet
+*.db
+*.log
+*.log.*
+dist/
