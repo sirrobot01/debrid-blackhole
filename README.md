@@ -15,8 +15,8 @@ The proxy is useful in filtering out un-cached Real Debrid torrents
 version: '3.7'
 services:
   blackhole:
-    image: ghcr.io/sirrobot01/debrid-blackhole:latest
-    container_name: debrid-blackhole
+    image: cy01/blackhole:latest
+    container_name: blackhole
     user: "1000:1000"
     volumes:
       - ./logs:/app/logs
