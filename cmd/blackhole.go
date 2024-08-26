@@ -126,12 +126,12 @@ func StartArr(conf *debrid.Arr, db debrid.Service) {
 	log.Printf("Watching: %s", conf.WatchFolder)
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	defer func(w *fsnotify.Watcher) {
 		err := w.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 	}(w)
 	events := make(map[string]time.Time)

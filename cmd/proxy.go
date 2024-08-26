@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -203,7 +204,7 @@ func ProcessXMLResponse(resp *http.Response, deb debrid.Service) *http.Response 
 	var rss RSS
 	err = xml.Unmarshal(body, &rss)
 	if err != nil {
-		log.Fatalf("Error unmarshalling XML: %v", err)
+		log.Printf("Error unmarshalling XML: %v", err)
 		return resp
 	}
 	newItems := &SafeItems{}
@@ -220,7 +221,9 @@ func ProcessXMLResponse(resp *http.Response, deb debrid.Service) *http.Response 
 		}(item)
 	}
 	wg.Wait()
-	rss.Channel.Items = newItems.Get()
+	items := newItems.Get()
+	log.Printf("Report: %d/%d items are cached", len(items), len(rss.Channel.Items))
+	rss.Channel.Items = items
 
 	// rss.Channel.Items = newItems
 	modifiedBody, err := xml.MarshalIndent(rss, "", "  ")
@@ -229,11 +232,6 @@ func ProcessXMLResponse(resp *http.Response, deb debrid.Service) *http.Response 
 		return resp
 	}
 	modifiedBody = append([]byte(xml.Header), modifiedBody...)
-
-	if err != nil {
-		log.Fatalf("Error marshalling XML: %v", err)
-		return resp
-	}
 
 	// Set the modified body back to the response
 	resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
@@ -266,7 +264,7 @@ func StartProxy(config *common.Config, deb debrid.Service) {
 			return ProcessResponse(resp, deb)
 		})
 
-	port := cmp.Or(cfg.Port, "8181")
+	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	proxy.Verbose = cfg.Debug
 	port = fmt.Sprintf(":%s", port)
 	log.Printf("Starting proxy server on %s\n", port)

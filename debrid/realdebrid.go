@@ -31,8 +31,13 @@ func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
 		if !r.IsAvailable(torrent.Magnet) {
 			return torrent, fmt.Errorf("torrent is not cached")
 		}
+		log.Printf("Torrent: %s is cached", torrent.Name)
 	}
 
+	torrent, err = r.SubmitMagnet(torrent)
+	if err != nil || torrent.Id == "" {
+		return nil, err
+	}
 	return r.CheckStatus(torrent)
 }
 
@@ -49,10 +54,8 @@ func (r *RealDebrid) IsAvailable(magnet *common.Magnet) bool {
 	}
 	hosters, exists := data[strings.ToLower(magnet.InfoHash)]
 	if !exists || len(hosters) < 1 {
-		log.Printf("Torrent: %s not cached", magnet.Name)
 		return false
 	}
-	log.Printf("Torrent: %s is cached", magnet.Name)
 	return true
 }
 

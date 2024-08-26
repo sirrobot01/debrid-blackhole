@@ -20,5 +20,7 @@ RUN CGO_ENABLED=0 GOOS=$(echo $TARGETPLATFORM | cut -d '/' -f1) GOARCH=$(echo $T
 FROM scratch
 COPY --from=builder /blackhole /blackhole
 
+EXPOSE 8181
+
 # Run
-# CMD ["/blackhole", "--config", "/app/config.json"]
+CMD ["/blackhole", "--config", "/app/config.json"]
