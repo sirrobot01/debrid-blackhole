@@ -1,10 +1,36 @@
 package structs
 
-type RealDebridAvailabilityResponse map[string]Hosters
+import (
+	"encoding/json"
+	"fmt"
+)
 
-type Hosters map[string][]FileIDs
+type RealDebridAvailabilityResponse map[string]Hoster
 
-type FileIDs map[string]FileVariant
+type Hoster struct {
+	Rd []map[string]FileVariant `json:"rd"`
+}
+
+func (h *Hoster) UnmarshalJSON(data []byte) error {
+	// Attempt to unmarshal into the expected structure (an object with an "rd" key)
+	type Alias Hoster
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*h = Hoster(obj)
+		return nil
+	}
+
+	// If unmarshalling into an object fails, check if it's an empty array
+	var arr []interface{}
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) == 0 {
+		// It's an empty array; initialize with no entries
+		*h = Hoster{Rd: nil}
+		return nil
+	}
+
+	// If both attempts fail, return an error
+	return fmt.Errorf("hoster: cannot unmarshal JSON data: %s", string(data))
+}
 
 type FileVariant struct {
 	Filename string `json:"filename"`
@@ -39,3 +65,5 @@ type RealDebridTorrentInfo struct {
 	Speed   int      `json:"speed,omitempty"`
 	Seeders int      `json:"seeders,omitempty"`
 }
+
+// 5e6e2e77fd3921a7903a41336c844cc409bf8788/14527C07BDFDDFC642963238BB6E7507B9742947/66A1CD1A5C7F4014877A51AC2620E857E3BB4D16

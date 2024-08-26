@@ -3,7 +3,7 @@
 This is a Golang implementation go Torrent Blackhole with a **Real Debrid Proxy Support**.
 
 #### Uses
-- Torrent Blackhole that supports the Arrs.
+- Torrent Blackhole that supports the Arrs(Sonarr, Radarr, etc)
 - Proxy support for the Arrs
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
@@ -73,12 +73,30 @@ Download the binary from the releases page and run it with the config file.
     "port": "8181",
     "debug": false,
     "username": "username",
-    "password": "password"
+    "password": "password",
+    "cached_only": true
   }
 }
 ```
 
-#### Proxy
+#### Config Notes
+##### Debrid Config
+- This config key is important as it's used for both Blackhole and Proxy
+
+##### Arrs Config
+- An empty array will disable Blackhole for the Arrs
+- The `watch_folder` is the folder where the Blackhole will watch for torrents
+- The `completed_folder` is the folder where the Blackhole will move the completed torrents
+- The `token` is the API key for the Arr(This is optional, I think)
+
+##### Proxy Config
+- The `enabled` key is used to enable the proxy
+- The `port` key is the port the proxy will listen on
+- The `debug` key is used to enable debug logs
+- The `username` and `password` keys are used for basic authentication
+- The `cached_only` means only cached torrents will be returned
+- 
+### Proxy
 
 The proxy is useful in filtering out un-cached Real Debrid torrents. 
 The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 

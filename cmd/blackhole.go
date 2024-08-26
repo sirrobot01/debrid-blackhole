@@ -146,6 +146,7 @@ func StartArr(conf *debrid.Arr, db debrid.Service) {
 }
 
 func StartBlackhole(config *common.Config, deb debrid.Service) {
+	log.Println("[*] Starting Blackhole")
 	var wg sync.WaitGroup
 	for _, conf := range config.Arrs {
 		wg.Add(1)

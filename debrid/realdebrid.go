@@ -28,7 +28,7 @@ func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
 	}
 	log.Printf("Torrent Name: %s", torrent.Name)
 	if !r.DownloadUncached {
-		if !r.IsAvailable(torrent.Magnet) {
+		if !r.IsAvailable([]string{torrent.InfoHash})[torrent.InfoHash] {
 			return torrent, fmt.Errorf("torrent is not cached")
 		}
 		log.Printf("Torrent: %s is cached", torrent.Name)
@@ -41,22 +41,31 @@ func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
 	return r.CheckStatus(torrent)
 }
 
-func (r *RealDebrid) IsAvailable(magnet *common.Magnet) bool {
-	url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, magnet.InfoHash)
+func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
+	hashes := strings.Join(infohashes, "/")
+	result := make(map[string]bool)
+	url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, hashes)
 	resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return false
+		log.Println(url)
+		log.Println("Error checking availability:", err)
+		return result
 	}
 	var data structs.RealDebridAvailabilityResponse
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
-		return false
+		log.Println("Error marshalling availability:", err)
+		return result
 	}
-	hosters, exists := data[strings.ToLower(magnet.InfoHash)]
-	if !exists || len(hosters) < 1 {
-		return false
+	for _, h := range infohashes {
+		hosters, exists := data[strings.ToLower(h)]
+		if !exists || len(hosters.Rd) < 1 {
+			result[h] = false
+		} else {
+			result[h] = true
+		}
 	}
-	return true
+	return result
 }
 
 func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {

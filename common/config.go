@@ -25,11 +25,12 @@ type Config struct {
 		URL             string `json:"url"`
 	} `json:"arrs"`
 	Proxy struct {
-		Port     string `json:"port"`
-		Enabled  bool   `json:"enabled"`
-		Debug    bool   `json:"debug"`
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Port       string `json:"port"`
+		Enabled    bool   `json:"enabled"`
+		Debug      bool   `json:"debug"`
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		CachedOnly bool   `json:"cached_only"`
 	}
 }
 

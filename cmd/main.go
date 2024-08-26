@@ -3,16 +3,33 @@ package cmd
 import (
 	"goBlack/common"
 	"goBlack/debrid"
-	"log"
+	"sync"
 )
 
 func Start(config *common.Config) {
 
-	log.Print("[*] BlackHole running")
 	deb := debrid.NewDebrid(config.Debrid)
+
+	var wg sync.WaitGroup
+
 	if config.Proxy.Enabled {
-		go StartProxy(config, deb)
+		proxy := NewProxy(*config, deb)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			proxy.Start()
+		}()
 	}
-	StartBlackhole(config, deb)
+
+	if len(config.Arrs) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			StartBlackhole(config, deb)
+		}()
+	}
+
+	// Wait indefinitely
+	wg.Wait()
 
 }

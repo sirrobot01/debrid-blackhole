@@ -11,7 +11,7 @@ type Service interface {
 	CheckStatus(torrent *Torrent) (*Torrent, error)
 	DownloadLink(torrent *Torrent) error
 	Process(arr *Arr, magnet string) (*Torrent, error)
-	IsAvailable(magnet *common.Magnet) bool
+	IsAvailable(infohashes []string) map[string]bool
 }
 
 type Debrid struct {
