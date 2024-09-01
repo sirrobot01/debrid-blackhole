@@ -8,6 +8,10 @@ This is a Golang implementation go Torrent Blackhole with a **Real Debrid Proxy 
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
 
+### Changelog
+
+- View the [CHANGELOG.md](CHANGELOG.md) for the latest changes
+
 
 #### Installation
 ##### Docker Compose
@@ -75,7 +79,8 @@ Download the binary from the releases page and run it with the config file.
     "username": "username",
     "password": "password",
     "cached_only": true
-  }
+  },
+  "max_cache_size": 1000
 }
 ```
 

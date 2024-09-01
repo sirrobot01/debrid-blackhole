@@ -18,14 +18,16 @@ type Debrid struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
+	client           *common.RLHTTPClient
+	cache            *common.Cache
 }
 
-func NewDebrid(dc common.DebridConfig) Service {
+func NewDebrid(dc common.DebridConfig, cache *common.Cache) Service {
 	switch dc.Name {
 	case "realdebrid":
-		return NewRealDebrid(dc)
+		return NewRealDebrid(dc, cache)
 	default:
-		return NewRealDebrid(dc)
+		return NewRealDebrid(dc, cache)
 	}
 }
 
@@ -80,4 +82,32 @@ func getTorrentInfo(filePath string) (*Torrent, error) {
 		Filename: filePath,
 	}
 	return torrent, nil
+}
+
+func GetLocalCache(infohashes []string, cache *common.Cache) (string, map[string]bool) {
+	result := make(map[string]bool)
+
+	if len(infohashes) == 0 {
+		return "", result
+	}
+	if len(infohashes) == 1 {
+		if cache.Exists(infohashes[0]) {
+			return "", map[string]bool{infohashes[0]: true}
+		}
+		return infohashes[0], result
+	}
+
+	cachedHashes := cache.GetMultiple(infohashes)
+
+	hashes := ""
+	for _, h := range infohashes {
+		_, exists := cachedHashes[h]
+		if !exists {
+			hashes += h + "/"
+		} else {
+			result[h] = true
+		}
+	}
+
+	return hashes, result
 }

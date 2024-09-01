@@ -18,6 +18,7 @@ type RealDebrid struct {
 	APIKey           string
 	DownloadUncached bool
 	client           *common.RLHTTPClient
+	cache            *common.Cache
 }
 
 func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
@@ -28,7 +29,8 @@ func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
 	}
 	log.Printf("Torrent Name: %s", torrent.Name)
 	if !r.DownloadUncached {
-		if !r.IsAvailable([]string{torrent.InfoHash})[torrent.InfoHash] {
+		hash, exists := r.IsAvailable([]string{torrent.InfoHash})[torrent.InfoHash]
+		if !exists || !hash {
 			return torrent, fmt.Errorf("torrent is not cached")
 		}
 		log.Printf("Torrent: %s is cached", torrent.Name)
@@ -42,12 +44,18 @@ func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
 }
 
 func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
-	hashes := strings.Join(infohashes, "/")
-	result := make(map[string]bool)
+	// Check if the infohashes are available in the local cache
+	hashes, result := GetLocalCache(infohashes, r.cache)
+
+	if hashes == "" {
+		// Either all the infohashes are locally cached or none are
+		r.cache.AddMultiple(result)
+		return result
+	}
+
 	url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, hashes)
 	resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
 	if err != nil {
-		log.Println(url)
 		log.Println("Error checking availability:", err)
 		return result
 	}
@@ -59,12 +67,11 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 	}
 	for _, h := range infohashes {
 		hosters, exists := data[strings.ToLower(h)]
-		if !exists || len(hosters.Rd) < 1 {
-			result[h] = false
-		} else {
+		if exists && len(hosters.Rd) > 0 {
 			result[h] = true
 		}
 	}
+	r.cache.AddMultiple(result) // Add the results to the cache
 	return result
 }
 
@@ -149,7 +156,7 @@ func (r *RealDebrid) DownloadLink(torrent *Torrent) error {
 	return nil
 }
 
-func NewRealDebrid(dc common.DebridConfig) *RealDebrid {
+func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
 	rl := common.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
@@ -160,5 +167,6 @@ func NewRealDebrid(dc common.DebridConfig) *RealDebrid {
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
+		cache:            cache,
 	}
 }

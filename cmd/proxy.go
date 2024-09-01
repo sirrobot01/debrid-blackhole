@@ -16,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type RSS struct {
@@ -70,26 +71,28 @@ type TorznabAttr struct {
 }
 
 type Proxy struct {
-	Port       string `json:"port"`
-	Enabled    bool   `json:"enabled"`
-	Debug      bool   `json:"debug"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	CachedOnly bool   `json:"cached_only"`
-	Debrid     debrid.Service
+	port       string
+	enabled    bool
+	debug      bool
+	username   string
+	password   string
+	cachedOnly bool
+	debrid     debrid.Service
+	cache      *common.Cache
 }
 
-func NewProxy(config common.Config, deb debrid.Service) *Proxy {
+func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Proxy {
 	cfg := config.Proxy
 	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	return &Proxy{
-		Port:       port,
-		Enabled:    cfg.Enabled,
-		Debug:      cfg.Debug,
-		Username:   cfg.Username,
-		Password:   cfg.Password,
-		CachedOnly: cfg.CachedOnly,
-		Debrid:     deb,
+		port:       port,
+		enabled:    cfg.Enabled,
+		debug:      cfg.Debug,
+		username:   cfg.Username,
+		password:   cfg.Password,
+		cachedOnly: cfg.CachedOnly,
+		debrid:     deb,
+		cache:      cache,
 	}
 }
 
@@ -147,45 +150,76 @@ func (p *Proxy) ProcessResponse(resp *http.Response) *http.Response {
 }
 
 func getItemsHash(items []Item) map[string]string {
-	IdHashMap := make(map[string]string)
+
+	var wg sync.WaitGroup
+	idHashMap := sync.Map{} // Use sync.Map for concurrent access
+
 	for _, item := range items {
-		hash := getItemHash(item)
-		IdHashMap[item.GUID] = hash
+		wg.Add(1)
+		go func(item Item) {
+			defer wg.Done()
+			hash := strings.ToLower(getItemHash(item))
+			if hash != "" {
+				idHashMap.Store(item.GUID, hash) // Store directly into sync.Map
+			}
+		}(item)
 	}
-	return IdHashMap
+	wg.Wait()
+
+	// Convert sync.Map to regular map
+	finalMap := make(map[string]string)
+	idHashMap.Range(func(key, value interface{}) bool {
+		finalMap[key.(string)] = value.(string)
+		return true
+	})
+
+	return finalMap
 }
 
 func getItemHash(item Item) string {
-	magnetLink := ""
 	infohash := ""
 
-	// Extract magnet link from the link or comments
-	if strings.Contains(item.Link, "magnet:?") {
-		magnetLink = item.Link
-	} else if strings.Contains(item.GUID, "magnet:?") {
-		magnetLink = item.GUID
-	}
-
-	// Extract infohash from <torznab:attr> elements
 	for _, attr := range item.TorznabAttrs {
 		if attr.Name == "infohash" {
-			infohash = attr.Value
+			return attr.Value
 		}
 	}
-	if magnetLink == "" && infohash == "" {
+
+	if strings.Contains(item.GUID, "magnet:?") {
+		magnet, err := common.GetMagnetInfo(item.GUID)
+		if err == nil && magnet != nil && magnet.InfoHash != "" {
+			return magnet.InfoHash
+		}
+	}
+
+	magnetLink := item.Link
+
+	if magnetLink == "" {
 		// We can't check the availability of the torrent without a magnet link or infohash
 		return ""
 	}
-	var magnet *common.Magnet
-	var err error
 
-	if infohash == "" {
-		magnet, err = common.GetMagnetInfo(magnetLink)
-		if err != nil || magnet == nil || magnet.InfoHash == "" {
-			log.Println("Error getting magnet info:", err)
-			return ""
+	if strings.Contains(magnetLink, "magnet:?") {
+		magnet, err := common.GetMagnetInfo(magnetLink)
+		if err == nil && magnet != nil && magnet.InfoHash != "" {
+			return magnet.InfoHash
 		}
-		infohash = magnet.InfoHash
+	}
+
+	//Check Description for infohash
+	hash := common.ExtractInfoHash(item.Description)
+	if hash == "" {
+		// Check Title for infohash
+		hash = common.ExtractInfoHash(item.Comments)
+	}
+	infohash = hash
+	if infohash == "" {
+		//Get torrent file from http link
+		//Takes too long, not worth it
+		//magnet, err := common.OpenMagnetHttpURL(magnetLink)
+		//if err == nil && magnet != nil && magnet.InfoHash != "" {
+		//	log.Printf("Magnet: %s", magnet.InfoHash)
+		//}
 	}
 	return infohash
 
@@ -198,9 +232,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		if p.Debug {
-			log.Println("Error reading response body:", err)
-		}
+		log.Println("Error reading response body:", err)
 		return resp
 	}
 	err = resp.Body.Close()
@@ -211,12 +243,9 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	var rss RSS
 	err = xml.Unmarshal(body, &rss)
 	if err != nil {
-		if p.Debug {
-			log.Printf("Error unmarshalling XML: %v", err)
-		}
+		log.Printf("Error unmarshalling XML: %v", err)
 		return resp
 	}
-	newItems := make([]Item, 0)
 
 	// Step 4: Extract infohash or magnet URI, manipulate data
 	IdsHashMap := getItemsHash(rss.Channel.Items)
@@ -226,45 +255,38 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 			hashes = append(hashes, hash)
 		}
 	}
-	if len(hashes) == 0 {
-		// No infohashes or magnet links found, should we return the original response?
-		return resp
+	log.Printf("Found %d infohashes/magnet links", len(hashes))
+	availableHashesMap := p.debrid.IsAvailable(hashes)
+	newItems := make([]Item, 0, len(rss.Channel.Items))
+
+	if len(hashes) > 0 {
+		for _, item := range rss.Channel.Items {
+			hash := IdsHashMap[item.GUID]
+			if hash == "" {
+				continue
+			}
+			isCached, exists := availableHashesMap[hash]
+			if !exists || !isCached {
+				continue
+			}
+			newItems = append(newItems, item)
+		}
 	}
-	availableHashes := p.Debrid.IsAvailable(hashes)
-	for _, item := range rss.Channel.Items {
-		hash := IdsHashMap[item.GUID]
-		if hash == "" {
-			// newItems = append(newItems, item)
-			continue
-		}
-		isCached, exists := availableHashes[hash]
-		if !exists {
-			// newItems = append(newItems, item)
-			continue
-		}
-		if !isCached {
-			continue
-		}
-		newItems = append(newItems, item)
-	}
+
 	log.Printf("Report: %d/%d items are cached", len(newItems), len(rss.Channel.Items))
 	rss.Channel.Items = newItems
 
 	// rss.Channel.Items = newItems
 	modifiedBody, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		if p.Debug {
-			log.Printf("Error marshalling XML: %v", err)
-		}
+		log.Printf("Error marshalling XML: %v", err)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
 	modifiedBody = append([]byte(xml.Header), modifiedBody...)
 
 	// Set the modified body back to the response
 	resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
-	resp.ContentLength = int64(len(modifiedBody))
-	resp.Header.Set("Content-Length", string(rune(len(modifiedBody))))
-
 	return resp
 }
 
@@ -275,7 +297,7 @@ func UrlMatches(re *regexp.Regexp) goproxy.ReqConditionFunc {
 }
 
 func (p *Proxy) Start() {
-	username, password := p.Username, p.Password
+	username, password := p.username, p.password
 	proxy := goproxy.NewProxyHttpServer()
 	if username != "" || password != "" {
 		// Set up basic auth for proxy
@@ -285,13 +307,15 @@ func (p *Proxy) Start() {
 	}
 
 	proxy.OnRequest(goproxy.ReqHostMatches(regexp.MustCompile("^.443$"))).HandleConnect(goproxy.AlwaysMitm)
-	proxy.OnResponse(UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$"))).DoFunc(
+	proxy.OnResponse(
+		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$")),
+		goproxy.StatusCodeIs(http.StatusOK, http.StatusAccepted)).DoFunc(
 		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 			return p.ProcessResponse(resp)
 		})
 
-	proxy.Verbose = p.Debug
-	portFmt := fmt.Sprintf(":%s", p.Port)
+	proxy.Verbose = p.debug
+	portFmt := fmt.Sprintf(":%s", p.port)
 	log.Printf("[*] Starting proxy server on %s\n", portFmt)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s", portFmt), proxy))
 }

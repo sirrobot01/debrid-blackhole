@@ -16,7 +16,6 @@ type DebridConfig struct {
 }
 
 type Config struct {
-	DbDSN  string       `json:"db_dsn"`
 	Debrid DebridConfig `json:"debrid"`
 	Arrs   []struct {
 		WatchFolder     string `json:"watch_folder"`
@@ -32,6 +31,7 @@ type Config struct {
 		Password   string `json:"password"`
 		CachedOnly bool   `json:"cached_only"`
 	}
+	MaxCacheSize int `json:"max_cache_size"`
 }
 
 func LoadConfig(path string) (*Config, error) {
