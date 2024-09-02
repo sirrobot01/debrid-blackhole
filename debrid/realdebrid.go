@@ -47,28 +47,50 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
 	hashes, result := GetLocalCache(infohashes, r.cache)
 
-	if hashes == "" {
+	if len(hashes) == 0 {
 		// Either all the infohashes are locally cached or none are
 		r.cache.AddMultiple(result)
 		return result
 	}
 
-	url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, hashes)
-	resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
-	if err != nil {
-		log.Println("Error checking availability:", err)
-		return result
-	}
-	var data structs.RealDebridAvailabilityResponse
-	err = json.Unmarshal(resp, &data)
-	if err != nil {
-		log.Println("Error marshalling availability:", err)
-		return result
-	}
-	for _, h := range infohashes {
-		hosters, exists := data[strings.ToLower(h)]
-		if exists && len(hosters.Rd) > 0 {
-			result[h] = true
+	// Divide hashes into groups of 100
+	for i := 0; i < len(hashes); i += 200 {
+		end := i + 200
+		if end > len(hashes) {
+			end = len(hashes)
+		}
+
+		// Filter out empty strings
+		validHashes := make([]string, 0, end-i)
+		for _, hash := range hashes[i:end] {
+			if hash != "" {
+				validHashes = append(validHashes, hash)
+			}
+		}
+
+		// If no valid hashes in this batch, continue to the next batch
+		if len(validHashes) == 0 {
+			continue
+		}
+
+		hashStr := strings.Join(validHashes, "/")
+		url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, hashStr)
+		resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
+		if err != nil {
+			log.Println("Error checking availability:", err)
+			return result
+		}
+		var data structs.RealDebridAvailabilityResponse
+		err = json.Unmarshal(resp, &data)
+		if err != nil {
+			log.Println("Error marshalling availability:", err)
+			return result
+		}
+		for _, h := range hashes[i:end] {
+			hosters, exists := data[strings.ToLower(h)]
+			if exists && len(hosters.Rd) > 0 {
+				result[h] = true
+			}
 		}
 	}
 	r.cache.AddMultiple(result) // Add the results to the cache
@@ -108,7 +130,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 		} else if status == "waiting_files_selection" {
 			files := make([]TorrentFile, 0)
 			for _, f := range data.Files {
-				name := f.Path
+				name := filepath.Base(f.Path)
 				if !common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.SUBMATCH, name) {
 					continue
 				}

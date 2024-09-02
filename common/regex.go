@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	VIDEOMATCH = "(?i)(\\.)(YUV|WMV|WEBM|VOB|VIV|SVI|ROQ|RMVB|RM|OGV|OGG|NSV|MXF|MTS|M2TS|TS|MPG|MPEG|M2V|MP2|MPE|MPV|MP4|M4P|M4V|MOV|QT|MNG|MKV|FLV|DRC|AVI|ASF|AMV)$"
-	SUBMATCH   = "(?i)(\\.)(SRT|SUB|SBV|ASS|VTT|TTML|DFXP|STL|SCC|CAP|SMI|TTXT|TDS|USF|JSS|SSA|PSB|RT|LRC|SSB)$"
+	VIDEOMATCH  = "(?i)(\\.)(YUV|WMV|WEBM|VOB|VIV|SVI|ROQ|RMVB|RM|OGV|OGG|NSV|MXF|MTS|M2TS|TS|MPG|MPEG|M2V|MP2|MPE|MPV|MP4|M4P|M4V|MOV|QT|MNG|MKV|FLV|DRC|AVI|ASF|AMV)$"
+	SUBMATCH    = "(?i)(\\.)(SRT|SUB|SBV|ASS|VTT|TTML|DFXP|STL|SCC|CAP|SMI|TTXT|TDS|USF|JSS|SSA|PSB|RT|LRC|SSB)$"
+	SeasonMatch = "(?i)(?:season|s)[.\\-_\\s]?(\\d+)"
 )
 
 func RegexMatch(regex string, value string) bool {
@@ -23,5 +24,15 @@ func RemoveExtension(value string) string {
 		return value[:loc[0]]
 	} else {
 		return value
+	}
+}
+
+func RegexFind(regex string, value string) string {
+	re := regexp.MustCompile(regex)
+	match := re.FindStringSubmatch(value)
+	if len(match) > 0 {
+		return match[0]
+	} else {
+		return ""
 	}
 }

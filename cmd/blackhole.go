@@ -53,7 +53,7 @@ func (b *Blackhole) processFiles(arr *debrid.Arr, torrent *debrid.Torrent) {
 	files := torrent.Files
 	ready := make(chan debrid.TorrentFile, len(files))
 
-	log.Println("Checking files...")
+	log.Printf("Checking %d files...", len(files))
 
 	for _, file := range files {
 		wg.Add(1)
@@ -80,12 +80,13 @@ func (b *Blackhole) createSymLink(arr *debrid.Arr, torrent *debrid.Torrent) {
 	if err != nil {
 		log.Printf("Failed to create directory: %s\n", path)
 	}
+
 	for _, file := range torrent.Files {
 		// Combine the directory and filename to form a full path
-		fullPath := filepath.Join(arr.CompletedFolder, file.Path)
-
+		fullPath := filepath.Join(path, file.Name) // completedFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
 		// Create a symbolic link if file doesn't exist
-		_ = os.Symlink(filepath.Join(arr.Debrid.Folder, file.Path), fullPath)
+		torrentPath := filepath.Join(arr.Debrid.Folder, torrent.Folder, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
+		_ = os.Symlink(torrentPath, fullPath)
 	}
 }
 

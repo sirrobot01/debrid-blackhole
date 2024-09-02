@@ -21,53 +21,48 @@ import (
 
 type RSS struct {
 	XMLName xml.Name `xml:"rss"`
+	Text    string   `xml:",chardata"`
 	Version string   `xml:"version,attr"`
-	Channel Channel  `xml:"channel"`
-}
-
-type Channel struct {
-	XMLName  xml.Name `xml:"channel"`
-	Title    string   `xml:"title"`
-	AtomLink AtomLink `xml:"link"`
-	Items    []Item   `xml:"item"`
-}
-
-type AtomLink struct {
-	XMLName xml.Name `xml:"link"`
-	Rel     string   `xml:"rel,attr"`
-	Type    string   `xml:"type,attr"`
+	Atom    string   `xml:"atom,attr"`
+	Torznab string   `xml:"torznab,attr"`
+	Channel struct {
+		Text string `xml:",chardata"`
+		Link struct {
+			Text string `xml:",chardata"`
+			Rel  string `xml:"rel,attr"`
+			Type string `xml:"type,attr"`
+		} `xml:"link"`
+		Title string `xml:"title"`
+		Items []Item `xml:"item"`
+	} `xml:"channel"`
 }
 
 type Item struct {
-	XMLName         xml.Name        `xml:"item"`
-	Title           string          `xml:"title"`
-	Description     string          `xml:"description"`
-	GUID            string          `xml:"guid"`
-	ProwlarrIndexer ProwlarrIndexer `xml:"prowlarrindexer"`
-	Comments        string          `xml:"comments"`
-	PubDate         string          `xml:"pubDate"`
-	Size            int64           `xml:"size"`
-	Link            string          `xml:"link"`
-	Categories      []string        `xml:"category"`
-	Enclosure       Enclosure       `xml:"enclosure"`
-	TorznabAttrs    []TorznabAttr   `xml:"torznab:attr"`
-}
-
-type ProwlarrIndexer struct {
-	ID    string `xml:"id,attr"`
-	Type  string `xml:"type,attr"`
-	Value string `xml:",chardata"`
-}
-
-type Enclosure struct {
-	URL    string `xml:"url,attr"`
-	Length int64  `xml:"length,attr"`
-	Type   string `xml:"type,attr"`
-}
-
-type TorznabAttr struct {
-	Name  string `xml:"name,attr"`
-	Value string `xml:"value,attr"`
+	Text            string `xml:",chardata"`
+	Title           string `xml:"title"`
+	Description     string `xml:"description"`
+	GUID            string `xml:"guid"`
+	ProwlarrIndexer struct {
+		Text string `xml:",chardata"`
+		ID   string `xml:"id,attr"`
+		Type string `xml:"type,attr"`
+	} `xml:"prowlarrindexer"`
+	Comments  string   `xml:"comments"`
+	PubDate   string   `xml:"pubDate"`
+	Size      string   `xml:"size"`
+	Link      string   `xml:"link"`
+	Category  []string `xml:"category"`
+	Enclosure struct {
+		Text   string `xml:",chardata"`
+		URL    string `xml:"url,attr"`
+		Length string `xml:"length,attr"`
+		Type   string `xml:"type,attr"`
+	} `xml:"enclosure"`
+	TorznabAttrs []struct {
+		Text  string `xml:",chardata"`
+		Name  string `xml:"name,attr"`
+		Value string `xml:"value,attr"`
+	} `xml:"attr"`
 }
 
 type Proxy struct {
@@ -158,7 +153,7 @@ func getItemsHash(items []Item) map[string]string {
 		wg.Add(1)
 		go func(item Item) {
 			defer wg.Done()
-			hash := strings.ToLower(getItemHash(item))
+			hash := strings.ToLower(item.getHash())
 			if hash != "" {
 				idHashMap.Store(item.GUID, hash) // Store directly into sync.Map
 			}
@@ -176,7 +171,7 @@ func getItemsHash(items []Item) map[string]string {
 	return finalMap
 }
 
-func getItemHash(item Item) string {
+func (item Item) getHash() string {
 	infohash := ""
 
 	for _, attr := range item.TorznabAttrs {
@@ -233,6 +228,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Println("Error reading response body:", err)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
 	err = resp.Body.Close()
@@ -244,7 +240,12 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	err = xml.Unmarshal(body, &rss)
 	if err != nil {
 		log.Printf("Error unmarshalling XML: %v", err)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
+	}
+	indexer := ""
+	if len(rss.Channel.Items) > 0 {
+		indexer = rss.Channel.Items[0].ProwlarrIndexer.Text
 	}
 
 	// Step 4: Extract infohash or magnet URI, manipulate data
@@ -255,7 +256,6 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 			hashes = append(hashes, hash)
 		}
 	}
-	log.Printf("Found %d infohashes/magnet links", len(hashes))
 	availableHashesMap := p.debrid.IsAvailable(hashes)
 	newItems := make([]Item, 0, len(rss.Channel.Items))
 
@@ -273,7 +273,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 		}
 	}
 
-	log.Printf("Report: %d/%d items are cached", len(newItems), len(rss.Channel.Items))
+	log.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
 	rss.Channel.Items = newItems
 
 	// rss.Channel.Items = newItems

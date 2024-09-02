@@ -84,26 +84,25 @@ func getTorrentInfo(filePath string) (*Torrent, error) {
 	return torrent, nil
 }
 
-func GetLocalCache(infohashes []string, cache *common.Cache) (string, map[string]bool) {
+func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[string]bool) {
 	result := make(map[string]bool)
+	hashes := make([]string, len(infohashes))
 
 	if len(infohashes) == 0 {
-		return "", result
+		return hashes, result
 	}
 	if len(infohashes) == 1 {
 		if cache.Exists(infohashes[0]) {
-			return "", map[string]bool{infohashes[0]: true}
+			return hashes, map[string]bool{infohashes[0]: true}
 		}
-		return infohashes[0], result
+		return infohashes, result
 	}
 
 	cachedHashes := cache.GetMultiple(infohashes)
-
-	hashes := ""
 	for _, h := range infohashes {
 		_, exists := cachedHashes[h]
 		if !exists {
-			hashes += h + "/"
+			hashes = append(hashes, h)
 		} else {
 			result[h] = true
 		}

@@ -25,3 +25,10 @@
 - Bug fixes
   - Fixed indexer getting disabled
   - Fixed blackhole not working
+
+#### 0.1.4
+
+- Rewrote Report log
+- Fix YTS, 1337x not grabbing infohash
+- Fix Torrent symlink bug
+- 
