@@ -1,4 +1,4 @@
-package cmd
+package proxy
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"github.com/elazarl/goproxy/ext/auth"
 	"github.com/valyala/fastjson"
 	"goBlack/common"
-	"goBlack/debrid"
+	"goBlack/pkg/debrid"
 	"io"
 	"log"
 	"net/http"
@@ -74,6 +74,7 @@ type Proxy struct {
 	cachedOnly bool
 	debrid     debrid.Service
 	cache      *common.Cache
+	logger     *log.Logger
 }
 
 func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Proxy {
@@ -88,6 +89,7 @@ func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Pr
 		cachedOnly: cfg.CachedOnly,
 		debrid:     deb,
 		cache:      cache,
+		logger:     common.NewLogger("Proxy", os.Stdout),
 	}
 }
 
@@ -227,7 +229,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("Error reading response body:", err)
+		p.logger.Println("Error reading response body:", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -239,7 +241,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	var rss RSS
 	err = xml.Unmarshal(body, &rss)
 	if err != nil {
-		log.Printf("Error unmarshalling XML: %v", err)
+		p.logger.Printf("Error unmarshalling XML: %v", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -273,13 +275,13 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 		}
 	}
 
-	log.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
+	p.logger.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
 	rss.Channel.Items = newItems
 
 	// rss.Channel.Items = newItems
 	modifiedBody, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		log.Printf("Error marshalling XML: %v", err)
+		p.logger.Printf("Error marshalling XML: %v", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -306,7 +308,9 @@ func (p *Proxy) Start() {
 		})
 	}
 
-	proxy.OnRequest(goproxy.ReqHostMatches(regexp.MustCompile("^.443$"))).HandleConnect(goproxy.AlwaysMitm)
+	proxy.OnRequest(
+		goproxy.ReqHostMatches(regexp.MustCompile("^.443$")),
+		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$"))).HandleConnect(goproxy.AlwaysMitm)
 	proxy.OnResponse(
 		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$")),
 		goproxy.StatusCodeIs(http.StatusOK, http.StatusAccepted)).DoFunc(
@@ -316,6 +320,6 @@ func (p *Proxy) Start() {
 
 	proxy.Verbose = p.debug
 	portFmt := fmt.Sprintf(":%s", p.port)
-	log.Printf("[*] Starting proxy server on %s\n", portFmt)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s", portFmt), proxy))
+	p.logger.Printf("[*] Starting proxy server on %s\n", portFmt)
+	p.logger.Fatal(http.ListenAndServe(fmt.Sprintf("%s", portFmt), proxy))
 }

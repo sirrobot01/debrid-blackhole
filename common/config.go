@@ -32,6 +32,14 @@ type Config struct {
 		CachedOnly bool   `json:"cached_only"`
 	}
 	MaxCacheSize int `json:"max_cache_size"`
+	QBitTorrent  struct {
+		Username       string   `json:"username"`
+		Password       string   `json:"password"`
+		Port           string   `json:"port"`
+		Debug          bool     `json:"debug"`
+		DownloadFolder string   `json:"download_folder"`
+		Categories     []string `json:"categories"`
+	} `json:"qbittorrent"`
 }
 
 func LoadConfig(path string) (*Config, error) {

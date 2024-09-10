@@ -52,26 +52,6 @@ Download the binary from the releases page and run it with the config file.
     "folder": "data/realdebrid/torrents/",
     "rate_limit": "250/minute"
   },
-  "arrs": [
-    {
-      "watch_folder": "data/sonarr/",
-      "completed_folder": "data/sonarr/completed/",
-      "token": "sonarr_api_key",
-      "url": "http://localhost:8787"
-    },
-    {
-      "watch_folder": "data/radarr/",
-      "completed_folder": "data/radarr/completed/",
-      "token": "radarr_api_key",
-      "url": "http://localhost:7878"
-    },
-    {
-      "watch_folder": "data/radarr4k/",
-      "completed_folder": "data/radarr4k/completed/",
-      "token": "radarr4k_api_key",
-      "url": "http://localhost:7878"
-    }
-  ],
   "proxy": {
     "enabled": true,
     "port": "8181",
@@ -80,7 +60,14 @@ Download the binary from the releases page and run it with the config file.
     "password": "password",
     "cached_only": true
   },
-  "max_cache_size": 1000
+  "max_cache_size": 1000,
+  "qbittorrent": {
+    "port": "8282",
+    "username": "admin",
+    "password": "admin",
+    "download_folder": "/media/symlinks/",
+    "categories": ["sonarr", "radarr"]
+  }
 }
 ```
 

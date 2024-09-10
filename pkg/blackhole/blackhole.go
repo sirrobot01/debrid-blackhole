@@ -1,10 +1,10 @@
-package cmd
+package blackhole
 
 import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"goBlack/common"
-	"goBlack/debrid"
+	debrid2 "goBlack/pkg/debrid"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,11 +14,11 @@ import (
 
 type Blackhole struct {
 	config *common.Config
-	deb    debrid.Service
+	deb    debrid2.Service
 	cache  *common.Cache
 }
 
-func NewBlackhole(config *common.Config, deb debrid.Service, cache *common.Cache) *Blackhole {
+func NewBlackhole(config *common.Config, deb debrid2.Service, cache *common.Cache) *Blackhole {
 	return &Blackhole{
 		config: config,
 		deb:    deb,
@@ -32,7 +32,7 @@ func fileReady(path string) bool {
 	return !os.IsNotExist(err) // Returns true if the file exists
 }
 
-func checkFileLoop(wg *sync.WaitGroup, dir string, file debrid.TorrentFile, ready chan<- debrid.TorrentFile) {
+func checkFileLoop(wg *sync.WaitGroup, dir string, file debrid2.TorrentFile, ready chan<- debrid2.TorrentFile) {
 	defer wg.Done()
 	ticker := time.NewTicker(1 * time.Second) // Check every second
 	defer ticker.Stop()
@@ -48,10 +48,10 @@ func checkFileLoop(wg *sync.WaitGroup, dir string, file debrid.TorrentFile, read
 	}
 }
 
-func (b *Blackhole) processFiles(arr *debrid.Arr, torrent *debrid.Torrent) {
+func (b *Blackhole) processFiles(arr *debrid2.Arr, torrent *debrid2.Torrent) {
 	var wg sync.WaitGroup
 	files := torrent.Files
-	ready := make(chan debrid.TorrentFile, len(files))
+	ready := make(chan debrid2.TorrentFile, len(files))
 
 	log.Printf("Checking %d files...", len(files))
 
@@ -74,7 +74,7 @@ func (b *Blackhole) processFiles(arr *debrid.Arr, torrent *debrid.Torrent) {
 	fmt.Printf("%s downloaded", torrent.Name)
 }
 
-func (b *Blackhole) createSymLink(arr *debrid.Arr, torrent *debrid.Torrent) {
+func (b *Blackhole) createSymLink(arr *debrid2.Arr, torrent *debrid2.Torrent) {
 	path := filepath.Join(arr.CompletedFolder, torrent.Folder)
 	err := os.MkdirAll(path, os.ModePerm)
 	if err != nil {
@@ -112,7 +112,7 @@ func watcher(watcher *fsnotify.Watcher, events map[string]time.Time) {
 	}
 }
 
-func (b *Blackhole) processFilesDebounced(arr *debrid.Arr, events map[string]time.Time, debouncePeriod time.Duration) {
+func (b *Blackhole) processFilesDebounced(arr *debrid2.Arr, events map[string]time.Time, debouncePeriod time.Duration) {
 	ticker := time.NewTicker(1 * time.Second) // Check every second
 	defer ticker.Stop()
 
@@ -138,7 +138,7 @@ func (b *Blackhole) processFilesDebounced(arr *debrid.Arr, events map[string]tim
 	}
 }
 
-func (b *Blackhole) startArr(arr *debrid.Arr) {
+func (b *Blackhole) startArr(arr *debrid2.Arr) {
 	log.Printf("Watching: %s", arr.WatchFolder)
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -172,7 +172,7 @@ func (b *Blackhole) Start() {
 		}
 		client := common.NewRLHTTPClient(nil, headers)
 
-		arr := &debrid.Arr{
+		arr := &debrid2.Arr{
 			Debrid:          b.config.Debrid,
 			WatchFolder:     conf.WatchFolder,
 			CompletedFolder: conf.CompletedFolder,
