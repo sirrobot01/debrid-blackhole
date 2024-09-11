@@ -29,7 +29,7 @@ type Config struct {
 		Debug      bool   `json:"debug"`
 		Username   string `json:"username"`
 		Password   string `json:"password"`
-		CachedOnly bool   `json:"cached_only"`
+		CachedOnly *bool  `json:"cached_only"`
 	}
 	MaxCacheSize int `json:"max_cache_size"`
 	QBitTorrent  struct {
@@ -60,6 +60,10 @@ func LoadConfig(path string) (*Config, error) {
 	err = decoder.Decode(config)
 	if err != nil {
 		return nil, err
+	}
+	if config.Proxy.CachedOnly == nil {
+		config.Proxy.CachedOnly = new(bool)
+		*config.Proxy.CachedOnly = true
 	}
 
 	return config, nil

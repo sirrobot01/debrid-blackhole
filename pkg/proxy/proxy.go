@@ -86,7 +86,7 @@ func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Pr
 		debug:      cfg.Debug,
 		username:   cfg.Username,
 		password:   cfg.Password,
-		cachedOnly: cfg.CachedOnly,
+		cachedOnly: *cfg.CachedOnly,
 		debrid:     deb,
 		cache:      cache,
 		logger:     common.NewLogger("Proxy", os.Stdout),
@@ -275,10 +275,17 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 		}
 	}
 
-	p.logger.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
-	rss.Channel.Items = newItems
+	if len(newItems) > 0 {
+		p.logger.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
+	} else {
+		// This will prevent the indexer from being disabled by the arr
+		p.logger.Printf("[%s Report]: No Items are cached; Return only first item with [UnCached]", indexer)
+		item := rss.Channel.Items[0]
+		item.Title = fmt.Sprintf("%s [UnCached]", item.Title)
+		newItems = append(newItems, item)
+	}
 
-	// rss.Channel.Items = newItems
+	rss.Channel.Items = newItems
 	modifiedBody, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
 		p.logger.Printf("Error marshalling XML: %v", err)

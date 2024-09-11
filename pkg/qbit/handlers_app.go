@@ -20,7 +20,7 @@ func (q *QBit) handlePreferences(w http.ResponseWriter, r *http.Request) {
 
 	preferences.WebUiUsername = q.Username
 	preferences.SavePath = q.DownloadFolder
-	preferences.TempPath = filepath.Join(q.DownloadFolder, "temp") + string(filepath.Separator)
+	preferences.TempPath = filepath.Join(q.DownloadFolder, "temp")
 
 	JSONResponse(w, preferences, http.StatusOK)
 }

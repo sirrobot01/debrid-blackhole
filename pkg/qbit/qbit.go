@@ -119,7 +119,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 
 	sizeCompleted := totalSize * progress
 	savePath := filepath.Join(q.DownloadFolder, t.Category)
-	torrentPath := filepath.Join(savePath, t.Name) + string(filepath.Separator)
+	torrentPath := filepath.Join(savePath, t.Name)
 
 	t.Size = debridTorrent.Bytes
 	t.Completed = sizeCompleted

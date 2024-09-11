@@ -3,11 +3,9 @@ package qbit
 import (
 	"goBlack/common"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 func (q *QBit) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
@@ -40,43 +38,29 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 		urlList = strings.Split(urls, "\n")
 	}
 
-	var wg sync.WaitGroup
 	for _, url := range urlList {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			magnet, err := common.GetMagnetFromUrl(url)
-			if err != nil {
-				q.logger.Printf("Error parsing magnet link: %v\n", err)
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			_, err = q.Process(magnet, category)
-			if err != nil {
-				q.logger.Printf("Error processing magnet: %v\n", err)
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		}(url)
+		magnet, err := common.GetMagnetFromUrl(url)
+		if err != nil {
+			q.logger.Printf("Error parsing magnet link: %v\n", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		go q.Process(magnet, category)
+
 	}
 
 	for _, fileHeader := range files {
-		wg.Add(1)
-		go func(fileHeader *multipart.FileHeader) {
-			defer wg.Done()
-			file, _ := fileHeader.Open()
-			defer file.Close()
-			var reader io.Reader = file
-			magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				q.logger.Printf("Error reading file: %s", fileHeader.Filename)
-				return
-			}
-			_, err = q.Process(magnet, category)
-		}(fileHeader)
+		file, _ := fileHeader.Open()
+		defer file.Close()
+		var reader io.Reader = file
+		magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			q.logger.Printf("Error reading file: %s", fileHeader.Filename)
+			return
+		}
+		go q.Process(magnet, category)
 	}
-	wg.Wait()
 	w.WriteHeader(http.StatusOK)
 }
 
