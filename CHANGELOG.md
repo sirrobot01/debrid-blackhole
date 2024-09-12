@@ -31,4 +31,16 @@
 - Rewrote Report log
 - Fix YTS, 1337x not grabbing infohash
 - Fix Torrent symlink bug
-- 
+
+
+#### 0.2.0-beta
+
+- Switch to QbitTorrent API instead of Blackhole
+- Rewrote the whole codebase
+
+
+#### 0.2.0
+- Implement 0.2.0-beta changes
+- Removed Blackhole
+- Added QbitTorrent API
+- Cleaned up the code

@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"goBlack/common"
-	"goBlack/debrid/structs"
+	"goBlack/pkg/debrid/structs"
 	"log"
 	"net/http"
 	gourl "net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,6 +20,39 @@ type RealDebrid struct {
 	DownloadUncached bool
 	client           *common.RLHTTPClient
 	cache            *common.Cache
+	MountPath        string
+	logger           *log.Logger
+}
+
+func (r *RealDebrid) GetMountPath() string {
+	return r.MountPath
+}
+
+func (r *RealDebrid) GetName() string {
+	return "realdebrid"
+}
+
+func (r *RealDebrid) GetLogger() *log.Logger {
+	return r.logger
+}
+
+func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
+	files := make([]TorrentFile, 0)
+	for _, f := range data.Files {
+		name := filepath.Base(f.Path)
+		if (!common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.SUBMATCH, name)) || common.RegexMatch(common.SAMPLEMATCH, name) {
+			continue
+		}
+		fileId := f.ID
+		file := &TorrentFile{
+			Name: name,
+			Path: filepath.Join(common.RemoveExtension(data.OriginalFilename), name),
+			Size: int64(f.Bytes),
+			Id:   strconv.Itoa(fileId),
+		}
+		files = append(files, *file)
+	}
+	return files
 }
 
 func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
@@ -114,35 +148,50 @@ func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	return torrent, nil
 }
 
+func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
+	torrent := &Torrent{}
+	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, id)
+	resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return torrent, err
+	}
+	var data structs.RealDebridTorrentInfo
+	err = json.Unmarshal(resp, &data)
+	if err != nil {
+		return torrent, err
+	}
+	name := common.RemoveExtension(data.OriginalFilename)
+	torrent.Id = id
+	torrent.Name = name
+	torrent.Bytes = data.Bytes
+	torrent.Folder = name
+	torrent.Progress = data.Progress
+	torrent.Status = data.Status
+	files := GetTorrentFiles(data)
+	torrent.Files = files
+	return torrent, nil
+}
+
 func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, torrent.Id)
 	for {
 		resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
 		if err != nil {
+			log.Println("ERROR Checking file: ", err)
 			return torrent, err
 		}
 		var data structs.RealDebridTorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
 		torrent.Folder = common.RemoveExtension(data.OriginalFilename)
+		torrent.Bytes = data.Bytes
+		torrent.Progress = data.Progress
+		torrent.Speed = data.Speed
+		torrent.Seeders = data.Seeders
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "waiting_files_selection" {
-			files := make([]TorrentFile, 0)
-			for _, f := range data.Files {
-				name := filepath.Base(f.Path)
-				if !common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.SUBMATCH, name) {
-					continue
-				}
-				fileId := f.ID
-				file := &TorrentFile{
-					Name: name,
-					Path: filepath.Join(torrent.Folder, name),
-					Size: int64(f.Bytes),
-					Id:   strconv.Itoa(fileId),
-				}
-				files = append(files, *file)
-			}
+			files := GetTorrentFiles(data)
 			torrent.Files = files
 			if len(files) == 0 {
 				return torrent, fmt.Errorf("no video files found")
@@ -166,8 +215,6 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 				return torrent, err
 			}
 			break
-		} else if status == "downloading" {
-			return torrent, fmt.Errorf("torrent is uncached")
 		}
 
 	}
@@ -178,17 +225,24 @@ func (r *RealDebrid) DownloadLink(torrent *Torrent) error {
 	return nil
 }
 
+func (r *RealDebrid) GetDownloadUncached() bool {
+	return r.DownloadUncached
+}
+
 func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
 	rl := common.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	client := common.NewRLHTTPClient(rl, headers)
+	logger := common.NewLogger(dc.Name, os.Stdout)
 	return &RealDebrid{
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		cache:            cache,
+		MountPath:        dc.Folder,
+		logger:           logger,
 	}
 }

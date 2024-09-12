@@ -1,9 +1,9 @@
 ### GoBlackHole(with Debrid Proxy Support)
 
-This is a Golang implementation go Torrent Blackhole with a **Real Debrid Proxy Support**.
+This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid Proxy Support**.
 
 #### Uses
-- Torrent Blackhole that supports the Arrs(Sonarr, Radarr, etc)
+- Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, etc)
 - Proxy support for the Arrs
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
@@ -21,6 +21,9 @@ services:
   blackhole:
     image: cy01/blackhole:latest # or cy01/blackhole:beta
     container_name: blackhole
+    ports:
+      - "8282:8282" # qBittorrent
+      - "8181:8181" # Proxy
     user: "1000:1000"
     volumes:
       - ./logs:/app/logs
@@ -31,6 +34,8 @@ services:
       - PUID=1000
       - PGID=1000
       - UMASK=002
+      - QBIT_PORT=8282 # qBittorrent Port. This is optional. You can set this in the config file
+      - PORT=8181 # Proxy Port. This is optional. You can set this in the config file
     restart: unless-stopped
     
 ```
@@ -52,26 +57,6 @@ Download the binary from the releases page and run it with the config file.
     "folder": "data/realdebrid/torrents/",
     "rate_limit": "250/minute"
   },
-  "arrs": [
-    {
-      "watch_folder": "data/sonarr/",
-      "completed_folder": "data/sonarr/completed/",
-      "token": "sonarr_api_key",
-      "url": "http://localhost:8787"
-    },
-    {
-      "watch_folder": "data/radarr/",
-      "completed_folder": "data/radarr/completed/",
-      "token": "radarr_api_key",
-      "url": "http://localhost:7878"
-    },
-    {
-      "watch_folder": "data/radarr4k/",
-      "completed_folder": "data/radarr4k/completed/",
-      "token": "radarr4k_api_key",
-      "url": "http://localhost:7878"
-    }
-  ],
   "proxy": {
     "enabled": true,
     "port": "8181",
@@ -80,7 +65,14 @@ Download the binary from the releases page and run it with the config file.
     "password": "password",
     "cached_only": true
   },
-  "max_cache_size": 1000
+  "max_cache_size": 1000,
+  "qbittorrent": {
+    "port": "8282",
+    "username": "admin",
+    "password": "admin",
+    "download_folder": "/media/symlinks/",
+    "categories": ["sonarr", "radarr"]
+  }
 }
 ```
 
@@ -88,19 +80,20 @@ Download the binary from the releases page and run it with the config file.
 ##### Debrid Config
 - This config key is important as it's used for both Blackhole and Proxy
 
-##### Arrs Config
-- An empty array will disable Blackhole for the Arrs
-- The `watch_folder` is the folder where the Blackhole will watch for torrents
-- The `completed_folder` is the folder where the Blackhole will move the completed torrents
-- The `token` is the API key for the Arr(This is optional, I think)
-
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
 - The `port` key is the port the proxy will listen on
 - The `debug` key is used to enable debug logs
 - The `username` and `password` keys are used for basic authentication
 - The `cached_only` means only cached torrents will be returned
-- 
+
+
+##### Qbittorrent Config
+- The `port` key is the port the qBittorrent will listen on
+- The `username` and `password` keys are used for basic authentication
+- The `download_folder` is the folder where the torrents will be downloaded. e.g `/media/symlinks/`
+- The `categories` key is used to filter out torrents based on the category. e.g `sonarr`, `radarr`
+
 ### Proxy
 
 The proxy is useful in filtering out un-cached Real Debrid torrents. 
@@ -117,7 +110,32 @@ Setting Up Proxy in Arr
   - Password: `password` # or the password set in the config file
   - Bypass Proxy for Local Addresses -> `No`
 
+### Qbittorrent
+
+The qBittorrent is a mock qBittorrent API that supports the Arrs(Sonarr, Radarr, etc).
+
+Setting Up Qbittorrent in Arr
+
+- Sonarr/Radarr
+  - Settings -> Download Client -> Add Client -> qBittorrent
+  - Host: `localhost` # or the IP of the server
+  - Port: `8282` # or the port set in the config file/ docker-compose env
+  - Username: `admin` # or the username set in the config file
+  - Password: `admin` # or the password set in the config file
+  - Category: e.g `sonarr`, `radarr`
+  - Use SSL -> `No`
+  - Test
+  - Save
+
 ### TODO
-- [ ] Add more Debrid Providers
+- [ ] A proper name!!!!
+- [ ] Debrid
+  - [ ] Add more Debrid Providers
+
+- [ ] Proxy
 - [ ] Add more Proxy features
-- [ ] Add more tests
+
+- [ ] Qbittorrent
+  - [ ] Add more Qbittorrent features
+  - [ ] Persist torrents on restart/server crash
+- [ ] Add tests

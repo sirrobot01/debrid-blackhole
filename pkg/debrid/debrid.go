@@ -1,8 +1,10 @@
 package debrid
 
 import (
+	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
 	"goBlack/common"
+	"log"
 	"path/filepath"
 )
 
@@ -12,6 +14,11 @@ type Service interface {
 	DownloadLink(torrent *Torrent) error
 	Process(arr *Arr, magnet string) (*Torrent, error)
 	IsAvailable(infohashes []string) map[string]bool
+	GetMountPath() string
+	GetDownloadUncached() bool
+	GetTorrent(id string) (*Torrent, error)
+	GetName() string
+	GetLogger() *log.Logger
 }
 
 type Debrid struct {
@@ -20,6 +27,8 @@ type Debrid struct {
 	DownloadUncached bool
 	client           *common.RLHTTPClient
 	cache            *common.Cache
+	MountPath        string
+	logger           *log.Logger
 }
 
 func NewDebrid(dc common.DebridConfig, cache *common.Cache) Service {
@@ -109,4 +118,32 @@ func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[stri
 	}
 
 	return hashes, result
+}
+
+func ProcessQBitTorrent(d Service, magnet *common.Magnet, category string) (*Torrent, error) {
+	arr := &Arr{
+		CompletedFolder: category,
+	}
+	debridTorrent := &Torrent{
+		InfoHash: magnet.InfoHash,
+		Magnet:   magnet,
+		Name:     magnet.Name,
+		Arr:      arr,
+		Size:     magnet.Size,
+	}
+	logger := d.GetLogger()
+	logger.Printf("Torrent Name: %s", debridTorrent.Name)
+	if !d.GetDownloadUncached() {
+		hash, exists := d.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
+		if !exists || !hash {
+			return debridTorrent, fmt.Errorf("torrent is not cached")
+		}
+		logger.Printf("Torrent: %s is cached", debridTorrent.Name)
+	}
+
+	debridTorrent, err := d.SubmitMagnet(debridTorrent)
+	if err != nil || debridTorrent.Id == "" {
+		return nil, err
+	}
+	return d.CheckStatus(debridTorrent)
 }

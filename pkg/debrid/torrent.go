@@ -7,6 +7,7 @@ import (
 	"net/http"
 	gourl "net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -39,11 +40,20 @@ type Torrent struct {
 	Folder   string         `json:"folder"`
 	Filename string         `json:"filename"`
 	Size     int64          `json:"size"`
+	Bytes    int64          `json:"bytes"` // Size of only the files that are downloaded
 	Magnet   *common.Magnet `json:"magnet"`
 	Files    []TorrentFile  `json:"files"`
 	Status   string         `json:"status"`
+	Progress int            `json:"progress"`
+	Speed    int            `json:"speed"`
+	Seeders  int            `json:"seeders"`
 
-	Arr *Arr
+	Debrid *Debrid
+	Arr    *Arr
+}
+
+func (t *Torrent) GetSymlinkFolder(parent string) string {
+	return filepath.Join(parent, t.Arr.CompletedFolder, t.Folder)
 }
 
 type TorrentFile struct {

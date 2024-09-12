@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -20,6 +22,41 @@ type Magnet struct {
 	InfoHash string
 	Size     int64
 	Link     string
+}
+
+func GetMagnetFromFile(file io.Reader, filePath string) (*Magnet, error) {
+	if filepath.Ext(filePath) == ".torrent" {
+		mi, err := metainfo.Load(file)
+		if err != nil {
+			return nil, err
+		}
+		hash := mi.HashInfoBytes()
+		infoHash := hash.HexString()
+		info, err := mi.UnmarshalInfo()
+		if err != nil {
+			return nil, err
+		}
+		magnet := &Magnet{
+			InfoHash: infoHash,
+			Name:     info.Name,
+			Size:     info.Length,
+			Link:     mi.Magnet(&hash, &info).String(),
+		}
+		return magnet, nil
+	} else {
+		// .magnet file
+		magnetLink := ReadMagnetFile(file)
+		return GetMagnetInfo(magnetLink)
+	}
+}
+
+func GetMagnetFromUrl(url string) (*Magnet, error) {
+	if strings.HasPrefix(url, "magnet:") {
+		return GetMagnetInfo(url)
+	} else if strings.HasPrefix(url, "http") {
+		return OpenMagnetHttpURL(url)
+	}
+	return nil, fmt.Errorf("invalid url")
 }
 
 func OpenMagnetFile(filePath string) string {
@@ -34,13 +71,15 @@ func OpenMagnetFile(filePath string) string {
 			return
 		}
 	}(file) // Ensure the file is closed after the function ends
+	return ReadMagnetFile(file)
+}
 
-	// Create a scanner to read the file line by line
+func ReadMagnetFile(file io.Reader) string {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		magnetLink := scanner.Text()
-		if magnetLink != "" {
-			return magnetLink
+		content := scanner.Text()
+		if content != "" {
+			return content
 		}
 	}
 
@@ -166,4 +205,9 @@ func processInfoHash(input string) (string, error) {
 
 	// If we get here, it's not a valid infohash and we couldn't convert it
 	return "", fmt.Errorf("invalid infohash: %s", input)
+}
+
+func NewLogger(prefix string, output *os.File) *log.Logger {
+	f := fmt.Sprintf("[%s] ", prefix)
+	return log.New(output, f, log.LstdFlags)
 }
