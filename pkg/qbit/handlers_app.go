@@ -36,3 +36,7 @@ func (q *QBit) handleBuildInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	JSONResponse(w, res, http.StatusOK)
 }
+
+func (q *QBit) shutdown(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}

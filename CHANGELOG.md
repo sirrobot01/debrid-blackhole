@@ -37,4 +37,10 @@
 
 - Switch to QbitTorrent API instead of Blackhole
 - Rewrote the whole codebase
-- 
+
+
+#### 0.2.0
+- Implement 0.2.0-beta changes
+- Removed Blackhole
+- Added QbitTorrent API
+- Cleaned up the code

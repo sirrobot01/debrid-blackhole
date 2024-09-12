@@ -45,6 +45,8 @@ type Torrent struct {
 	Files    []TorrentFile  `json:"files"`
 	Status   string         `json:"status"`
 	Progress int            `json:"progress"`
+	Speed    int            `json:"speed"`
+	Seeders  int            `json:"seeders"`
 
 	Debrid *Debrid
 	Arr    *Arr
@@ -52,9 +54,6 @@ type Torrent struct {
 
 func (t *Torrent) GetSymlinkFolder(parent string) string {
 	return filepath.Join(parent, t.Arr.CompletedFolder, t.Folder)
-}
-func (t *Torrent) GetSymlinkPath(parent string) string {
-	return filepath.Join(t.GetSymlinkFolder(parent), t.Name)
 }
 
 type TorrentFile struct {

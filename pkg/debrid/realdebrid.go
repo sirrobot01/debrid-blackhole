@@ -160,10 +160,11 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
+	name := common.RemoveExtension(data.OriginalFilename)
 	torrent.Id = id
-	torrent.Name = data.OriginalFilename
+	torrent.Name = name
 	torrent.Bytes = data.Bytes
-	torrent.Folder = common.RemoveExtension(data.OriginalFilename)
+	torrent.Folder = name
 	torrent.Progress = data.Progress
 	torrent.Status = data.Status
 	files := GetTorrentFiles(data)
@@ -185,6 +186,8 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 		torrent.Folder = common.RemoveExtension(data.OriginalFilename)
 		torrent.Bytes = data.Bytes
 		torrent.Progress = data.Progress
+		torrent.Speed = data.Speed
+		torrent.Seeders = data.Seeders
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "waiting_files_selection" {

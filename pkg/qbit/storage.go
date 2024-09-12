@@ -109,12 +109,20 @@ func (ts *TorrentStorage) Update(torrent *Torrent) {
 func (ts *TorrentStorage) Delete(hash string) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
+	torrent, exists := ts.torrents[hash]
+	if !exists {
+		return
+	}
 	delete(ts.torrents, hash)
 	for i, id := range ts.order {
 		if id == hash {
 			ts.order = append(ts.order[:i], ts.order[i+1:]...)
 			break
 		}
+	}
+	// Delete the torrent folder
+	if torrent.ContentPath != "" {
+		os.RemoveAll(torrent.ContentPath)
 	}
 }
 

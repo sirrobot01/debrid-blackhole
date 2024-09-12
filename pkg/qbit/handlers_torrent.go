@@ -19,11 +19,24 @@ func (q *QBit) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(32 << 20) // 32MB max memory
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	contentType := strings.Split(r.Header.Get("Content-Type"), ";")[0]
+	switch contentType {
+	case "multipart/form-data":
+		err := r.ParseMultipartForm(32 << 20) // 32MB max memory
+		if err != nil {
+			q.logger.Printf("Error parsing form: %v\n", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	case "application/x-www-form-urlencoded":
+		err := r.ParseForm()
+		if err != nil {
+			q.logger.Printf("Error parsing form: %v\n", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
+
 	files := r.MultipartForm.File["torrents"]
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
@@ -129,7 +142,6 @@ func (q *QBit) handleCategories(w http.ResponseWriter, r *http.Request) {
 			SavePath: path,
 		}
 	}
-
 	JSONResponse(w, categories, http.StatusOK)
 }
 
@@ -149,4 +161,11 @@ func (q *QBit) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	q.Categories = append(q.Categories, name)
 
 	JSONResponse(w, nil, http.StatusOK)
+}
+
+func (q *QBit) handleTorrentProperties(w http.ResponseWriter, r *http.Request) {
+	hash := r.URL.Query().Get("hash")
+	torrent := q.storage.Get(hash)
+	properties := q.GetTorrentProperties(torrent)
+	JSONResponse(w, properties, http.StatusOK)
 }

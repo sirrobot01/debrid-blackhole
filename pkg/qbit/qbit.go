@@ -1,8 +1,6 @@
 package qbit
 
 import (
-	"cmp"
-	"fmt"
 	"github.com/google/uuid"
 	"goBlack/common"
 	"goBlack/pkg/debrid"
@@ -23,7 +21,7 @@ func (q *QBit) Process(magnet *common.Magnet, category string) (*Torrent, error)
 		return torrent, err
 	}
 	torrent.ID = debridTorrent.Id
-	go q.processFiles(torrent, debridTorrent)
+	q.processFiles(torrent, debridTorrent)
 	return torrent, nil
 }
 
@@ -63,6 +61,11 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent) {
 
 	q.logger.Printf("Checking %d files...", len(files))
 	rCloneMountPath := q.debrid.GetMountPath()
+	path := filepath.Join(q.DownloadFolder, debridTorrent.Arr.CompletedFolder, debridTorrent.Folder) // /mnt/symlinks/{category}/MyTVShow/
+	err := os.MkdirAll(path, os.ModePerm)
+	if err != nil {
+		q.logger.Printf("Failed to create directory: %s\n", path)
+	}
 
 	for _, file := range files {
 		wg.Add(1)
@@ -74,81 +77,25 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent) {
 		close(ready)
 	}()
 
-	for r := range ready {
-		q.logger.Println("File is ready:", r.Name)
-		q.createSymLink(debridTorrent)
+	for f := range ready {
+		q.logger.Println("File is ready:", f.Path)
+		q.createSymLink(path, debridTorrent, f)
 
 	}
+	// Update the torrent when all files are ready
 	q.UpdateTorrent(torrent, debridTorrent)
-	fmt.Printf("%s downloaded \n", debridTorrent.Name)
+	q.logger.Printf("%s COMPLETED \n", debridTorrent.Name)
 }
 
-func (q *QBit) createSymLink(torrent *debrid.Torrent) {
-	path := torrent.GetSymlinkFolder(q.DownloadFolder) // /mnt/symlinks/{category}/MyTVShow/
-	err := os.MkdirAll(path, os.ModePerm)
-	if err != nil {
-		q.logger.Printf("Failed to create directory: %s\n", path)
+func (q *QBit) createSymLink(path string, torrent *debrid.Torrent, file debrid.TorrentFile) {
+
+	// Combine the directory and filename to form a full path
+	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
+	// Create a symbolic link if file doesn't exist
+	torrentMountPath := filepath.Join(q.debrid.GetMountPath(), torrent.Folder, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
+	_ = os.Symlink(torrentMountPath, fullPath)
+	// Check if the file exists
+	if !fileReady(fullPath) {
+		q.logger.Printf("Failed to create symlink: %s\n", fullPath)
 	}
-
-	for _, file := range torrent.Files {
-		// Combine the directory and filename to form a full path
-		fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
-		// Create a symbolic link if file doesn't exist
-		torrentMountPath := filepath.Join(q.debrid.GetMountPath(), torrent.Folder, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
-		_ = os.Symlink(torrentMountPath, fullPath)
-	}
-}
-
-func (q *QBit) MarkAsFailed(t *Torrent) *Torrent {
-	t.State = "error"
-	q.storage.AddOrUpdate(t)
-	return t
-}
-
-func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent {
-	if debridTorrent == nil && t.ID != "" {
-		debridTorrent, _ = q.debrid.GetTorrent(t.ID)
-	}
-	if debridTorrent == nil {
-		q.logger.Printf("Torrent with ID %s not found in %s", t.ID, q.debrid.GetName())
-		return t
-	}
-	totalSize := cmp.Or(debridTorrent.Bytes, 1)
-	progress := int64(cmp.Or(debridTorrent.Progress, 100))
-	progress = progress / 100.0
-
-	sizeCompleted := totalSize * progress
-	savePath := filepath.Join(q.DownloadFolder, t.Category)
-	torrentPath := filepath.Join(savePath, t.Name)
-
-	t.Size = debridTorrent.Bytes
-	t.Completed = sizeCompleted
-	t.Downloaded = sizeCompleted
-	t.DownloadedSession = sizeCompleted
-	t.Uploaded = sizeCompleted
-	t.UploadedSession = sizeCompleted
-	t.AmountLeft = totalSize - sizeCompleted
-	t.Availability = 2
-	t.Progress = 100
-	t.SavePath = savePath
-	t.ContentPath = torrentPath
-
-	if t.AmountLeft == 0 {
-		t.State = "pausedUP"
-	}
-
-	go q.storage.AddOrUpdate(t)
-	return t
-}
-
-func (q *QBit) ResumeTorrent(t *Torrent) bool {
-	return true
-}
-
-func (q *QBit) PauseTorrent(t *Torrent) bool {
-	return true
-}
-
-func (q *QBit) RefreshTorrent(t *Torrent) bool {
-	return true
 }

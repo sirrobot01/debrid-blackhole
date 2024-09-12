@@ -22,6 +22,7 @@ func (q *QBit) AddRoutes(r chi.Router) http.Handler {
 				r.Get("/pause", q.handleTorrentsPause)
 				r.Get("/resume", q.handleTorrentsResume)
 				r.Get("/recheck", q.handleTorrentRecheck)
+				r.Get("/properties", q.handleTorrentProperties)
 			})
 
 			r.Route("/app", func(r chi.Router) {
@@ -29,6 +30,7 @@ func (q *QBit) AddRoutes(r chi.Router) http.Handler {
 				r.Get("/webapiVersion", q.handleWebAPIVersion)
 				r.Get("/preferences", q.handlePreferences)
 				r.Get("/buildInfo", q.handleBuildInfo)
+				r.Get("/shutdown", q.shutdown)
 			})
 		})
 

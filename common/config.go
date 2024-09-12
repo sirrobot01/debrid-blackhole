@@ -17,13 +17,7 @@ type DebridConfig struct {
 
 type Config struct {
 	Debrid DebridConfig `json:"debrid"`
-	Arrs   []struct {
-		WatchFolder     string `json:"watch_folder"`
-		CompletedFolder string `json:"completed_folder"`
-		Token           string `json:"token"`
-		URL             string `json:"url"`
-	} `json:"arrs"`
-	Proxy struct {
+	Proxy  struct {
 		Port       string `json:"port"`
 		Enabled    bool   `json:"enabled"`
 		Debug      bool   `json:"debug"`

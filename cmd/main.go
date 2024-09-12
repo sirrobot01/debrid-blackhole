@@ -3,7 +3,6 @@ package cmd
 import (
 	"cmp"
 	"goBlack/common"
-	"goBlack/pkg/blackhole"
 	"goBlack/pkg/debrid"
 	"goBlack/pkg/proxy"
 	"goBlack/pkg/qbit"
@@ -26,16 +25,6 @@ func Start(config *common.Config) {
 			p.Start()
 		}()
 	}
-
-	if len(config.Arrs) > 0 {
-		b := blackhole.NewBlackhole(config, deb, cache)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			b.Start()
-		}()
-	}
-
 	if config.QBitTorrent.Port != "" {
 		qb := qbit.NewQBit(config, deb, cache)
 		wg.Add(1)

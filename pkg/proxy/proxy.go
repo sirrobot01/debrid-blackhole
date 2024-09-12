@@ -248,6 +248,10 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	indexer := ""
 	if len(rss.Channel.Items) > 0 {
 		indexer = rss.Channel.Items[0].ProwlarrIndexer.Text
+	} else {
+		p.logger.Println("No items found in RSS feed")
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		return resp
 	}
 
 	// Step 4: Extract infohash or magnet URI, manipulate data
