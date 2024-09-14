@@ -49,7 +49,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	t.Uploaded = sizeCompleted
 	t.UploadedSession = sizeCompleted
 	t.AmountLeft = totalSize - sizeCompleted
-	t.Progress = 100
+	t.Progress = float32(progress)
 	t.SavePath = savePath
 	t.ContentPath = torrentPath
 	t.Eta = eta

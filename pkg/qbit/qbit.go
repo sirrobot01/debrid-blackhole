@@ -17,11 +17,14 @@ func (q *QBit) Process(magnet *common.Magnet, category string) (*Torrent, error)
 	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, category)
 	if err != nil || debridTorrent == nil {
 		// Mark as failed
+		q.logger.Printf("Failed to process torrent: %s: %v", magnet.Name, err)
 		q.MarkAsFailed(torrent)
 		return torrent, err
 	}
 	torrent.ID = debridTorrent.Id
-	q.processFiles(torrent, debridTorrent)
+	torrent.Name = debridTorrent.Name // Update the name before adding it to *arrs storage
+	torrent.DebridTorrent = debridTorrent
+	go q.processFiles(torrent, debridTorrent)
 	return torrent, nil
 }
 

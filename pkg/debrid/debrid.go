@@ -12,7 +12,6 @@ type Service interface {
 	SubmitMagnet(torrent *Torrent) (*Torrent, error)
 	CheckStatus(torrent *Torrent) (*Torrent, error)
 	DownloadLink(torrent *Torrent) error
-	Process(arr *Arr, magnet string) (*Torrent, error)
 	IsAvailable(infohashes []string) map[string]bool
 	GetMountPath() string
 	GetDownloadUncached() bool
@@ -132,17 +131,19 @@ func ProcessQBitTorrent(d Service, magnet *common.Magnet, category string) (*Tor
 		Size:     magnet.Size,
 	}
 	logger := d.GetLogger()
-	logger.Printf("Torrent Name: %s", debridTorrent.Name)
+	logger.Printf("Torrent Hash: %s", debridTorrent.InfoHash)
 	if !d.GetDownloadUncached() {
 		hash, exists := d.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
 		if !exists || !hash {
-			return debridTorrent, fmt.Errorf("torrent is not cached")
+			return debridTorrent, fmt.Errorf("torrent: %s is not cached", debridTorrent.Name)
+		} else {
+			logger.Printf("Torrent: %s is cached", debridTorrent.Name)
 		}
-		logger.Printf("Torrent: %s is cached", debridTorrent.Name)
 	}
 
 	debridTorrent, err := d.SubmitMagnet(debridTorrent)
 	if err != nil || debridTorrent.Id == "" {
+		logger.Printf("Error submitting magnet: %s", err)
 		return nil, err
 	}
 	return d.CheckStatus(debridTorrent)

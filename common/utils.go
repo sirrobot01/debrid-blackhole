@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"context"
 	"encoding/base32"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Magnet struct {
@@ -210,4 +212,45 @@ func processInfoHash(input string) (string, error) {
 func NewLogger(prefix string, output *os.File) *log.Logger {
 	f := fmt.Sprintf("[%s] ", prefix)
 	return log.New(output, f, log.LstdFlags)
+}
+
+func GetInfohashFromURL(url string) (string, error) {
+	// Download the torrent file
+	var magnetLink string
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("stopped after 3 redirects")
+			}
+			if strings.HasPrefix(req.URL.String(), "magnet:") {
+				// Stop the redirect chain
+				magnetLink = req.URL.String()
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if magnetLink != "" {
+		return ExtractInfoHash(magnetLink), nil
+	}
+
+	mi, err := metainfo.Load(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	hash := mi.HashInfoBytes()
+	infoHash := hash.HexString()
+	return infoHash, nil
 }

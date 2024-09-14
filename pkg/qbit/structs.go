@@ -1,5 +1,7 @@
 package qbit
 
+import "goBlack/pkg/debrid"
+
 type BuildInfo struct {
 	Libtorrent string `json:"libtorrent"`
 	Bitness    int    `json:"bitness"`
@@ -167,7 +169,8 @@ type TorrentCategory struct {
 }
 
 type Torrent struct {
-	ID string `json:"-"`
+	ID            string          `json:"-"`
+	DebridTorrent *debrid.Torrent `json:"-"`
 
 	AddedOn           int64   `json:"added_on,omitempty"`
 	AmountLeft        int64   `json:"amount_left,omitempty"`

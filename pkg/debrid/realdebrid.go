@@ -55,28 +55,6 @@ func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
 	return files
 }
 
-func (r *RealDebrid) Process(arr *Arr, magnet string) (*Torrent, error) {
-	torrent, err := GetTorrentInfo(magnet)
-	torrent.Arr = arr
-	if err != nil {
-		return torrent, err
-	}
-	log.Printf("Torrent Name: %s", torrent.Name)
-	if !r.DownloadUncached {
-		hash, exists := r.IsAvailable([]string{torrent.InfoHash})[torrent.InfoHash]
-		if !exists || !hash {
-			return torrent, fmt.Errorf("torrent is not cached")
-		}
-		log.Printf("Torrent: %s is cached", torrent.Name)
-	}
-
-	torrent, err = r.SubmitMagnet(torrent)
-	if err != nil || torrent.Id == "" {
-		return nil, err
-	}
-	return r.CheckStatus(torrent)
-}
-
 func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
 	hashes, result := GetLocalCache(infohashes, r.cache)
@@ -183,7 +161,9 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 		var data structs.RealDebridTorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
-		torrent.Folder = common.RemoveExtension(data.OriginalFilename)
+		name := common.RemoveExtension(data.OriginalFilename)
+		torrent.Name = name // Important because some magnet changes the name
+		torrent.Folder = name
 		torrent.Bytes = data.Bytes
 		torrent.Progress = data.Progress
 		torrent.Speed = data.Speed

@@ -15,25 +15,29 @@ type DebridConfig struct {
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
 }
 
+type ProxyConfig struct {
+	Port       string `json:"port"`
+	Enabled    bool   `json:"enabled"`
+	Debug      bool   `json:"debug"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	CachedOnly *bool  `json:"cached_only"`
+}
+
+type QBitTorrentConfig struct {
+	Username       string   `json:"username"`
+	Password       string   `json:"password"`
+	Port           string   `json:"port"`
+	Debug          bool     `json:"debug"`
+	DownloadFolder string   `json:"download_folder"`
+	Categories     []string `json:"categories"`
+}
+
 type Config struct {
-	Debrid DebridConfig `json:"debrid"`
-	Proxy  struct {
-		Port       string `json:"port"`
-		Enabled    bool   `json:"enabled"`
-		Debug      bool   `json:"debug"`
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-		CachedOnly *bool  `json:"cached_only"`
-	}
-	MaxCacheSize int `json:"max_cache_size"`
-	QBitTorrent  struct {
-		Username       string   `json:"username"`
-		Password       string   `json:"password"`
-		Port           string   `json:"port"`
-		Debug          bool     `json:"debug"`
-		DownloadFolder string   `json:"download_folder"`
-		Categories     []string `json:"categories"`
-	} `json:"qbittorrent"`
+	Debrid       DebridConfig      `json:"debrid"`
+	Proxy        ProxyConfig       `json:"proxy"`
+	MaxCacheSize int               `json:"max_cache_size"`
+	QBitTorrent  QBitTorrentConfig `json:"qbittorrent"`
 }
 
 func LoadConfig(path string) (*Config, error) {

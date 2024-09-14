@@ -37,14 +37,8 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	files := r.MultipartForm.File["torrents"]
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
-
-	if len(files) == 0 && urls == "" {
-		http.Error(w, "No torrent provided", http.StatusBadRequest)
-		return
-	}
 
 	var urlList []string
 	if urls != "" {
@@ -62,18 +56,22 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	for _, fileHeader := range files {
-		file, _ := fileHeader.Open()
-		defer file.Close()
-		var reader io.Reader = file
-		magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			q.logger.Printf("Error reading file: %s", fileHeader.Filename)
-			return
+	if contentType == "multipart/form-data" {
+		files := r.MultipartForm.File["torrents"]
+		for _, fileHeader := range files {
+			file, _ := fileHeader.Open()
+			defer file.Close()
+			var reader io.Reader = file
+			magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				q.logger.Printf("Error reading file: %s", fileHeader.Filename)
+				return
+			}
+			go q.Process(magnet, category)
 		}
-		go q.Process(magnet, category)
 	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
