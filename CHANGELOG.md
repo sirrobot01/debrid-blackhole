@@ -44,3 +44,9 @@
 - Removed Blackhole
 - Added QbitTorrent API
 - Cleaned up the code
+
+#### 0.2.1
+
+- Fix Uncached torrents not being downloaded/downloaded
+- Minor bug fixed
+- Fix Race condition in the cache and file system
