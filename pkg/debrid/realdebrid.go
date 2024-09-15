@@ -201,6 +201,11 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 				return torrent, err
 			}
 			break
+		} else if status == "downloading" {
+			if !r.DownloadUncached {
+				// @TODO: Delete the torrent if it's not cached
+				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
+			}
 		}
 
 	}
