@@ -68,10 +68,11 @@ Download the binary from the releases page and run it with the config file.
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
-    "username": "admin",
-    "password": "admin",
+    "username": "admin", // deprecated
+    "password": "admin", // deprecated
     "download_folder": "/media/symlinks/",
-    "categories": ["sonarr", "radarr"]
+    "categories": ["sonarr", "radarr"],
+    "refresh_interval": 5 // in seconds
   }
 }
 ```
@@ -90,7 +91,6 @@ Download the binary from the releases page and run it with the config file.
 
 ##### Qbittorrent Config
 - The `port` key is the port the qBittorrent will listen on
-- The `username` and `password` keys are used for basic authentication
 - The `download_folder` is the folder where the torrents will be downloaded. e.g `/media/symlinks/`
 - The `categories` key is used to filter out torrents based on the category. e.g `sonarr`, `radarr`
 
@@ -120,8 +120,8 @@ Setting Up Qbittorrent in Arr
   - Settings -> Download Client -> Add Client -> qBittorrent
   - Host: `localhost` # or the IP of the server
   - Port: `8282` # or the port set in the config file/ docker-compose env
-  - Username: `admin` # or the username set in the config file
-  - Password: `admin` # or the password set in the config file
+  - Username: `http://sonarr:8989` # Your arr host with http/https
+  - Password: `sonarr_token` # Your arr token
   - Category: e.g `sonarr`, `radarr`
   - Use SSL -> `No`
   - Test

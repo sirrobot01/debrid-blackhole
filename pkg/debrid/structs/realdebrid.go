@@ -70,17 +70,17 @@ type RealDebridAddMagnetSchema struct {
 }
 
 type RealDebridTorrentInfo struct {
-	ID               string `json:"id"`
-	Filename         string `json:"filename"`
-	OriginalFilename string `json:"original_filename"`
-	Hash             string `json:"hash"`
-	Bytes            int64  `json:"bytes"`
-	OriginalBytes    int    `json:"original_bytes"`
-	Host             string `json:"host"`
-	Split            int    `json:"split"`
-	Progress         int    `json:"progress"`
-	Status           string `json:"status"`
-	Added            string `json:"added"`
+	ID               string  `json:"id"`
+	Filename         string  `json:"filename"`
+	OriginalFilename string  `json:"original_filename"`
+	Hash             string  `json:"hash"`
+	Bytes            int64   `json:"bytes"`
+	OriginalBytes    int     `json:"original_bytes"`
+	Host             string  `json:"host"`
+	Split            int     `json:"split"`
+	Progress         float64 `json:"progress"`
+	Status           string  `json:"status"`
+	Added            string  `json:"added"`
 	Files            []struct {
 		ID       int    `json:"id"`
 		Path     string `json:"path"`
@@ -89,7 +89,7 @@ type RealDebridTorrentInfo struct {
 	} `json:"files"`
 	Links   []string `json:"links"`
 	Ended   string   `json:"ended,omitempty"`
-	Speed   int      `json:"speed,omitempty"`
+	Speed   int64    `json:"speed,omitempty"`
 	Seeders int      `json:"seeders,omitempty"`
 }
 

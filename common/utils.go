@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -124,7 +125,6 @@ func OpenMagnetHttpURL(magnetLink string) (*Magnet, error) {
 		Link:     mi.Magnet(&hash, &info).String(),
 	}
 	return magnet, nil
-
 }
 
 func GetMagnetInfo(magnetLink string) (*Magnet, error) {
@@ -253,4 +253,23 @@ func GetInfohashFromURL(url string) (string, error) {
 	hash := mi.HashInfoBytes()
 	infoHash := hash.HexString()
 	return infoHash, nil
+}
+
+func JoinURL(base string, paths ...string) (string, error) {
+	// Parse the base URL
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+
+	// Join the path components
+	u.Path = path.Join(u.Path, path.Join(paths...))
+
+	// Return the resulting URL as a string
+	return u.String(), nil
+}
+
+func FileReady(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err) // Returns true if the file exists
 }

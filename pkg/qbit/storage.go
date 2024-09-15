@@ -95,7 +95,7 @@ func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string
 				filtered = append(filtered, torrent)
 			}
 		}
-		return filtered
+		torrents = filtered
 	}
 	return torrents
 }

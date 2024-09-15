@@ -46,7 +46,7 @@ func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
 		fileId := f.ID
 		file := &TorrentFile{
 			Name: name,
-			Path: filepath.Join(common.RemoveExtension(data.OriginalFilename), name),
+			Path: name,
 			Size: int64(f.Bytes),
 			Id:   strconv.Itoa(fileId),
 		}
@@ -138,13 +138,17 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
-	name := common.RemoveExtension(data.OriginalFilename)
+	name := common.RemoveInvalidChars(data.OriginalFilename)
 	torrent.Id = id
 	torrent.Name = name
 	torrent.Bytes = data.Bytes
 	torrent.Folder = name
 	torrent.Progress = data.Progress
 	torrent.Status = data.Status
+	torrent.Speed = data.Speed
+	torrent.Seeders = data.Seeders
+	torrent.Filename = data.Filename
+	torrent.OriginalFilename = data.OriginalFilename
 	files := GetTorrentFiles(data)
 	torrent.Files = files
 	return torrent, nil
@@ -161,9 +165,11 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 		var data structs.RealDebridTorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
-		name := common.RemoveExtension(data.OriginalFilename)
+		name := common.RemoveInvalidChars(data.OriginalFilename)
 		torrent.Name = name // Important because some magnet changes the name
 		torrent.Folder = name
+		torrent.Filename = data.Filename
+		torrent.OriginalFilename = data.OriginalFilename
 		torrent.Bytes = data.Bytes
 		torrent.Progress = data.Progress
 		torrent.Speed = data.Speed

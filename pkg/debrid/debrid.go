@@ -119,10 +119,7 @@ func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[stri
 	return hashes, result
 }
 
-func ProcessQBitTorrent(d Service, magnet *common.Magnet, category string) (*Torrent, error) {
-	arr := &Arr{
-		CompletedFolder: category,
-	}
+func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr) (*Torrent, error) {
 	debridTorrent := &Torrent{
 		InfoHash: magnet.InfoHash,
 		Magnet:   magnet,

@@ -10,7 +10,8 @@ func (q *QBit) AddRoutes(r chi.Router) http.Handler {
 		r.Post("/auth/login", q.handleLogin)
 
 		r.Group(func(r chi.Router) {
-			r.Use(q.authMiddleware)
+			//r.Use(q.authMiddleware)
+			r.Use(q.authContext)
 			r.Route("/torrents", func(r chi.Router) {
 				r.Use(HashesCtx)
 				r.Get("/info", q.handleTorrentsInfo)

@@ -17,6 +17,7 @@ func (q *QBit) MarkAsFailed(t *Torrent) *Torrent {
 }
 
 func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent {
+	rcLoneMount := q.debrid.GetMountPath()
 	if debridTorrent == nil && t.ID != "" {
 		debridTorrent, _ = q.debrid.GetTorrent(t.ID)
 	}
@@ -24,31 +25,40 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 		q.logger.Printf("Torrent with ID %s not found in %s", t.ID, q.debrid.GetName())
 		return t
 	}
-	totalSize := cmp.Or(debridTorrent.Bytes, 1)
-	progress := int64(cmp.Or(debridTorrent.Progress, 100))
-	progress = progress / 100.0
+	if debridTorrent.Status != "downloaded" {
+		debridTorrent, _ = q.debrid.GetTorrent(t.ID)
+	}
 
-	sizeCompleted := totalSize * progress
+	if t.TorrentPath == "" {
+		t.TorrentPath = filepath.Base(debridTorrent.GetMountFolder(rcLoneMount))
+	}
+
+	totalSize := float64(cmp.Or(debridTorrent.Bytes, 1.0))
+	progress := cmp.Or(debridTorrent.Progress, 100.0)
+	progress = progress / 100.0
+	var sizeCompleted int64
+
+	sizeCompleted = int64(totalSize * progress)
 	savePath := filepath.Join(q.DownloadFolder, t.Category) + string(os.PathSeparator)
-	torrentPath := filepath.Join(savePath, debridTorrent.Folder) + string(os.PathSeparator)
+	torrentPath := filepath.Join(savePath, t.TorrentPath) + string(os.PathSeparator)
 
 	var speed int64
 	if debridTorrent.Speed != 0 {
-		speed = int64(debridTorrent.Speed)
+		speed = debridTorrent.Speed
 	}
 	var eta int64
 	if speed != 0 {
-		eta = (totalSize - sizeCompleted) / speed
+		eta = int64((totalSize - float64(sizeCompleted)) / float64(speed))
 	}
-
-	t.Name = debridTorrent.Name
+	
 	t.Size = debridTorrent.Bytes
+	t.DebridTorrent = debridTorrent
 	t.Completed = sizeCompleted
 	t.Downloaded = sizeCompleted
 	t.DownloadedSession = sizeCompleted
 	t.Uploaded = sizeCompleted
 	t.UploadedSession = sizeCompleted
-	t.AmountLeft = totalSize - sizeCompleted
+	t.AmountLeft = int64(totalSize) - sizeCompleted
 	t.Progress = float32(progress)
 	t.SavePath = savePath
 	t.ContentPath = torrentPath
@@ -56,12 +66,25 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	t.Dlspeed = speed
 	t.Upspeed = speed
 
-	if t.AmountLeft == 0 {
+	if t.IsReady() {
 		t.State = "pausedUP"
+		q.storage.AddOrUpdate(t)
+		return t
 	}
-
-	go q.storage.AddOrUpdate(t)
-	return t
+	ticker := time.NewTicker(3 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if t.IsReady() {
+				t.State = "pausedUP"
+				q.storage.AddOrUpdate(t)
+				ticker.Stop()
+				return t
+			} else {
+				return q.UpdateTorrent(t, debridTorrent)
+			}
+		}
+	}
 }
 
 func (q *QBit) ResumeTorrent(t *Torrent) bool {

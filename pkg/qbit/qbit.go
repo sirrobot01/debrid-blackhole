@@ -1,6 +1,7 @@
 package qbit
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"goBlack/common"
 	"goBlack/pkg/debrid"
@@ -11,10 +12,15 @@ import (
 	"time"
 )
 
-func (q *QBit) Process(magnet *common.Magnet, category string) (*Torrent, error) {
+func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category string) (*Torrent, error) {
 	torrent := q.CreateTorrentFromMagnet(magnet, category)
 	go q.storage.AddOrUpdate(torrent)
-	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, category)
+	arr := &debrid.Arr{
+		Name:  category,
+		Token: ctx.Value("token").(string),
+		Host:  ctx.Value("host").(string),
+	}
+	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, arr)
 	if err != nil || debridTorrent == nil {
 		// Mark as failed
 		q.logger.Printf("Failed to process torrent: %s: %v", magnet.Name, err)
@@ -22,9 +28,9 @@ func (q *QBit) Process(magnet *common.Magnet, category string) (*Torrent, error)
 		return torrent, err
 	}
 	torrent.ID = debridTorrent.Id
-	torrent.Name = debridTorrent.Name // Update the name before adding it to *arrs storage
 	torrent.DebridTorrent = debridTorrent
-	go q.processFiles(torrent, debridTorrent)
+	torrent.Name = debridTorrent.Name
+	q.processFiles(torrent, debridTorrent, arr)
 	return torrent, nil
 }
 
@@ -57,22 +63,29 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *
 	return torrent
 }
 
-func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent) {
+func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *debrid.Arr) {
 	var wg sync.WaitGroup
 	files := debridTorrent.Files
 	ready := make(chan debrid.TorrentFile, len(files))
 
 	q.logger.Printf("Checking %d files...", len(files))
-	rCloneMountPath := q.debrid.GetMountPath()
-	path := filepath.Join(q.DownloadFolder, debridTorrent.Arr.CompletedFolder, debridTorrent.Folder) // /mnt/symlinks/{category}/MyTVShow/
-	err := os.MkdirAll(path, os.ModePerm)
+	rCloneBase := q.debrid.GetMountPath()
+	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
 	if err != nil {
-		q.logger.Printf("Failed to create directory: %s\n", path)
+		q.logger.Printf("Error: %v", err)
+		return
 	}
 
+	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentPath) // /mnt/symlinks/{category}/MyTVShow/
+	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
+	if err != nil {
+		q.logger.Printf("Failed to create directory: %s\n", torrentSymlinkPath)
+		return
+	}
+	torrentRclonePath := filepath.Join(rCloneBase, torrentPath)
 	for _, file := range files {
 		wg.Add(1)
-		go checkFileLoop(&wg, rCloneMountPath, file, ready)
+		go checkFileLoop(&wg, torrentRclonePath, file, ready)
 	}
 
 	go func() {
@@ -82,23 +95,49 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent) {
 
 	for f := range ready {
 		q.logger.Println("File is ready:", f.Path)
-		q.createSymLink(path, debridTorrent, f)
-
+		q.createSymLink(torrentSymlinkPath, torrentRclonePath, f)
 	}
 	// Update the torrent when all files are ready
+	torrent.TorrentPath = filepath.Base(torrentPath) // Quite important
 	q.UpdateTorrent(torrent, debridTorrent)
-	q.logger.Printf("%s COMPLETED \n", debridTorrent.Name)
+	q.RefreshArr(arr)
 }
 
-func (q *QBit) createSymLink(path string, torrent *debrid.Torrent, file debrid.TorrentFile) {
+func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) (string, error) {
+	pathChan := make(chan string)
+	errChan := make(chan error)
+
+	go func() {
+		for {
+			torrentPath := debridTorrent.GetMountFolder(rclonePath)
+			if torrentPath != "" {
+				pathChan <- torrentPath
+				return
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
+	select {
+	case path := <-pathChan:
+		return path, nil
+	case err := <-errChan:
+		return "", err
+	}
+}
+
+func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.TorrentFile) {
 
 	// Combine the directory and filename to form a full path
 	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
 	// Create a symbolic link if file doesn't exist
-	torrentMountPath := filepath.Join(q.debrid.GetMountPath(), torrent.Folder, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
-	_ = os.Symlink(torrentMountPath, fullPath)
-	// Check if the file exists
-	if !fileReady(fullPath) {
+	torrentFilePath := filepath.Join(torrentMountPath, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
+	err := os.Symlink(torrentFilePath, fullPath)
+	if err != nil {
 		q.logger.Printf("Failed to create symlink: %s\n", fullPath)
+	}
+	// Check if the file exists
+	if !common.FileReady(fullPath) {
+		q.logger.Printf("Symlink not ready: %s\n", fullPath)
 	}
 }

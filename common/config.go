@@ -25,12 +25,13 @@ type ProxyConfig struct {
 }
 
 type QBitTorrentConfig struct {
-	Username       string   `json:"username"`
-	Password       string   `json:"password"`
-	Port           string   `json:"port"`
-	Debug          bool     `json:"debug"`
-	DownloadFolder string   `json:"download_folder"`
-	Categories     []string `json:"categories"`
+	Username        string   `json:"username"`
+	Password        string   `json:"password"`
+	Port            string   `json:"port"`
+	Debug           bool     `json:"debug"`
+	DownloadFolder  string   `json:"download_folder"`
+	Categories      []string `json:"categories"`
+	RefreshInterval int      `json:"refresh_interval"`
 }
 
 type Config struct {

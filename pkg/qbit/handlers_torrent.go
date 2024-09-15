@@ -19,6 +19,7 @@ func (q *QBit) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	contentType := strings.Split(r.Header.Get("Content-Type"), ";")[0]
 	switch contentType {
 	case "multipart/form-data":
@@ -52,7 +53,7 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		go q.Process(magnet, category)
+		go q.Process(ctx, magnet, category)
 
 	}
 
@@ -68,7 +69,7 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 				q.logger.Printf("Error reading file: %s", fileHeader.Filename)
 				return
 			}
-			go q.Process(magnet, category)
+			go q.Process(ctx, magnet, category)
 		}
 	}
 

@@ -1,7 +1,9 @@
 package common
 
 import (
+	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -15,8 +17,26 @@ func RegexMatch(regex string, value string) bool {
 	return re.MatchString(value)
 }
 
+func RemoveInvalidChars(value string) string {
+	return strings.Map(func(r rune) rune {
+		if r == filepath.Separator || r == ':' {
+			return r
+		}
+		if filepath.IsAbs(string(r)) {
+			return r
+		}
+		if strings.ContainsRune(filepath.VolumeName("C:"+string(r)), r) {
+			return r
+		}
+		if r < 32 || strings.ContainsRune(`<>:"/\|?*`, r) {
+			return -1
+		}
+		return r
+	}, value)
+}
+
 func RemoveExtension(value string) string {
-	re := regexp.MustCompile(VIDEOMATCH)
+	re := regexp.MustCompile(VIDEOMATCH + "|" + SUBMATCH + "|" + SAMPLEMATCH)
 
 	// Find the last index of the matched extension
 	loc := re.FindStringIndex(value)

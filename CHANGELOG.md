@@ -50,3 +50,8 @@
 - Fix Uncached torrents not being downloaded/downloaded
 - Minor bug fixed
 - Fix Race condition in the cache and file system
+
+#### 0.2.2
+- Fix name mismatch in the cache
+- Fix directory mapping with mounts
+- Add Support for refreshing the *arrs

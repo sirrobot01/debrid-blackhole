@@ -289,8 +289,6 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 		p.logger.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
 	} else {
 		// This will prevent the indexer from being disabled by the arr
-		//filename := common.RandomString(10) + ".xml"
-		//_ = os.WriteFile(filename, body, 0644)
 		p.logger.Printf("[%s Report]: No Items are cached; Return only first item with [UnCached]", indexer)
 		item := rss.Channel.Items[0]
 		item.Title = fmt.Sprintf("%s [UnCached]", item.Title)

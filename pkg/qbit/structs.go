@@ -171,6 +171,7 @@ type TorrentCategory struct {
 type Torrent struct {
 	ID            string          `json:"-"`
 	DebridTorrent *debrid.Torrent `json:"-"`
+	TorrentPath   string          `json:"-"`
 
 	AddedOn           int64   `json:"added_on,omitempty"`
 	AmountLeft        int64   `json:"amount_left,omitempty"`
@@ -216,6 +217,10 @@ type Torrent struct {
 	Uploaded          int64   `json:"uploaded,omitempty"`
 	UploadedSession   int64   `json:"uploaded_session,omitempty"`
 	Upspeed           int64   `json:"upspeed,omitempty"`
+}
+
+func (t *Torrent) IsReady() bool {
+	return t.AmountLeft <= 0 && t.TorrentPath != ""
 }
 
 type TorrentProperties struct {
