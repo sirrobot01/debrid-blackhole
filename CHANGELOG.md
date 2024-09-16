@@ -55,3 +55,9 @@
 - Fix name mismatch in the cache
 - Fix directory mapping with mounts
 - Add Support for refreshing the *arrs
+
+#### 0.2.3
+
+- Delete uncached items from RD
+- Fail if the torrent is not cached(optional)
+- Fix cache not being updated

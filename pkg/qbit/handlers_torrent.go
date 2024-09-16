@@ -1,8 +1,6 @@
 package qbit
 
 import (
-	"goBlack/common"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -47,29 +45,21 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, url := range urlList {
-		magnet, err := common.GetMagnetFromUrl(url)
-		if err != nil {
-			q.logger.Printf("Error parsing magnet link: %v\n", err)
+		if err := q.AddMagnet(ctx, url, category); err != nil {
+			q.logger.Printf("Error adding magnet: %v\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		go q.Process(ctx, magnet, category)
-
 	}
 
 	if contentType == "multipart/form-data" {
 		files := r.MultipartForm.File["torrents"]
 		for _, fileHeader := range files {
-			file, _ := fileHeader.Open()
-			defer file.Close()
-			var reader io.Reader = file
-			magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
-			if err != nil {
+			if err := q.AddTorrent(ctx, fileHeader, category); err != nil {
+				q.logger.Printf("Error adding torrent: %v\n", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				q.logger.Printf("Error reading file: %s", fileHeader.Filename)
 				return
 			}
-			go q.Process(ctx, magnet, category)
 		}
 	}
 

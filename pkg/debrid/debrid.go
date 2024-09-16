@@ -12,6 +12,7 @@ type Service interface {
 	SubmitMagnet(torrent *Torrent) (*Torrent, error)
 	CheckStatus(torrent *Torrent) (*Torrent, error)
 	DownloadLink(torrent *Torrent) error
+	DeleteTorrent(torrent *Torrent)
 	IsAvailable(infohashes []string) map[string]bool
 	GetMountPath() string
 	GetDownloadUncached() bool
@@ -134,7 +135,7 @@ func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr) (*Torrent, e
 		if !exists || !hash {
 			return debridTorrent, fmt.Errorf("torrent: %s is not cached", debridTorrent.Name)
 		} else {
-			logger.Printf("Torrent: %s is cached", debridTorrent.Name)
+			logger.Printf("Torrent: %s is cached(or downloading)", debridTorrent.Name)
 		}
 	}
 

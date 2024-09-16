@@ -203,13 +203,26 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
-				// @TODO: Delete the torrent if it's not cached
+				go r.DeleteTorrent(torrent)
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
+			// Break out of the loop if the torrent is downloading.
+			// This is necessary to prevent infinite loop since we moved to sync downloading and async processing
+			break
 		}
 
 	}
 	return torrent, nil
+}
+
+func (r *RealDebrid) DeleteTorrent(torrent *Torrent) {
+	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrent.Id)
+	_, err := r.client.MakeRequest(http.MethodDelete, url, nil)
+	if err == nil {
+		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
+	} else {
+		r.logger.Printf("Error deleting torrent: %s", err)
+	}
 }
 
 func (r *RealDebrid) DownloadLink(torrent *Torrent) error {

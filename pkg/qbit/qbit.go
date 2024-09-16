@@ -2,9 +2,12 @@ package qbit
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"goBlack/common"
 	"goBlack/pkg/debrid"
+	"io"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +15,39 @@ import (
 	"time"
 )
 
-func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category string) (*Torrent, error) {
+func (q *QBit) AddMagnet(ctx context.Context, url, category string) error {
+	magnet, err := common.GetMagnetFromUrl(url)
+	if err != nil {
+		q.logger.Printf("Error parsing magnet link: %v\n", err)
+		return err
+	}
+	err = q.Process(ctx, magnet, category)
+	if err != nil {
+		q.logger.Println("Failed to process magnet:", err)
+		return err
+	}
+	return nil
+}
+
+func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader, category string) error {
+	file, _ := fileHeader.Open()
+	defer file.Close()
+	var reader io.Reader = file
+	magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
+	if err != nil {
+		q.logger.Printf("Error reading file: %s", fileHeader.Filename)
+		return err
+	}
+	err = q.Process(ctx, magnet, category)
+	if err != nil {
+		q.logger.Println("Failed to process torrent:", err)
+		return err
+	}
+	return nil
+}
+
+func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category string) error {
 	torrent := q.CreateTorrentFromMagnet(magnet, category)
-	go q.storage.AddOrUpdate(torrent)
 	arr := &debrid.Arr{
 		Name:  category,
 		Token: ctx.Value("token").(string),
@@ -22,16 +55,17 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 	}
 	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, arr)
 	if err != nil || debridTorrent == nil {
-		// Mark as failed
-		q.logger.Printf("Failed to process torrent: %s: %v", magnet.Name, err)
-		q.MarkAsFailed(torrent)
-		return torrent, err
+		if err == nil {
+			err = fmt.Errorf("failed to process torrent")
+		}
+		return err
 	}
 	torrent.ID = debridTorrent.Id
 	torrent.DebridTorrent = debridTorrent
 	torrent.Name = debridTorrent.Name
-	q.processFiles(torrent, debridTorrent, arr)
-	return torrent, nil
+	q.storage.AddOrUpdate(torrent)
+	go q.processFiles(torrent, debridTorrent, arr) // We can send async for file processing not to delay the response
+	return nil
 }
 
 func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *Torrent {
@@ -72,6 +106,7 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	rCloneBase := q.debrid.GetMountPath()
 	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
 	if err != nil {
+		q.MarkAsFailed(torrent)
 		q.logger.Printf("Error: %v", err)
 		return
 	}
@@ -80,6 +115,7 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
 	if err != nil {
 		q.logger.Printf("Failed to create directory: %s\n", torrentSymlinkPath)
+		q.MarkAsFailed(torrent)
 		return
 	}
 	torrentRclonePath := filepath.Join(rCloneBase, torrentPath)
