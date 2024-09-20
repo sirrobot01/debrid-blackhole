@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -34,7 +35,7 @@ type QBit struct {
 	storage         *TorrentStorage
 	debug           bool
 	logger          *log.Logger
-	arrs            map[string]string // host:token (Used for refreshing in worker)
+	arrs            sync.Map // host:token (Used for refreshing in worker)
 	RefreshInterval int
 }
 
@@ -54,7 +55,7 @@ func NewQBit(config *common.Config, deb debrid.Service, cache *common.Cache) *QB
 		debug:           cfg.Debug,
 		storage:         storage,
 		logger:          common.NewLogger("QBit", os.Stdout),
-		arrs:            make(map[string]string),
+		arrs:            sync.Map{},
 		RefreshInterval: refreshInterval,
 	}
 }

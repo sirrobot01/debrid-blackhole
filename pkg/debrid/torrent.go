@@ -25,23 +25,31 @@ type ArrHistorySchema struct {
 }
 
 type Torrent struct {
-	Id               string         `json:"id"`
-	InfoHash         string         `json:"info_hash"`
-	Name             string         `json:"name"`
-	Folder           string         `json:"folder"`
-	Filename         string         `json:"filename"`
-	OriginalFilename string         `json:"original_filename"`
-	Size             int64          `json:"size"`
-	Bytes            int64          `json:"bytes"` // Size of only the files that are downloaded
-	Magnet           *common.Magnet `json:"magnet"`
-	Files            []TorrentFile  `json:"files"`
-	Status           string         `json:"status"`
-	Progress         float64        `json:"progress"`
-	Speed            int64          `json:"speed"`
-	Seeders          int            `json:"seeders"`
+	Id               string                 `json:"id"`
+	InfoHash         string                 `json:"info_hash"`
+	Name             string                 `json:"name"`
+	Folder           string                 `json:"folder"`
+	Filename         string                 `json:"filename"`
+	OriginalFilename string                 `json:"original_filename"`
+	Size             int64                  `json:"size"`
+	Bytes            int64                  `json:"bytes"` // Size of only the files that are downloaded
+	Magnet           *common.Magnet         `json:"magnet"`
+	Files            []TorrentFile          `json:"files"`
+	Status           string                 `json:"status"`
+	Progress         float64                `json:"progress"`
+	Speed            int64                  `json:"speed"`
+	Seeders          int                    `json:"seeders"`
+	Links            []string               `json:"links"`
+	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`
 
 	Debrid *Debrid
 	Arr    *Arr
+}
+
+type TorrentDownloadLinks struct {
+	Filename     string `json:"filename"`
+	Link         string `json:"link"`
+	DownloadLink string `json:"download_link"`
 }
 
 func (t *Torrent) GetSymlinkFolder(parent string) string {

@@ -52,7 +52,7 @@ func (q *QBit) authContext(next http.Handler) http.Handler {
 		if err == nil {
 			ctx = context.WithValue(r.Context(), "host", host)
 			ctx = context.WithValue(ctx, "token", token)
-			q.arrs[host] = token
+			q.arrs.Store(host, token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}

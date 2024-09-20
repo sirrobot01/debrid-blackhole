@@ -30,12 +30,19 @@ func (q *QBit) RefreshArrs() {
 	if len(torrents) == 0 {
 		return
 	}
-	for host, token := range q.arrs {
+
+	q.arrs.Range(func(key, value interface{}) bool {
+		host, ok := key.(string)
+		token, ok2 := value.(string)
+		if !ok || !ok2 {
+			return true
+		}
 		arr := &debrid.Arr{
 			Name:  "",
 			Token: token,
 			Host:  host,
 		}
 		q.RefreshArr(arr)
-	}
+		return true
+	})
 }

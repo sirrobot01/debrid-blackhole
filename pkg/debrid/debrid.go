@@ -10,8 +10,8 @@ import (
 
 type Service interface {
 	SubmitMagnet(torrent *Torrent) (*Torrent, error)
-	CheckStatus(torrent *Torrent) (*Torrent, error)
-	DownloadLink(torrent *Torrent) error
+	CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
+	GetDownloadLinks(torrent *Torrent) error
 	DeleteTorrent(torrent *Torrent)
 	IsAvailable(infohashes []string) map[string]bool
 	GetMountPath() string
@@ -120,7 +120,7 @@ func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[stri
 	return hashes, result
 }
 
-func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr) (*Torrent, error) {
+func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr, isSymlink bool) (*Torrent, error) {
 	debridTorrent := &Torrent{
 		InfoHash: magnet.InfoHash,
 		Magnet:   magnet,
@@ -144,5 +144,5 @@ func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr) (*Torrent, e
 		logger.Printf("Error submitting magnet: %s", err)
 		return nil, err
 	}
-	return d.CheckStatus(debridTorrent)
+	return d.CheckStatus(debridTorrent, isSymlink)
 }

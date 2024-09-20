@@ -8,10 +8,7 @@ import (
 	"goBlack/pkg/debrid"
 	"io"
 	"mime/multipart"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -53,7 +50,8 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 		Token: ctx.Value("token").(string),
 		Host:  ctx.Value("host").(string),
 	}
-	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, arr)
+	isSymlink := ctx.Value("isSymlink").(bool)
+	debridTorrent, err := debrid.ProcessQBitTorrent(q.debrid, magnet, arr, isSymlink)
 	if err != nil || debridTorrent == nil {
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")
@@ -64,7 +62,7 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 	torrent.DebridTorrent = debridTorrent
 	torrent.Name = debridTorrent.Name
 	q.storage.AddOrUpdate(torrent)
-	go q.processFiles(torrent, debridTorrent, arr) // We can send async for file processing not to delay the response
+	go q.processFiles(torrent, debridTorrent, arr, isSymlink) // We can send async for file processing not to delay the response
 	return nil
 }
 
@@ -97,83 +95,22 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *
 	return torrent
 }
 
-func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *debrid.Arr) {
-	var wg sync.WaitGroup
-	files := debridTorrent.Files
-	ready := make(chan debrid.TorrentFile, len(files))
-
-	q.logger.Printf("Checking %d files...", len(files))
-	rCloneBase := q.debrid.GetMountPath()
-	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
-	if err != nil {
-		q.MarkAsFailed(torrent)
-		q.logger.Printf("Error: %v", err)
-		return
-	}
-
-	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentPath) // /mnt/symlinks/{category}/MyTVShow/
-	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
-	if err != nil {
-		q.logger.Printf("Failed to create directory: %s\n", torrentSymlinkPath)
-		q.MarkAsFailed(torrent)
-		return
-	}
-	torrentRclonePath := filepath.Join(rCloneBase, torrentPath)
-	for _, file := range files {
-		wg.Add(1)
-		go checkFileLoop(&wg, torrentRclonePath, file, ready)
-	}
-
-	go func() {
-		wg.Wait()
-		close(ready)
-	}()
-
-	for f := range ready {
-		q.logger.Println("File is ready:", f.Path)
-		q.createSymLink(torrentSymlinkPath, torrentRclonePath, f)
-	}
-	// Update the torrent when all files are ready
-	torrent.TorrentPath = filepath.Base(torrentPath) // Quite important
-	q.UpdateTorrent(torrent, debridTorrent)
-	q.RefreshArr(arr)
-}
-
-func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) (string, error) {
-	pathChan := make(chan string)
-	errChan := make(chan error)
-
-	go func() {
-		for {
-			torrentPath := debridTorrent.GetMountFolder(rclonePath)
-			if torrentPath != "" {
-				pathChan <- torrentPath
-				return
-			}
-			time.Sleep(time.Second)
+func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *debrid.Arr, isSymlink bool) {
+	for debridTorrent.Status != "downloaded" {
+		progress := debridTorrent.Progress
+		q.logger.Printf("Progress: %.2f%%", progress)
+		time.Sleep(5 * time.Second)
+		dbT, err := q.debrid.CheckStatus(debridTorrent, isSymlink)
+		if err != nil {
+			q.logger.Printf("Error checking status: %v", err)
+			q.MarkAsFailed(torrent)
+			return
 		}
-	}()
-
-	select {
-	case path := <-pathChan:
-		return path, nil
-	case err := <-errChan:
-		return "", err
+		debridTorrent = dbT
 	}
-}
-
-func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.TorrentFile) {
-
-	// Combine the directory and filename to form a full path
-	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
-	// Create a symbolic link if file doesn't exist
-	torrentFilePath := filepath.Join(torrentMountPath, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
-	err := os.Symlink(torrentFilePath, fullPath)
-	if err != nil {
-		q.logger.Printf("Failed to create symlink: %s\n", fullPath)
-	}
-	// Check if the file exists
-	if !common.FileReady(fullPath) {
-		q.logger.Printf("Symlink not ready: %s\n", fullPath)
+	if isSymlink {
+		q.processSymlink(torrent, debridTorrent, arr)
+	} else {
+		q.processManualFiles(torrent, debridTorrent, arr)
 	}
 }

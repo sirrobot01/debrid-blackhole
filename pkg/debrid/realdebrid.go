@@ -40,7 +40,9 @@ func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
 	files := make([]TorrentFile, 0)
 	for _, f := range data.Files {
 		name := filepath.Base(f.Path)
-		if (!common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.SUBMATCH, name)) || common.RegexMatch(common.SAMPLEMATCH, name) {
+		if (!common.RegexMatch(common.VIDEOMATCH, name) &&
+			!common.RegexMatch(common.SUBMATCH, name) &&
+			!common.RegexMatch(common.MUSICMATCH, name)) || common.RegexMatch(common.SAMPLEMATCH, name) {
 			continue
 		}
 		fileId := f.ID
@@ -149,12 +151,13 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	torrent.Seeders = data.Seeders
 	torrent.Filename = data.Filename
 	torrent.OriginalFilename = data.OriginalFilename
+	torrent.Links = data.Links
 	files := GetTorrentFiles(data)
 	torrent.Files = files
 	return torrent, nil
 }
 
-func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
+func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, torrent.Id)
 	for {
 		resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
@@ -174,6 +177,8 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 		torrent.Progress = data.Progress
 		torrent.Speed = data.Speed
 		torrent.Seeders = data.Seeders
+		torrent.Links = data.Links
+		torrent.Status = status
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "waiting_files_selection" {
@@ -195,11 +200,16 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent) (*Torrent, error) {
 				return torrent, err
 			}
 		} else if status == "downloaded" {
-			log.Printf("Torrent: %s downloaded\n", torrent.Name)
-			err = r.DownloadLink(torrent)
-			if err != nil {
-				return torrent, err
+			files := GetTorrentFiles(data)
+			torrent.Files = files
+			log.Printf("Torrent: %s downloaded to RD\n", torrent.Name)
+			if !isSymlink {
+				err = r.GetDownloadLinks(torrent)
+				if err != nil {
+					return torrent, err
+				}
 			}
+
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
@@ -225,7 +235,32 @@ func (r *RealDebrid) DeleteTorrent(torrent *Torrent) {
 	}
 }
 
-func (r *RealDebrid) DownloadLink(torrent *Torrent) error {
+func (r *RealDebrid) GetDownloadLinks(torrent *Torrent) error {
+	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
+	downloadLinks := make([]TorrentDownloadLinks, 0)
+	for _, link := range torrent.Links {
+		if link == "" {
+			continue
+		}
+		payload := gourl.Values{
+			"link": {link},
+		}
+		resp, err := r.client.MakeRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+		if err != nil {
+			return err
+		}
+		var data structs.RealDebridUnrestrictResponse
+		if err = json.Unmarshal(resp, &data); err != nil {
+			return err
+		}
+		download := TorrentDownloadLinks{
+			Link:         data.Link,
+			Filename:     data.Filename,
+			DownloadLink: data.Download,
+		}
+		downloadLinks = append(downloadLinks, download)
+	}
+	torrent.DownloadLinks = downloadLinks
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package qbit
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,8 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	isSymlink := strings.ToLower(r.FormValue("sequentialDownload")) != "true"
+	q.logger.Printf("isSymlink: %v\n", isSymlink)
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
 
@@ -43,6 +46,8 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	if urls != "" {
 		urlList = strings.Split(urls, "\n")
 	}
+
+	ctx = context.WithValue(ctx, "isSymlink", isSymlink)
 
 	for _, url := range urlList {
 		if err := q.AddMagnet(ctx, url, category); err != nil {
