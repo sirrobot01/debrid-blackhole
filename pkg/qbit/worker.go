@@ -20,17 +20,15 @@ func (q *QBit) StartRefreshWorker(ctx context.Context) {
 			q.logger.Println("Qbit Refresh Worker stopped")
 			return
 		case <-refreshTicker.C:
-			q.RefreshArrs()
+			torrents := q.storage.GetAll("", "", nil)
+			if len(torrents) > 0 {
+				q.RefreshArrs()
+			}
 		}
 	}
 }
 
 func (q *QBit) RefreshArrs() {
-	torrents := q.storage.GetAll("", "", nil)
-	if len(torrents) == 0 {
-		return
-	}
-
 	q.arrs.Range(func(key, value interface{}) bool {
 		host, ok := key.(string)
 		token, ok2 := value.(string)

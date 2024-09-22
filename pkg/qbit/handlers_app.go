@@ -7,12 +7,10 @@ import (
 
 func (q *QBit) handleVersion(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("v4.3.2"))
-	w.WriteHeader(http.StatusOK)
 }
 
 func (q *QBit) handleWebAPIVersion(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("2.7"))
-	w.WriteHeader(http.StatusOK)
 }
 
 func (q *QBit) handlePreferences(w http.ResponseWriter, r *http.Request) {

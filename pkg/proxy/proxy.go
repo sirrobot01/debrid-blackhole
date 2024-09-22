@@ -211,13 +211,6 @@ func (item Item) getHash() string {
 	}
 	infohash = hash
 	if infohash == "" {
-		//Get torrent file from http link
-		//Takes too long, not worth it
-		//magnet, err := common.OpenMagnetHttpURL(magnetLink)
-		//if err == nil && magnet != nil && magnet.InfoHash != "" {
-		//	log.Printf("Magnet: %s", magnet.InfoHash)
-		//}
-
 		if strings.Contains(magnetLink, "http") {
 			h, _ := common.GetInfohashFromURL(magnetLink)
 			if h != "" {
@@ -325,9 +318,7 @@ func (p *Proxy) Start() {
 		})
 	}
 
-	proxy.OnRequest(
-		goproxy.ReqHostMatches(regexp.MustCompile("^.443$")),
-		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$"))).HandleConnect(goproxy.AlwaysMitm)
+	proxy.OnRequest(goproxy.ReqHostMatches(regexp.MustCompile("^.443$"))).HandleConnect(goproxy.AlwaysMitm)
 	proxy.OnResponse(
 		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$")),
 		goproxy.StatusCodeIs(http.StatusOK, http.StatusAccepted)).DoFunc(

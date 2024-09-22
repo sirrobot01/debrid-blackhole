@@ -77,7 +77,7 @@ func (ts *TorrentStorage) Get(hash string) *Torrent {
 func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string) []*Torrent {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	torrents := make([]*Torrent, 0, len(ts.torrents))
+	torrents := make([]*Torrent, 0)
 	for _, id := range ts.order {
 		torrent := ts.torrents[id]
 		if category != "" && torrent.Category != category {

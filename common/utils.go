@@ -217,7 +217,7 @@ func NewLogger(prefix string, output *os.File) *log.Logger {
 func GetInfohashFromURL(url string) (string, error) {
 	// Download the torrent file
 	var magnetLink string
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client := &http.Client{
 		Timeout: 30 * time.Second,

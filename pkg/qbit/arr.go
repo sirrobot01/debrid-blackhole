@@ -40,7 +40,9 @@ func (q *QBit) RefreshArr(arr *debrid.Arr) {
 	if reqErr == nil {
 		statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'
 		if statusOk {
-			q.logger.Printf("Refreshed monitored downloads for %s", cmp.Or(arr.Name, arr.Host))
+			if q.debug {
+				q.logger.Printf("Refreshed monitored downloads for %s", cmp.Or(arr.Name, arr.Host))
+			}
 		}
 	}
 	if reqErr != nil {

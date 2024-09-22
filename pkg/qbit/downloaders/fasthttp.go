@@ -10,7 +10,8 @@ import (
 
 func GetFastHTTPClient() *fasthttp.Client {
 	return &fasthttp.Client{
-		TLSConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSConfig:          &tls.Config{InsecureSkipVerify: true},
+		StreamResponseBody: true,
 	}
 }
 
@@ -35,19 +36,24 @@ func NormalFastHTTP(client *fasthttp.Client, url, filename string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Println("Error closing file:", err)
+			return
+		}
+	}(file)
 	bodyStream := resp.BodyStream()
 	if bodyStream == nil {
-		return fmt.Errorf("bodyStream is nil")
-	}
-	defer func() {
-		if rc, ok := bodyStream.(io.Closer); ok {
-			rc.Close()
+		// Write to memory and then to file
+		_, err := file.Write(resp.Body())
+		if err != nil {
+			return err
 		}
-	}()
-
-	if _, err := io.Copy(file, bodyStream); err != nil {
-		return err
+	} else {
+		if _, err := io.Copy(file, bodyStream); err != nil {
+			return err
+		}
 	}
 	return nil
 }

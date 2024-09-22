@@ -63,7 +63,9 @@ func NewQBit(config *common.Config, deb debrid.Service, cache *common.Cache) *QB
 func (q *QBit) Start() {
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	if q.debug {
+		r.Use(middleware.Logger)
+	}
 	r.Use(middleware.Recoverer)
 
 	q.AddRoutes(r)
