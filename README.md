@@ -124,6 +124,7 @@ Setting Up Qbittorrent in Arr
   - Password: `sonarr_token` # Your arr token
   - Category: e.g `sonarr`, `radarr`
   - Use SSL -> `No`
+  - Sequential Download -> `No`|`Yes` (If you want to download the torrents locally instead of symlink)
   - Test
   - Save
 

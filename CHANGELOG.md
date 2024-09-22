@@ -61,3 +61,10 @@
 - Delete uncached items from RD
 - Fail if the torrent is not cached(optional)
 - Fix cache not being updated
+
+#### 0.2.4
+
+- Add file download support(Sequential Download)
+- Fix http handler error
+- Fix *arrs map failing concurrently
+- Fix cache not being updated
