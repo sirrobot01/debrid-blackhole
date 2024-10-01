@@ -68,16 +68,19 @@ Download the binary from the releases page and run it with the config file.
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
-    "username": "admin", // deprecated
-    "password": "admin", // deprecated
     "download_folder": "/media/symlinks/",
     "categories": ["sonarr", "radarr"],
-    "refresh_interval": 5 // in seconds
+    "refresh_interval": 5
   }
 }
 ```
 
 #### Config Notes
+##### Max Cache Size
+- The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent
+- The default value is `1000`
+- The cache is stored in memory and is not persisted on restart
+
 ##### Debrid Config
 - This config key is important as it's used for both Blackhole and Proxy
 
@@ -93,6 +96,7 @@ Download the binary from the releases page and run it with the config file.
 - The `port` key is the port the qBittorrent will listen on
 - The `download_folder` is the folder where the torrents will be downloaded. e.g `/media/symlinks/`
 - The `categories` key is used to filter out torrents based on the category. e.g `sonarr`, `radarr`
+- The `refresh_interval` key is used to set the interval in minutes to refresh the Arrs Monitored Downloads(it's in seconds). The default value is `5` seconds
 
 ### Proxy
 

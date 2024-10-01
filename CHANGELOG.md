@@ -68,3 +68,8 @@
 - Fix http handler error
 - Fix *arrs map failing concurrently
 - Fix cache not being updated
+
+#### 0.2.5
+- Fix ContentPath not being set prior
+- Rewrote Readme
+- Cleaned up the code

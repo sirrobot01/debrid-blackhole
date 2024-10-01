@@ -5,6 +5,5 @@ import (
 )
 
 func (q *QBit) handleLogin(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Ok."))
+	_, _ = w.Write([]byte("Ok."))
 }

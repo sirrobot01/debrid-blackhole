@@ -24,6 +24,7 @@ func (q *QBit) AddRoutes(r chi.Router) http.Handler {
 				r.Get("/resume", q.handleTorrentsResume)
 				r.Get("/recheck", q.handleTorrentRecheck)
 				r.Get("/properties", q.handleTorrentProperties)
+				r.Get("/files", q.handleTorrentFiles)
 			})
 
 			r.Route("/app", func(r chi.Router) {

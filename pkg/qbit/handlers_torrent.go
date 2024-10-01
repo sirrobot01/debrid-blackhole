@@ -163,3 +163,13 @@ func (q *QBit) handleTorrentProperties(w http.ResponseWriter, r *http.Request) {
 	properties := q.GetTorrentProperties(torrent)
 	JSONResponse(w, properties, http.StatusOK)
 }
+
+func (q *QBit) handleTorrentFiles(w http.ResponseWriter, r *http.Request) {
+	hash := r.URL.Query().Get("hash")
+	torrent := q.storage.Get(hash)
+	if torrent == nil {
+		return
+	}
+	files := q.GetTorrentFiles(torrent)
+	JSONResponse(w, files, http.StatusOK)
+}

@@ -58,9 +58,7 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 		}
 		return err
 	}
-	torrent.ID = debridTorrent.Id
-	torrent.DebridTorrent = debridTorrent
-	torrent.Name = debridTorrent.Name
+	torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 	q.storage.AddOrUpdate(torrent)
 	go q.processFiles(torrent, debridTorrent, arr, isSymlink) // We can send async for file processing not to delay the response
 	return nil
@@ -74,23 +72,14 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *
 		Size:      magnet.Size,
 		Category:  category,
 		State:     "downloading",
-		AddedOn:   time.Now().Unix(),
 		MagnetUri: magnet.Link,
 
-		Tracker:        "udp://tracker.opentrackr.org:1337",
-		UpLimit:        -1,
-		DlLimit:        -1,
-		FlPiecePrio:    false,
-		ForceStart:     false,
-		AutoTmm:        false,
-		Availability:   2,
-		MaxRatio:       -1,
-		MaxSeedingTime: -1,
-		NumComplete:    10,
-		NumIncomplete:  0,
-		NumLeechs:      1,
-		Ratio:          1,
-		RatioLimit:     1,
+		Tracker:    "udp://tracker.opentrackr.org:1337",
+		UpLimit:    -1,
+		DlLimit:    -1,
+		AutoTmm:    false,
+		Ratio:      1,
+		RatioLimit: 1,
 	}
 	return torrent
 }
@@ -98,15 +87,17 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *
 func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *debrid.Arr, isSymlink bool) {
 	for debridTorrent.Status != "downloaded" {
 		progress := debridTorrent.Progress
-		q.logger.Printf("Progress: %.2f%%", progress)
+		q.logger.Printf("RD Download Progress: %.2f%%", progress)
 		time.Sleep(5 * time.Second)
 		dbT, err := q.debrid.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Printf("Error checking status: %v", err)
 			q.MarkAsFailed(torrent)
+			q.RefreshArr(arr)
 			return
 		}
 		debridTorrent = dbT
+		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 	}
 	if isSymlink {
 		q.processSymlink(torrent, debridTorrent, arr)

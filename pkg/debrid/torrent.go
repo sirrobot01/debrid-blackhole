@@ -36,6 +36,7 @@ type Torrent struct {
 	Magnet           *common.Magnet         `json:"magnet"`
 	Files            []TorrentFile          `json:"files"`
 	Status           string                 `json:"status"`
+	Added            string                 `json:"added"`
 	Progress         float64                `json:"progress"`
 	Speed            int64                  `json:"speed"`
 	Seeders          int                    `json:"seeders"`

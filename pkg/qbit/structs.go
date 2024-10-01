@@ -174,20 +174,20 @@ type Torrent struct {
 	TorrentPath   string          `json:"-"`
 
 	AddedOn           int64   `json:"added_on,omitempty"`
-	AmountLeft        int64   `json:"amount_left,omitempty"`
+	AmountLeft        int64   `json:"amount_left"`
 	AutoTmm           bool    `json:"auto_tmm"`
-	Availability      float64 `json:"availability"`
+	Availability      float64 `json:"availability,omitempty"`
 	Category          string  `json:"category,omitempty"`
-	Completed         int64   `json:"completed,omitempty"`
+	Completed         int64   `json:"completed"`
 	CompletionOn      int64   `json:"completion_on,omitempty"`
-	ContentPath       string  `json:"content_path,omitempty"`
-	DlLimit           int64   `json:"dl_limit,omitempty"`
-	Dlspeed           int64   `json:"dlspeed,omitempty"`
-	Downloaded        int64   `json:"downloaded,omitempty"`
-	DownloadedSession int64   `json:"downloaded_session,omitempty"`
-	Eta               int64   `json:"eta,omitempty"`
-	FlPiecePrio       bool    `json:"f_l_piece_prio"`
-	ForceStart        bool    `json:"force_start"`
+	ContentPath       string  `json:"content_path"`
+	DlLimit           int64   `json:"dl_limit"`
+	Dlspeed           int64   `json:"dlspeed"`
+	Downloaded        int64   `json:"downloaded"`
+	DownloadedSession int64   `json:"downloaded_session"`
+	Eta               int64   `json:"eta"`
+	FlPiecePrio       bool    `json:"f_l_piece_prio,omitempty"`
+	ForceStart        bool    `json:"force_start,omitempty"`
 	Hash              string  `json:"hash"`
 	LastActivity      int64   `json:"last_activity,omitempty"`
 	MagnetUri         string  `json:"magnet_uri,omitempty"`
@@ -202,7 +202,7 @@ type Torrent struct {
 	Progress          float32 `json:"progress"`
 	Ratio             int64   `json:"ratio,omitempty"`
 	RatioLimit        int64   `json:"ratio_limit,omitempty"`
-	SavePath          string  `json:"save_path,omitempty"`
+	SavePath          string  `json:"save_path"`
 	SeedingTimeLimit  int64   `json:"seeding_time_limit,omitempty"`
 	SeenComplete      int64   `json:"seen_complete,omitempty"`
 	SeqDl             bool    `json:"seq_dl"`
@@ -257,6 +257,17 @@ type TorrentProperties struct {
 	UpLimit                int64  `json:"up_limit,omitempty"`
 	UpSpeed                int64  `json:"up_speed,omitempty"`
 	UpSpeedAvg             int64  `json:"up_speed_avg,omitempty"`
+}
+
+type TorrentFile struct {
+	Index        int     `json:"index,omitempty"`
+	Name         string  `json:"name,omitempty"`
+	Size         int64   `json:"size,omitempty"`
+	Progress     int64   `json:"progress,omitempty"`
+	Priority     int64   `json:"priority,omitempty"`
+	IsSeed       bool    `json:"is_seed,omitempty"`
+	PieceRange   []int64 `json:"piece_range,omitempty"`
+	Availability float64 `json:"availability,omitempty"`
 }
 
 func NewAppPreferences() *AppPreferences {
