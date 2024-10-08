@@ -185,6 +185,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 			files := GetTorrentFiles(data)
 			torrent.Files = files
 			if len(files) == 0 {
+				r.DeleteTorrent(torrent)
 				return torrent, fmt.Errorf("no video files found")
 			}
 			filesId := make([]string, 0)

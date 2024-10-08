@@ -73,3 +73,7 @@
 - Fix ContentPath not being set prior
 - Rewrote Readme
 - Cleaned up the code
+
+#### 0.2.6
+- Delete torrent for empty matched files
+- Update Readme

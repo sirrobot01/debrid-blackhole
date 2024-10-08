@@ -3,7 +3,7 @@
 This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid Proxy Support**.
 
 #### Uses
-- Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, etc)
+- Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, Lidarr etc)
 - Proxy support for the Arrs
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
@@ -37,6 +37,8 @@ services:
       - QBIT_PORT=8282 # qBittorrent Port. This is optional. You can set this in the config file
       - PORT=8181 # Proxy Port. This is optional. You can set this in the config file
     restart: unless-stopped
+    depends_on:
+      - rclone # If you are using rclone with docker
     
 ```
 
