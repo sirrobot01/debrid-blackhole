@@ -1,12 +1,19 @@
 ### GoBlackHole(with Debrid Proxy Support)
 
-This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid Proxy Support**.
+This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid & Torbox Support**.
 
-#### Uses
+#### Features
 - Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, etc)
 - Proxy support for the Arrs
+- Real Debrid Support
+- Torbox Support
+- Multi-Debrid Providers support
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
+
+### Supported Debrid Providers
+- Real Debrid
+- Torbox
 
 ### Changelog
 
@@ -58,7 +65,7 @@ Download the binary from the releases page and run it with the config file.
       "folder": "data/realdebrid/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
-      "check_uncached": true
+      "check_cached": true
     },
     {
       "name": "realdebrid",
@@ -67,7 +74,7 @@ Download the binary from the releases page and run it with the config file.
       "folder": "data/realdebrid/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
-      "check_uncached": false
+      "check_cached": false
     }
   ],
   "proxy": {
@@ -94,7 +101,14 @@ Download the binary from the releases page and run it with the config file.
 
 #### Config Notes
 ##### Debrid Config
-- This config key is important as it's used for both Blackhole and Proxy
+- The `debrids` key is an array of debrid providers
+- The `name` key is the name of the debrid provider
+- The `host` key is the API endpoint of the debrid provider
+- The `api_key` key is the API key of the debrid provider
+- The `folder` key is the folder where the torrents will be downloaded. e.g `data/realdebrid/torrents/`
+- The `rate_limit` key is the rate limit of the debrid provider(null by default)
+- The `download_uncached` bool key is used to download uncached torrents(disabled by default)
+- The `check_cached` bool key is used to check if the torrent is cached(disabled by default)
 
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy

@@ -149,7 +149,7 @@ func ProcessQBitTorrent(d *DebridService, magnet *common.Magnet, arr *Arr, isSym
 		log.Println("Processing debrid: ", db.GetName())
 		logger := db.GetLogger()
 		logger.Printf("Torrent Hash: %s", debridTorrent.InfoHash)
-		if !db.GetCheckCached() {
+		if db.GetCheckCached() {
 			hash, exists := db.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
 			if !exists || !hash {
 				logger.Printf("Torrent: %s is not cached", debridTorrent.Name)
