@@ -4,7 +4,6 @@ import (
 	"goBlack/common"
 	"goBlack/pkg/debrid"
 	"goBlack/pkg/qbit/downloaders"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -60,7 +59,6 @@ func (q *QBit) processSymlink(torrent *Torrent, debridTorrent *debrid.Torrent, a
 
 	q.logger.Printf("Checking %d files...", len(files))
 	rCloneBase := debridTorrent.Debrid.GetMountPath()
-	log.Println("Rclone base:", rCloneBase)
 	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
 	if err != nil {
 		q.MarkAsFailed(torrent)

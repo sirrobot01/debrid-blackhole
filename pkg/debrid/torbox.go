@@ -11,6 +11,7 @@ import (
 	"net/http"
 	gourl "net/url"
 	"os"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -169,6 +170,10 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 			Name: f.Name,
 			Size: f.Size,
 		}
+	}
+	if len(files) > 0 && name == data.Hash {
+		cleanPath := path.Clean(files[0].Name)
+		torrent.OriginalFilename = strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")[0]
 	}
 	torrent.Files = files
 	torrent.Debrid = r

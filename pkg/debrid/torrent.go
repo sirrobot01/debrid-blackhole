@@ -57,12 +57,11 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 }
 
 func (t *Torrent) GetMountFolder(rClonePath string) string {
-	pathWithNoExt := common.RemoveExtension(t.OriginalFilename)
 	if common.FileReady(filepath.Join(rClonePath, t.OriginalFilename)) {
 		return t.OriginalFilename
 	} else if common.FileReady(filepath.Join(rClonePath, t.Filename)) {
 		return t.Filename
-	} else if common.FileReady(filepath.Join(rClonePath, pathWithNoExt)) {
+	} else if pathWithNoExt := common.RemoveExtension(t.OriginalFilename); common.FileReady(filepath.Join(rClonePath, pathWithNoExt)) {
 		return pathWithNoExt
 	} else {
 		return ""
