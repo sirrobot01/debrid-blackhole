@@ -30,7 +30,7 @@ type QBit struct {
 	Port            string   `json:"port"`
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
-	debrid          debrid.Service
+	debrid          *debrid.DebridService
 	cache           *common.Cache
 	storage         *TorrentStorage
 	debug           bool
@@ -39,7 +39,7 @@ type QBit struct {
 	RefreshInterval int
 }
 
-func NewQBit(config *common.Config, deb debrid.Service, cache *common.Cache) *QBit {
+func NewQBit(config *common.Config, deb *debrid.DebridService, cache *common.Cache) *QBit {
 	cfg := config.QBitTorrent
 	storage := NewTorrentStorage("torrents.json")
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8182")

@@ -50,16 +50,29 @@ Download the binary from the releases page and run it with the config file.
 #### Config
 ```json
 {
-  "debrid": {
-    "name": "realdebrid",
-    "host": "https://api.real-debrid.com/rest/1.0",
-    "api_key": "realdebrid_api_key",
-    "folder": "data/realdebrid/torrents/",
-    "rate_limit": "250/minute"
-  },
+  "debrids": [
+    {
+      "name": "torbox",
+      "host": "https://api.torbox.app/v1",
+      "api_key": "torbox_api_key",
+      "folder": "data/realdebrid/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_uncached": true
+    },
+    {
+      "name": "realdebrid",
+      "host": "https://api.real-debrid.com/rest/1.0",
+      "api_key": "realdebrid_key",
+      "folder": "data/realdebrid/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_uncached": false
+    }
+  ],
   "proxy": {
     "enabled": true,
-    "port": "8181",
+    "port": "8100",
     "debug": false,
     "username": "username",
     "password": "password",
@@ -68,11 +81,13 @@ Download the binary from the releases page and run it with the config file.
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
-    "username": "admin", // deprecated
-    "password": "admin", // deprecated
     "download_folder": "/media/symlinks/",
-    "categories": ["sonarr", "radarr"],
-    "refresh_interval": 5 // in seconds
+    "categories": [
+      "sonarr",
+      "radarr"
+    ],
+    "debug": true,
+    "refresh_interval": 10
   }
 }
 ```

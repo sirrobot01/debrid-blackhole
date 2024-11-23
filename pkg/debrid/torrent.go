@@ -42,7 +42,7 @@ type Torrent struct {
 	Links            []string               `json:"links"`
 	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`
 
-	Debrid *Debrid
+	Debrid Service
 	Arr    *Arr
 }
 
@@ -74,6 +74,7 @@ type TorrentFile struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 	Path string `json:"path"`
+	Link string `json:"link"`
 }
 
 func getEventId(eventType string) int {

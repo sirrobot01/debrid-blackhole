@@ -100,7 +100,7 @@ func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		progress := debridTorrent.Progress
 		q.logger.Printf("Progress: %.2f%%", progress)
 		time.Sleep(5 * time.Second)
-		dbT, err := q.debrid.CheckStatus(debridTorrent, isSymlink)
+		dbT, err := debridTorrent.Debrid.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Printf("Error checking status: %v", err)
 			q.MarkAsFailed(torrent)

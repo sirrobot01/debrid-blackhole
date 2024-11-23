@@ -17,16 +17,17 @@ func (q *QBit) MarkAsFailed(t *Torrent) *Torrent {
 }
 
 func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent {
-	rcLoneMount := q.debrid.GetMountPath()
+	db := debridTorrent.Debrid
+	rcLoneMount := db.GetMountPath()
 	if debridTorrent == nil && t.ID != "" {
-		debridTorrent, _ = q.debrid.GetTorrent(t.ID)
+		debridTorrent, _ = db.GetTorrent(t.ID)
 	}
 	if debridTorrent == nil {
-		q.logger.Printf("Torrent with ID %s not found in %s", t.ID, q.debrid.GetName())
+		q.logger.Printf("Torrent with ID %s not found in %s", t.ID, db.GetName())
 		return t
 	}
 	if debridTorrent.Status != "downloaded" {
-		debridTorrent, _ = q.debrid.GetTorrent(t.ID)
+		debridTorrent, _ = db.GetTorrent(t.ID)
 	}
 
 	if t.TorrentPath == "" {
@@ -50,7 +51,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	if speed != 0 {
 		eta = int64((totalSize - float64(sizeCompleted)) / float64(speed))
 	}
-	
+
 	t.Size = debridTorrent.Bytes
 	t.DebridTorrent = debridTorrent
 	t.Completed = sizeCompleted

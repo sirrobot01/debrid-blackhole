@@ -13,7 +13,7 @@ func Start(config *common.Config) {
 	maxCacheSize := cmp.Or(config.MaxCacheSize, 1000)
 	cache := common.NewCache(maxCacheSize)
 
-	deb := debrid.NewDebrid(config.Debrid, cache)
+	deb := debrid.NewDebrid(config.Debrids, cache)
 
 	var wg sync.WaitGroup
 

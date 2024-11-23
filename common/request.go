@@ -60,11 +60,7 @@ func (c *RLHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return resp, fmt.Errorf("max retries exceeded")
 }
 
-func (c *RLHTTPClient) MakeRequest(method string, url string, body io.Reader) ([]byte, error) {
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return nil, err
-	}
+func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 	if c.Headers != nil {
 		for key, value := range c.Headers {
 			req.Header.Set(key, value)
@@ -75,6 +71,7 @@ func (c *RLHTTPClient) MakeRequest(method string, url string, body io.Reader) ([
 	if err != nil {
 		return nil, err
 	}
+	b, _ := io.ReadAll(res.Body)
 	statusOk := strconv.Itoa(res.StatusCode)[0] == '2'
 	if !statusOk {
 		return nil, fmt.Errorf("unexpected status code: %d", res.StatusCode)
@@ -85,7 +82,7 @@ func (c *RLHTTPClient) MakeRequest(method string, url string, body io.Reader) ([
 			log.Println(err)
 		}
 	}(res.Body)
-	return io.ReadAll(res.Body)
+	return b, nil
 }
 
 func NewRLHTTPClient(rl *rate.Limiter, headers map[string]string) *RLHTTPClient {
