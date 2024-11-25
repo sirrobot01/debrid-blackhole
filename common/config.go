@@ -12,6 +12,7 @@ type DebridConfig struct {
 	APIKey           string `json:"api_key"`
 	Folder           string `json:"folder"`
 	DownloadUncached bool   `json:"download_uncached"`
+	CheckCached      bool   `json:"check_cached"`
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
 }
 
@@ -36,6 +37,7 @@ type QBitTorrentConfig struct {
 
 type Config struct {
 	Debrid       DebridConfig      `json:"debrid"`
+	Debrids      []DebridConfig    `json:"debrids"`
 	Proxy        ProxyConfig       `json:"proxy"`
 	MaxCacheSize int               `json:"max_cache_size"`
 	QBitTorrent  QBitTorrentConfig `json:"qbittorrent"`
@@ -60,9 +62,9 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if config.Proxy.CachedOnly == nil {
-		config.Proxy.CachedOnly = new(bool)
-		*config.Proxy.CachedOnly = true
+
+	if config.Debrid.Name != "" {
+		config.Debrids = append(config.Debrids, config.Debrid)
 	}
 
 	return config, nil

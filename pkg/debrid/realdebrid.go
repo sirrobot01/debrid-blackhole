@@ -15,13 +15,7 @@ import (
 )
 
 type RealDebrid struct {
-	Host             string `json:"host"`
-	APIKey           string
-	DownloadUncached bool
-	client           *common.RLHTTPClient
-	cache            *common.Cache
-	MountPath        string
-	logger           *log.Logger
+	BaseDebrid
 }
 
 func (r *RealDebrid) GetMountPath() string {
@@ -29,7 +23,7 @@ func (r *RealDebrid) GetMountPath() string {
 }
 
 func (r *RealDebrid) GetName() string {
-	return "realdebrid"
+	return r.Name
 }
 
 func (r *RealDebrid) GetLogger() *log.Logger {
@@ -89,7 +83,8 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 
 		hashStr := strings.Join(validHashes, "/")
 		url := fmt.Sprintf("%s/torrents/instantAvailability/%s", r.Host, hashStr)
-		resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
+		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		resp, err := r.client.MakeRequest(req)
 		if err != nil {
 			log.Println("Error checking availability:", err)
 			return result
@@ -117,7 +112,8 @@ func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 		"magnet": {torrent.Magnet.Link},
 	}
 	var data structs.RealDebridAddMagnetSchema
-	resp, err := r.client.MakeRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+	resp, err := r.client.MakeRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +127,8 @@ func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	torrent := &Torrent{}
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, id)
-	resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := r.client.MakeRequest(req)
 	if err != nil {
 		return torrent, err
 	}
@@ -152,6 +149,7 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	torrent.Filename = data.Filename
 	torrent.OriginalFilename = data.OriginalFilename
 	torrent.Links = data.Links
+	torrent.Debrid = r
 	files := GetTorrentFiles(data)
 	torrent.Files = files
 	return torrent, nil
@@ -159,8 +157,9 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 
 func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, torrent.Id)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	for {
-		resp, err := r.client.MakeRequest(http.MethodGet, url, nil)
+		resp, err := r.client.MakeRequest(req)
 		if err != nil {
 			log.Println("ERROR Checking file: ", err)
 			return torrent, err
@@ -179,6 +178,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		torrent.Seeders = data.Seeders
 		torrent.Links = data.Links
 		torrent.Status = status
+		torrent.Debrid = r
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "waiting_files_selection" {
@@ -196,7 +196,8 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 				"files": {strings.Join(filesId, ",")},
 			}
 			payload := strings.NewReader(p.Encode())
-			_, err = r.client.MakeRequest(http.MethodPost, fmt.Sprintf("%s/torrents/selectFiles/%s", r.Host, torrent.Id), payload)
+			req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/torrents/selectFiles/%s", r.Host, torrent.Id), payload)
+			_, err = r.client.MakeRequest(req)
 			if err != nil {
 				return torrent, err
 			}
@@ -210,7 +211,6 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 					return torrent, err
 				}
 			}
-
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
@@ -228,7 +228,8 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 
 func (r *RealDebrid) DeleteTorrent(torrent *Torrent) {
 	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrent.Id)
-	_, err := r.client.MakeRequest(http.MethodDelete, url, nil)
+	req, _ := http.NewRequest(http.MethodDelete, url, nil)
+	_, err := r.client.MakeRequest(req)
 	if err == nil {
 		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
 	} else {
@@ -246,7 +247,8 @@ func (r *RealDebrid) GetDownloadLinks(torrent *Torrent) error {
 		payload := gourl.Values{
 			"link": {link},
 		}
-		resp, err := r.client.MakeRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+		resp, err := r.client.MakeRequest(req)
 		if err != nil {
 			return err
 		}
@@ -265,8 +267,8 @@ func (r *RealDebrid) GetDownloadLinks(torrent *Torrent) error {
 	return nil
 }
 
-func (r *RealDebrid) GetDownloadUncached() bool {
-	return r.DownloadUncached
+func (r *RealDebrid) GetCheckCached() bool {
+	return r.CheckCached
 }
 
 func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
@@ -277,12 +279,16 @@ func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
 	client := common.NewRLHTTPClient(rl, headers)
 	logger := common.NewLogger(dc.Name, os.Stdout)
 	return &RealDebrid{
-		Host:             dc.Host,
-		APIKey:           dc.APIKey,
-		DownloadUncached: dc.DownloadUncached,
-		client:           client,
-		cache:            cache,
-		MountPath:        dc.Folder,
-		logger:           logger,
+		BaseDebrid: BaseDebrid{
+			Name:             "realdebrid",
+			Host:             dc.Host,
+			APIKey:           dc.APIKey,
+			DownloadUncached: dc.DownloadUncached,
+			client:           client,
+			cache:            cache,
+			MountPath:        dc.Folder,
+			logger:           logger,
+			CheckCached:      dc.CheckCached,
+		},
 	}
 }

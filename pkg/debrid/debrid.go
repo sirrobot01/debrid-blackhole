@@ -8,20 +8,8 @@ import (
 	"path/filepath"
 )
 
-type Service interface {
-	SubmitMagnet(torrent *Torrent) (*Torrent, error)
-	CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
-	GetDownloadLinks(torrent *Torrent) error
-	DeleteTorrent(torrent *Torrent)
-	IsAvailable(infohashes []string) map[string]bool
-	GetMountPath() string
-	GetDownloadUncached() bool
-	GetTorrent(id string) (*Torrent, error)
-	GetName() string
-	GetLogger() *log.Logger
-}
-
-type Debrid struct {
+type BaseDebrid struct {
+	Name             string
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
@@ -29,12 +17,41 @@ type Debrid struct {
 	cache            *common.Cache
 	MountPath        string
 	logger           *log.Logger
+	CheckCached      bool
 }
 
-func NewDebrid(dc common.DebridConfig, cache *common.Cache) Service {
+type Service interface {
+	SubmitMagnet(torrent *Torrent) (*Torrent, error)
+	CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
+	GetDownloadLinks(torrent *Torrent) error
+	DeleteTorrent(torrent *Torrent)
+	IsAvailable(infohashes []string) map[string]bool
+	GetMountPath() string
+	GetCheckCached() bool
+	GetTorrent(id string) (*Torrent, error)
+	GetName() string
+	GetLogger() *log.Logger
+}
+
+func NewDebrid(debs []common.DebridConfig, cache *common.Cache) *DebridService {
+	debrids := make([]Service, 0)
+	for _, dc := range debs {
+		d := createDebrid(dc, cache)
+		d.GetLogger().Println("Debrid Service started")
+		debrids = append(debrids, d)
+	}
+	d := &DebridService{debrids: debrids, lastUsed: 0}
+	return d
+}
+
+func createDebrid(dc common.DebridConfig, cache *common.Cache) Service {
 	switch dc.Name {
 	case "realdebrid":
 		return NewRealDebrid(dc, cache)
+	case "torbox":
+		return NewTorbox(dc, cache)
+	case "debridlink":
+		return NewDebridLink(dc, cache)
 	default:
 		return NewRealDebrid(dc, cache)
 	}
@@ -95,32 +112,31 @@ func getTorrentInfo(filePath string) (*Torrent, error) {
 
 func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[string]bool) {
 	result := make(map[string]bool)
-	hashes := make([]string, len(infohashes))
 
-	if len(infohashes) == 0 {
-		return hashes, result
-	}
-	if len(infohashes) == 1 {
-		if cache.Exists(infohashes[0]) {
-			return hashes, map[string]bool{infohashes[0]: true}
-		}
-		return infohashes, result
-	}
+	//if len(infohashes) == 0 {
+	//	return hashes, result
+	//}
+	//if len(infohashes) == 1 {
+	//	if cache.Exists(infohashes[0]) {
+	//		return hashes, map[string]bool{infohashes[0]: true}
+	//	}
+	//	return infohashes, result
+	//}
+	//
+	//cachedHashes := cache.GetMultiple(infohashes)
+	//for _, h := range infohashes {
+	//	_, exists := cachedHashes[h]
+	//	if !exists {
+	//		hashes = append(hashes, h)
+	//	} else {
+	//		result[h] = true
+	//	}
+	//}
 
-	cachedHashes := cache.GetMultiple(infohashes)
-	for _, h := range infohashes {
-		_, exists := cachedHashes[h]
-		if !exists {
-			hashes = append(hashes, h)
-		} else {
-			result[h] = true
-		}
-	}
-
-	return hashes, result
+	return infohashes, result
 }
 
-func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr, isSymlink bool) (*Torrent, error) {
+func ProcessQBitTorrent(d *DebridService, magnet *common.Magnet, arr *Arr, isSymlink bool) (*Torrent, error) {
 	debridTorrent := &Torrent{
 		InfoHash: magnet.InfoHash,
 		Magnet:   magnet,
@@ -128,21 +144,30 @@ func ProcessQBitTorrent(d Service, magnet *common.Magnet, arr *Arr, isSymlink bo
 		Arr:      arr,
 		Size:     magnet.Size,
 	}
-	logger := d.GetLogger()
-	logger.Printf("Torrent Hash: %s", debridTorrent.InfoHash)
-	if !d.GetDownloadUncached() {
-		hash, exists := d.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
-		if !exists || !hash {
-			return debridTorrent, fmt.Errorf("torrent: %s is not cached", debridTorrent.Name)
-		} else {
-			logger.Printf("Torrent: %s is cached(or downloading)", debridTorrent.Name)
-		}
-	}
 
-	debridTorrent, err := d.SubmitMagnet(debridTorrent)
-	if err != nil || debridTorrent.Id == "" {
-		logger.Printf("Error submitting magnet: %s", err)
-		return nil, err
+	for index, db := range d.debrids {
+		log.Println("Processing debrid: ", db.GetName())
+		logger := db.GetLogger()
+		logger.Printf("Torrent Hash: %s", debridTorrent.InfoHash)
+		if db.GetCheckCached() {
+			hash, exists := db.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
+			if !exists || !hash {
+				logger.Printf("Torrent: %s is not cached", debridTorrent.Name)
+				continue
+			} else {
+				logger.Printf("Torrent: %s is cached(or downloading)", debridTorrent.Name)
+			}
+		}
+
+		debridTorrent, err := db.SubmitMagnet(debridTorrent)
+		if err != nil || debridTorrent.Id == "" {
+			logger.Printf("Error submitting magnet: %s", err)
+			continue
+		}
+		logger.Printf("Torrent: %s submitted to %s", debridTorrent.Name, db.GetName())
+		d.lastUsed = index
+		debridTorrent.Debrid = db
+		return db.CheckStatus(debridTorrent, isSymlink)
 	}
-	return d.CheckStatus(debridTorrent, isSymlink)
+	return nil, fmt.Errorf("failed to process torrent")
 }

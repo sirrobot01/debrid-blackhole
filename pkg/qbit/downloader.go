@@ -58,7 +58,7 @@ func (q *QBit) processSymlink(torrent *Torrent, debridTorrent *debrid.Torrent, a
 	ready := make(chan debrid.TorrentFile, len(files))
 
 	q.logger.Printf("Checking %d files...", len(files))
-	rCloneBase := q.debrid.GetMountPath()
+	rCloneBase := debridTorrent.Debrid.GetMountPath()
 	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
 	if err != nil {
 		q.MarkAsFailed(torrent)

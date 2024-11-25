@@ -43,7 +43,7 @@ type Torrent struct {
 	Links            []string               `json:"links"`
 	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`
 
-	Debrid *Debrid
+	Debrid Service
 	Arr    *Arr
 }
 
@@ -58,12 +58,11 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 }
 
 func (t *Torrent) GetMountFolder(rClonePath string) string {
-	pathWithNoExt := common.RemoveExtension(t.OriginalFilename)
 	if common.FileReady(filepath.Join(rClonePath, t.OriginalFilename)) {
 		return t.OriginalFilename
 	} else if common.FileReady(filepath.Join(rClonePath, t.Filename)) {
 		return t.Filename
-	} else if common.FileReady(filepath.Join(rClonePath, pathWithNoExt)) {
+	} else if pathWithNoExt := common.RemoveExtension(t.OriginalFilename); common.FileReady(filepath.Join(rClonePath, pathWithNoExt)) {
 		return pathWithNoExt
 	} else {
 		return ""
@@ -75,6 +74,7 @@ type TorrentFile struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 	Path string `json:"path"`
+	Link string `json:"link"`
 }
 
 func getEventId(eventType string) int {

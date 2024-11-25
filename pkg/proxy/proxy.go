@@ -77,7 +77,7 @@ type Proxy struct {
 	logger     *log.Logger
 }
 
-func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Proxy {
+func NewProxy(config common.Config, deb *debrid.DebridService, cache *common.Cache) *Proxy {
 	cfg := config.Proxy
 	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	return &Proxy{
@@ -87,7 +87,7 @@ func NewProxy(config common.Config, deb debrid.Service, cache *common.Cache) *Pr
 		username:   cfg.Username,
 		password:   cfg.Password,
 		cachedOnly: *cfg.CachedOnly,
-		debrid:     deb,
+		debrid:     deb.Get(),
 		cache:      cache,
 		logger:     common.NewLogger("Proxy", os.Stdout),
 	}
