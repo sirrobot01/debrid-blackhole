@@ -77,3 +77,10 @@
 #### 0.2.6
 - Delete torrent for empty matched files
 - Update Readme
+
+#### 0.2.7
+
+- Add support for multiple debrid providers
+- Add Torbox support
+- Add support for configurable debrid cache checks
+- Add support for configurable debrid download uncached torrents

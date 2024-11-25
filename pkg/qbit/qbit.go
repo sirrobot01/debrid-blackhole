@@ -87,7 +87,7 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *
 func (q *QBit) processFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *debrid.Arr, isSymlink bool) {
 	for debridTorrent.Status != "downloaded" {
 		progress := debridTorrent.Progress
-		q.logger.Printf("RD Download Progress: %.2f%%", progress)
+		q.logger.Printf("%s Download Progress: %.2f%%", debridTorrent.Debrid.GetName(), progress)
 		time.Sleep(5 * time.Second)
 		dbT, err := debridTorrent.Debrid.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
