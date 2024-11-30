@@ -15,7 +15,8 @@ jobs:
 
       - name: Get version
         id: get_version
-        shell: /usr/bin/bash -e {0}
+        env:
+          GITHUB_REF: ${{ github.ref }}
         run: |
           if [[ "${GITHUB_REF}" == 'refs/heads/main' ]]; then
             VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
