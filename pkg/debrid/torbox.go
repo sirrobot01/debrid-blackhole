@@ -12,6 +12,7 @@ import (
 	gourl "net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -157,24 +158,36 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	torrent.Name = name
 	torrent.Bytes = data.Size
 	torrent.Folder = name
-	torrent.Progress = data.Progress
+	torrent.Progress = data.Progress * 100
 	torrent.Status = getStatus(data.DownloadState, data.DownloadFinished)
 	torrent.Speed = data.DownloadSpeed
 	torrent.Seeders = data.Seeds
 	torrent.Filename = name
 	torrent.OriginalFilename = name
-	files := make([]TorrentFile, len(data.Files))
-	for i, f := range data.Files {
-		files[i] = TorrentFile{
-			Id:   strconv.Itoa(f.Id),
-			Name: f.Name,
-			Size: f.Size,
+	files := make([]TorrentFile, 0)
+	if len(data.Files) == 0 {
+		return torrent, fmt.Errorf("no files found for torrent: %s", name)
+	}
+	for _, f := range data.Files {
+		fileName := filepath.Base(f.Name)
+		if (!common.RegexMatch(common.VIDEOMATCH, fileName) &&
+			!common.RegexMatch(common.SUBMATCH, fileName) &&
+			!common.RegexMatch(common.MUSICMATCH, fileName)) || common.RegexMatch(common.SAMPLEMATCH, fileName) {
+			continue
 		}
+		file := TorrentFile{
+			Id:   strconv.Itoa(f.Id),
+			Name: fileName,
+			Size: f.Size,
+			Path: fileName,
+		}
+		files = append(files, file)
 	}
-	if len(files) > 0 && name == data.Hash {
-		cleanPath := path.Clean(files[0].Name)
-		torrent.OriginalFilename = strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")[0]
+	if len(files) == 0 {
+		return torrent, fmt.Errorf("no video files found")
 	}
+	cleanPath := path.Clean(data.Files[0].Name)
+	torrent.OriginalFilename = strings.Split(cleanPath, "/")[0]
 	torrent.Files = files
 	torrent.Debrid = r
 	return torrent, nil
@@ -203,7 +216,7 @@ func (r *Torbox) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
-				go r.DeleteTorrent(torrent)
+				go torrent.Delete()
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

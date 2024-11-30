@@ -11,7 +11,7 @@ type TorboxAPIResponse[T any] struct {
 
 type TorBoxAvailableResponse TorboxAPIResponse[map[string]struct {
 	Name string `json:"name"`
-	Size int64  `json:"size"`
+	Size int    `json:"size"`
 	Hash string `json:"hash"`
 }]
 
@@ -36,7 +36,7 @@ type torboxInfo struct {
 	Peers           int         `json:"peers"`
 	Ratio           int         `json:"ratio"`
 	Progress        float64     `json:"progress"`
-	DownloadSpeed   int64       `json:"download_speed"`
+	DownloadSpeed   int         `json:"download_speed"`
 	UploadSpeed     int         `json:"upload_speed"`
 	Eta             int         `json:"eta"`
 	TorrentFile     bool        `json:"torrent_file"`

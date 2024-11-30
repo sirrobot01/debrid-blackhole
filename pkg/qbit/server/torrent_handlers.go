@@ -1,44 +1,46 @@
-package qbit
+package server
 
 import (
 	"context"
+	"goBlack/common"
+	"goBlack/pkg/qbit/shared"
 	"net/http"
 	"path/filepath"
 	"strings"
 )
 
-func (q *QBit) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
 	//log all url params
 	ctx := r.Context()
-	category := strings.Trim(r.URL.Query().Get("category"), "")
+	category := ctx.Value("category").(string)
 	filter := strings.Trim(r.URL.Query().Get("filter"), "")
 	hashes, _ := ctx.Value("hashes").([]string)
-	torrents := q.storage.GetAll(category, filter, hashes)
-	JSONResponse(w, torrents, http.StatusOK)
+	torrents := s.qbit.Storage.GetAll(category, filter, hashes)
+	common.JSONResponse(w, torrents, http.StatusOK)
 }
 
-func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	contentType := strings.Split(r.Header.Get("Content-Type"), ";")[0]
 	switch contentType {
 	case "multipart/form-data":
 		err := r.ParseMultipartForm(32 << 20) // 32MB max memory
 		if err != nil {
-			q.logger.Printf("Error parsing form: %v\n", err)
+			s.logger.Printf("Error parsing form: %v\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	case "application/x-www-form-urlencoded":
 		err := r.ParseForm()
 		if err != nil {
-			q.logger.Printf("Error parsing form: %v\n", err)
+			s.logger.Printf("Error parsing form: %v\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 
 	isSymlink := strings.ToLower(r.FormValue("sequentialDownload")) != "true"
-	q.logger.Printf("isSymlink: %v\n", isSymlink)
+	s.logger.Printf("isSymlink: %v\n", isSymlink)
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
 
@@ -50,8 +52,8 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, "isSymlink", isSymlink)
 
 	for _, url := range urlList {
-		if err := q.AddMagnet(ctx, url, category); err != nil {
-			q.logger.Printf("Error adding magnet: %v\n", err)
+		if err := s.qbit.AddMagnet(ctx, url, category); err != nil {
+			s.logger.Printf("Error adding magnet: %v\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -60,8 +62,8 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	if contentType == "multipart/form-data" {
 		files := r.MultipartForm.File["torrents"]
 		for _, fileHeader := range files {
-			if err := q.AddTorrent(ctx, fileHeader, category); err != nil {
-				q.logger.Printf("Error adding torrent: %v\n", err)
+			if err := s.qbit.AddTorrent(ctx, fileHeader, category); err != nil {
+				s.logger.Printf("Error adding torrent: %v\n", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -71,7 +73,7 @@ func (q *QBit) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (q *QBit) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
 	if len(hashes) == 0 {
@@ -79,67 +81,67 @@ func (q *QBit) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, hash := range hashes {
-		q.storage.Delete(hash)
+		s.qbit.Storage.Delete(hash)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (q *QBit) handleTorrentsPause(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentsPause(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
 	for _, hash := range hashes {
-		torrent := q.storage.Get(hash)
+		torrent := s.qbit.Storage.Get(hash)
 		if torrent == nil {
 			continue
 		}
-		go q.PauseTorrent(torrent)
+		go s.qbit.PauseTorrent(torrent)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (q *QBit) handleTorrentsResume(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentsResume(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
 	for _, hash := range hashes {
-		torrent := q.storage.Get(hash)
+		torrent := s.qbit.Storage.Get(hash)
 		if torrent == nil {
 			continue
 		}
-		go q.ResumeTorrent(torrent)
+		go s.qbit.ResumeTorrent(torrent)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (q *QBit) handleTorrentRecheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentRecheck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
 	for _, hash := range hashes {
-		torrent := q.storage.Get(hash)
+		torrent := s.qbit.Storage.Get(hash)
 		if torrent == nil {
 			continue
 		}
-		go q.RefreshTorrent(torrent)
+		go s.qbit.RefreshTorrent(torrent)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (q *QBit) handleCategories(w http.ResponseWriter, r *http.Request) {
-	var categories = map[string]TorrentCategory{}
-	for _, cat := range q.Categories {
-		path := filepath.Join(q.DownloadFolder, cat)
-		categories[cat] = TorrentCategory{
+func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
+	var categories = map[string]shared.TorrentCategory{}
+	for _, cat := range s.qbit.Categories {
+		path := filepath.Join(s.qbit.DownloadFolder, cat)
+		categories[cat] = shared.TorrentCategory{
 			Name:     cat,
 			SavePath: path,
 		}
 	}
-	JSONResponse(w, categories, http.StatusOK)
+	common.JSONResponse(w, categories, http.StatusOK)
 }
 
-func (q *QBit) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
@@ -152,24 +154,24 @@ func (q *QBit) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q.Categories = append(q.Categories, name)
+	s.qbit.Categories = append(s.qbit.Categories, name)
 
-	JSONResponse(w, nil, http.StatusOK)
+	common.JSONResponse(w, nil, http.StatusOK)
 }
 
-func (q *QBit) handleTorrentProperties(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentProperties(w http.ResponseWriter, r *http.Request) {
 	hash := r.URL.Query().Get("hash")
-	torrent := q.storage.Get(hash)
-	properties := q.GetTorrentProperties(torrent)
-	JSONResponse(w, properties, http.StatusOK)
+	torrent := s.qbit.Storage.Get(hash)
+	properties := s.qbit.GetTorrentProperties(torrent)
+	common.JSONResponse(w, properties, http.StatusOK)
 }
 
-func (q *QBit) handleTorrentFiles(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTorrentFiles(w http.ResponseWriter, r *http.Request) {
 	hash := r.URL.Query().Get("hash")
-	torrent := q.storage.Get(hash)
+	torrent := s.qbit.Storage.Get(hash)
 	if torrent == nil {
 		return
 	}
-	files := q.GetTorrentFiles(torrent)
-	JSONResponse(w, files, http.StatusOK)
+	files := s.qbit.GetTorrentFiles(torrent)
+	common.JSONResponse(w, files, http.StatusOK)
 }

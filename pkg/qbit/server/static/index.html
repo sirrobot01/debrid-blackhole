@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debrid Manager</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
+    <!-- Select2 Bootstrap 5 Theme CSS -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"/>
+    <style>
+        .select2-container--bootstrap-5 .select2-results__option {
+            padding: 0.5rem;
+        }
+
+        .select2-result img {
+            border-radius: 4px;
+        }
+
+        .select2-container--bootstrap-5 .select2-results__option--highlighted {
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+        }
+
+        .select2-container--bootstrap-5 .select2-results__option--selected {
+            background-color: #e9ecef !important;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <span class="navbar-brand">Debrid Manager</span>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="mb-3">
+                <label for="magnetURI" class="form-label">Magnet Link</label>
+                <textarea class="form-control" id="magnetURI" rows="3"></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="selectArr" class="form-label">Enter Category</label>
+                <input type="email" class="form-control" id="selectArr" placeholder="Enter Category(e.g sonarr, radarr, radarr4k)">
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="" id="isSymlink">
+                <label class="form-check-label" for="isSymlink">
+                    Not Symlink(Download real files instead of symlinks from Debrid)
+                </label>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-primary" id="addToArr">
+                    Add to Arr
+                </button>
+            </div>
+        </div>
+<!--        <div class="col-md-6">-->
+
+<!--                        <div class="mb-3 d-none">-->
+<!--                            <select class="form-select mb-3 select2-ajax" id="selectContent">-->
+<!--                                <option></option>-->
+<!--                            </select>-->
+<!--                        </div>-->
+<!--                        <div class="mb-3 d-none">-->
+<!--                            <select class="form-select mb-3 select2-multi" id="selectSeason" multiple-->
+<!--                                    style="width: 100%; display: none;">-->
+<!--                                <option value="all">Select All</option>-->
+<!--                            </select>-->
+<!--                        </div>-->
+<!--                        <div class="mb-4 d-none">-->
+<!--                            <select class="form-select mb-3 select2-multi" id="selectEpisode" multiple-->
+<!--                                    style="width: 100%; display: none;">-->
+<!--                                <option value="all">Select All</option>-->
+<!--                            </select>-->
+<!--                        </div>-->
+
+<!--        </div>-->
+    </div>
+</div>
+
+<!-- Bootstrap JS and Popper.js -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function () {
+        let $selectArr = $('#selectArr');
+        let $selectContent = $('#selectContent');
+        let $selectSeason = $('#selectSeason');
+        let $selectEpisode = $('#selectEpisode');
+        let $addBtn = $('#addToArr');
+        const $contentSearch = $('#contentSearch');
+        const $searchResults = $('#searchResults');
+        let isSonarr = true;
+        let searchTimeout;
+        let selectedArr, selectedContent, selectedSeasons, selectedEpisodes;
+
+        // Initially show only selectArr, hide others
+        $selectSeason.hide().closest('.mb-3').hide();
+        $selectEpisode.hide().closest('.mb-3').hide();
+
+        // Initialize Select2
+        $('.select2-multi').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Select options',
+            allowClear: true
+        });
+
+        // Also hide the Select2 containers
+        $('.select2-container--bootstrap-5').hide();
+
+        $selectContent.select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Search shows/movies...',
+            allowClear: true,
+            minimumInputLength: 2,
+            ajax: {
+                url: '/internal/search',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        term: params.term
+                    };
+                },
+                processResults: function (data) {
+                    return {
+                        results: data.map(function (item) {
+                            return {
+                                id: item.id,
+                                text: item.media_type === 'movie' ? item.title : item.name,
+                                media_type: item.media_type,
+                                poster: item.poster_path ?
+                                    'https://image.tmdb.org/t/p/w92' + item.poster_path : null,
+                                year: item.media_type === 'movie' ?
+                                    (item.release_date ? item.release_date.substring(0, 4) : '') :
+                                    (item.first_air_date ? item.first_air_date.substring(0, 4) : '')
+                            };
+                        })
+                    };
+                },
+                cache: true
+            },
+            templateResult: formatResult,
+            templateSelection: formatSelection
+        });
+
+        function formatResult(item) {
+            if (!item.id) return item.text;
+
+            return $(`
+        <div class="select2-result d-flex align-items-center gap-2">
+            ${item.poster ?
+                `<img src="${item.poster}" style="width: 45px; height: 68px; object-fit: cover;">` :
+                '<div style="width: 45px; height: 68px; background: #eee;"></div>'
+            }
+            <div>
+                <div class="fw-bold">${item.text}</div>
+                <small class="text-muted">
+                    ${item.year} • ${item.media_type === 'movie' ? 'Movie' : 'TV Series'}
+                </small>
+            </div>
+        </div>
+    `);
+        }
+
+        function formatSelection(item) {
+            if (!item.id) return item.text;
+            return item.text + (item.year ? ` (${item.year})` : '');
+        }
+
+// Handle selection
+        $selectContent.on('select2:select', function (e) {
+            selectedContent = e.params.data.id;
+            const mediaType = e.params.data.media_type;
+
+            if (mediaType === 'tv') {
+                $selectSeason.show().closest('.mb-3').show();
+                $selectSeason.next('.select2-container--bootstrap-5').show();
+                // Fetch seasons (your existing seasons fetch code)
+                fetch(`/internal/seasons/${selectedContent}`)
+                    .then(response => response.json())
+                    .then(seasons => {
+                        $selectSeason.empty().append('<option value="all">Select All</option>');
+                        seasons.forEach(season => {
+                            $selectSeason.append(`<option value="${season}">Season ${season}</option>`);
+                        });
+                        $selectSeason.trigger('change.select2');
+                    })
+                    .catch(error => console.error('Error fetching seasons:', error));
+            } else {
+                // For movies, show the Add to Arr button directly
+                $selectSeason.hide().closest('.mb-3').hide();
+                $selectSeason.next('.select2-container--bootstrap-5').hide();
+                $selectEpisode.hide().closest('.mb-3').hide();
+                $selectEpisode.next('.select2-container--bootstrap-5').hide();
+                $addBtn.show();
+            }
+        });
+
+        // Fetch Arrs
+        function fetchArrs() {
+            fetch('/internal/arrs')
+                .then(response => response.json())
+                .then(arrs => {
+                    $selectArr.empty().append('<option value="">Select Arr</option>');
+                    arrs.forEach(arr => {
+                        $selectArr.append(`<option value="${arr.name}">${arr.name}</option>`);
+                    });
+                })
+                .catch(error => console.error('Error fetching arrs:', error));
+        }
+
+        // Handle content selection
+        $selectContent.change(function () {
+            selectedContent = $(this).val();
+            selectedArr = $selectArr.val();
+
+            if (!selectedContent) {
+                $selectSeason.hide().closest('.mb-3').hide();
+                $selectSeason.next('.select2-container--bootstrap-5').hide();
+                $selectEpisode.hide().closest('.mb-3').hide();
+                $selectEpisode.next('.select2-container--bootstrap-5').hide();
+                return;
+            }
+
+            if (isSonarr) {
+                $selectSeason.show().closest('.mb-3').show();
+                $selectSeason.next('.select2-container--bootstrap-5').show();
+                // Fetch seasons
+                fetch(`/internal/seasons/${selectedContent}`)
+                    .then(response => response.json())
+                    .then(seasons => {
+                        $selectSeason.empty().append('<option value="all">Select All</option>');
+                        seasons.forEach(season => {
+                            $selectSeason.append(`<option value="${season}">Season ${season}</option>`);
+                        });
+                        $selectSeason.trigger('change.select2');
+                    })
+                    .catch(error => console.error('Error fetching seasons:', error));
+            } else {
+                // For Radarr, show the Add to Arr button directly
+                $selectSeason.hide().closest('.mb-3').hide();
+                $selectSeason.next('.select2-container--bootstrap-5').hide();
+                $selectEpisode.hide().closest('.mb-3').hide();
+                $selectEpisode.next('.select2-container--bootstrap-5').hide();
+                $addBtn.show();
+            }
+        });
+
+        // Handle season selection
+        $selectSeason.change(function () {
+            selectedSeasons = $(this).val();
+            console.log('Selected seasons:', selectedSeasons);
+
+            if (!selectedSeasons || selectedSeasons.includes('all')) {
+                $selectEpisode.hide().closest('.mb-3').hide();
+                $selectEpisode.next('.select2-container--bootstrap-5').hide();
+                $addBtn.show();
+                return;
+            }
+
+            $selectEpisode.show().closest('.mb-3').show();
+            $selectEpisode.next('.select2-container--bootstrap-5').show();
+            fetch(`/internal/episodes/${selectedContent}?seasons=${selectedSeasons.join(',')}`)
+                .then(response => response.json())
+                .then(episodes => {
+                    $selectEpisode.empty().append('<option value="all">Select All</option>');
+                    episodes.forEach(episode => {
+                        $selectEpisode.append(`<option value="${episode}">Episode ${episode}</option>`);
+                    });
+                    $selectEpisode.trigger('change.select2');
+                })
+                .catch(error => console.error('Error fetching episodes:', error));
+            $addBtn.show();
+        });
+
+        $addBtn.click(function () {
+            let oldText = $(this).text();
+            $(this).prop('disabled', true).prepend('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>');
+            let magnet = $('#magnetURI').val();
+            if (!magnet) {
+                $(this).prop('disabled', false).text(oldText);
+                alert('Please provide a magnet link or upload a torrent file!');
+                
+                return;
+            }
+            let data = {
+                arr: $selectArr.val(),
+                url: magnet,
+                notSymlink: $('#isSymlink').is(':checked'),
+            };
+            console.log('Adding to Arr:', data);
+            fetch('/internal/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(async response => {
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(errorText);
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    console.log('Added to Arr:', result);
+                    $(this).prop('disabled', false).text(oldText);
+                    alert('Added to Arr successfully!');
+                })
+                .catch(error => {
+                    $(this).prop('disabled', false).text(oldText);
+                    alert(`Error adding to Arr: ${error.message || error}`);
+                });
+        });
+
+        // Initial fetch of Arrs
+        //fetchArrs();
+    });
+</script>
+</body>
+</html>

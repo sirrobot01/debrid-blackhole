@@ -1,8 +1,7 @@
-package qbit
+package shared
 
 import (
 	"context"
-	"goBlack/pkg/debrid"
 	"time"
 )
 
@@ -20,7 +19,7 @@ func (q *QBit) StartRefreshWorker(ctx context.Context) {
 			q.logger.Println("Qbit Refresh Worker stopped")
 			return
 		case <-refreshTicker.C:
-			torrents := q.storage.GetAll("", "", nil)
+			torrents := q.Storage.GetAll("", "", nil)
 			if len(torrents) > 0 {
 				q.RefreshArrs()
 			}
@@ -29,18 +28,10 @@ func (q *QBit) StartRefreshWorker(ctx context.Context) {
 }
 
 func (q *QBit) RefreshArrs() {
-	q.arrs.Range(func(key, value interface{}) bool {
-		host, ok := key.(string)
-		token, ok2 := value.(string)
-		if !ok || !ok2 {
-			return true
+	for _, arr := range q.Arrs.GetAll() {
+		err := arr.Refresh()
+		if err != nil {
+			return
 		}
-		arr := &debrid.Arr{
-			Name:  "",
-			Token: token,
-			Host:  host,
-		}
-		q.RefreshArr(arr)
-		return true
-	})
+	}
 }

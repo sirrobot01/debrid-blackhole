@@ -1,0 +1,63 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push for beta branch
+        if: github.ref == 'refs/heads/beta'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: cy01/blackhole:beta
+
+      - name: Build and push for main branch with version
+        if: github.ref == 'refs/heads/main' && steps.get_version.outputs.VERSION != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: |
+            cy01/blackhole:latest
+            cy01/blackhole:${{ steps.get_version.outputs.VERSION }}
+
+      - name: Build and push for main branch without version
+        if: github.ref == 'refs/heads/main' && steps.get_version.outputs.VERSION == ''
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: cy01/blackhole:latest

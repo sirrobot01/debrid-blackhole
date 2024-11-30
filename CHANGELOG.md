@@ -84,3 +84,11 @@
 - Add Torbox support
 - Add support for configurable debrid cache checks
 - Add support for configurable debrid download uncached torrents
+
+#### 0.3.0
+
+- Add UI for adding torrents
+- Refraction of the code
+- -Fix Torbox bug
+- Update CI/CD
+- Update Readme

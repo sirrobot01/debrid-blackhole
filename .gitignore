@@ -9,3 +9,4 @@ docker-compose.yml
 *.log
 *.log.*
 dist/
+tmp/**

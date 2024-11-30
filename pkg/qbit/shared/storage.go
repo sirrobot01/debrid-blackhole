@@ -1,4 +1,4 @@
-package qbit
+package shared
 
 import (
 	"encoding/json"
@@ -122,7 +122,10 @@ func (ts *TorrentStorage) Delete(hash string) {
 	}
 	// Delete the torrent folder
 	if torrent.ContentPath != "" {
-		os.RemoveAll(torrent.ContentPath)
+		err := os.RemoveAll(torrent.ContentPath)
+		if err != nil {
+			return
+		}
 	}
 }
 

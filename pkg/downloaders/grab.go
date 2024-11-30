@@ -40,7 +40,7 @@ Loop:
 			fmt.Printf("  %s: transferred %d / %d bytes (%.2f%%)\n",
 				resp.Filename,
 				resp.BytesComplete(),
-				resp.Size,
+				resp.Size(),
 				100*resp.Progress())
 
 		case <-resp.Done:

@@ -36,8 +36,8 @@ type debridLinkTorrentInfo struct {
 	} `json:"trackers"`
 	Created         int64   `json:"created"`
 	DownloadPercent float64 `json:"downloadPercent"`
-	DownloadSpeed   int64   `json:"downloadSpeed"`
-	UploadSpeed     int64   `json:"uploadSpeed"`
+	DownloadSpeed   int     `json:"downloadSpeed"`
+	UploadSpeed     int     `json:"uploadSpeed"`
 }
 
 type DebridLinkTorrentInfo DebridLinkAPIResponse[[]debridLinkTorrentInfo]

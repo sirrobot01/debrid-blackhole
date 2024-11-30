@@ -2,13 +2,14 @@ package debrid
 
 import (
 	"goBlack/common"
+	"goBlack/pkg/arr"
 	"os"
 	"path/filepath"
 )
 
 type Arr struct {
 	Name  string `json:"name"`
-	Token string `json:"token"`
+	Token string `json:"-"`
 	Host  string `json:"host"`
 }
 
@@ -38,13 +39,13 @@ type Torrent struct {
 	Status           string                 `json:"status"`
 	Added            string                 `json:"added"`
 	Progress         float64                `json:"progress"`
-	Speed            int64                  `json:"speed"`
+	Speed            int                    `json:"speed"`
 	Seeders          int                    `json:"seeders"`
 	Links            []string               `json:"links"`
 	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`
 
 	Debrid Service
-	Arr    *Arr
+	Arr    *arr.Arr
 }
 
 type TorrentDownloadLinks struct {
@@ -58,15 +59,22 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 }
 
 func (t *Torrent) GetMountFolder(rClonePath string) string {
-	if common.FileReady(filepath.Join(rClonePath, t.OriginalFilename)) {
-		return t.OriginalFilename
-	} else if common.FileReady(filepath.Join(rClonePath, t.Filename)) {
-		return t.Filename
-	} else if pathWithNoExt := common.RemoveExtension(t.OriginalFilename); common.FileReady(filepath.Join(rClonePath, pathWithNoExt)) {
-		return pathWithNoExt
-	} else {
-		return ""
+	possiblePaths := []string{
+		t.OriginalFilename,
+		t.Filename,
+		common.RemoveExtension(t.OriginalFilename),
 	}
+
+	for _, path := range possiblePaths {
+		if path != "" && common.FileReady(filepath.Join(rClonePath, path)) {
+			return path
+		}
+	}
+	return ""
+}
+
+func (t *Torrent) Delete() {
+	t.Debrid.DeleteTorrent(t)
 }
 
 type TorrentFile struct {

@@ -3,7 +3,9 @@ package proxy
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/auth"
@@ -308,7 +310,7 @@ func UrlMatches(re *regexp.Regexp) goproxy.ReqConditionFunc {
 	}
 }
 
-func (p *Proxy) Start() {
+func (p *Proxy) Start(ctx context.Context) error {
 	username, password := p.username, p.password
 	proxy := goproxy.NewProxyHttpServer()
 	if username != "" || password != "" {
@@ -328,6 +330,17 @@ func (p *Proxy) Start() {
 
 	proxy.Verbose = p.debug
 	portFmt := fmt.Sprintf(":%s", p.port)
+	srv := &http.Server{
+		Addr:    portFmt,
+		Handler: proxy,
+	}
 	p.logger.Printf("[*] Starting proxy server on %s\n", portFmt)
-	p.logger.Fatal(http.ListenAndServe(fmt.Sprintf("%s", portFmt), proxy))
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			p.logger.Printf("Error starting proxy server: %v\n", err)
+		}
+	}()
+	<-ctx.Done()
+	p.logger.Println("Shutting down gracefully...")
+	return srv.Shutdown(context.Background())
 }

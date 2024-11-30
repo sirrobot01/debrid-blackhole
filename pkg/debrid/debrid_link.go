@@ -107,8 +107,6 @@ func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 		return torrent, fmt.Errorf("torrent not found")
 	}
 	dt := *res.Value
-	fmt.Printf("Length of dt: %d\n", len(dt))
-	fmt.Printf("Raw response: %+v\n", res)
 
 	if len(dt) == 0 {
 		return torrent, fmt.Errorf("torrent not found")
@@ -206,7 +204,7 @@ func (r *DebridLink) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
-				go r.DeleteTorrent(torrent)
+				go torrent.Delete()
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

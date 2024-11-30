@@ -2,6 +2,7 @@ package common
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"golang.org/x/time/rate"
 	"io"
@@ -124,4 +125,10 @@ func ParseRateLimit(rateStr string) *rate.Limiter {
 	default:
 		return nil
 	}
+}
+
+func JSONResponse(w http.ResponseWriter, data interface{}, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(data)
 }

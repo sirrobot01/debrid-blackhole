@@ -2,8 +2,11 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"os"
+	"sync"
 )
 
 type DebridConfig struct {
@@ -43,6 +46,82 @@ type Config struct {
 	QBitTorrent  QBitTorrentConfig `json:"qbittorrent"`
 }
 
+func validateDebrids(debrids []DebridConfig) error {
+	if len(debrids) == 0 {
+		return errors.New("no debrids configured")
+	}
+
+	errChan := make(chan error, len(debrids))
+	var wg sync.WaitGroup
+
+	for _, debrid := range debrids {
+		// Basic field validation
+		if debrid.Host == "" {
+			return errors.New("debrid host is required")
+		}
+		if debrid.APIKey == "" {
+			return errors.New("debrid api key is required")
+		}
+		if debrid.Folder == "" {
+			return errors.New("debrid folder is required")
+		}
+
+		// Check folder existence concurrently
+		wg.Add(1)
+		go func(folder string) {
+			defer wg.Done()
+			if _, err := os.Stat(folder); os.IsNotExist(err) {
+				errChan <- fmt.Errorf("debrid folder does not exist: %s", folder)
+			}
+		}(debrid.Folder)
+	}
+
+	// Wait for all checks to complete
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	// Return first error if any
+	if err := <-errChan; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateQbitTorrent(config *QBitTorrentConfig) error {
+	if config.DownloadFolder == "" {
+		return errors.New("qbittorent download folder is required")
+	}
+	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
+		return errors.New("qbittorent download folder does not exist")
+	}
+	return nil
+}
+
+func validateConfig(config *Config) error {
+	// Run validations concurrently
+	errChan := make(chan error, 2)
+
+	go func() {
+		errChan <- validateDebrids(config.Debrids)
+	}()
+
+	go func() {
+		errChan <- validateQbitTorrent(&config.QBitTorrent)
+	}()
+
+	// Check for errors
+	for i := 0; i < 2; i++ {
+		if err := <-errChan; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func LoadConfig(path string) (*Config, error) {
 	// Load the config file
 	file, err := os.Open(path)
@@ -66,6 +145,11 @@ func LoadConfig(path string) (*Config, error) {
 	if config.Debrid.Name != "" {
 		config.Debrids = append(config.Debrids, config.Debrid)
 	}
+
+	// Validate the config
+	//if err := validateConfig(config); err != nil {
+	//	return nil, err
+	//}
 
 	return config, nil
 }

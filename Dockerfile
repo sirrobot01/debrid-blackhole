@@ -20,6 +20,7 @@ RUN CGO_ENABLED=0 GOOS=$(echo $TARGETPLATFORM | cut -d '/' -f1) GOARCH=$(echo $T
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /blackhole /blackhole
+COPY --from=builder /app/README.md /README.md
 
 EXPOSE 8181
 

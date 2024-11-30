@@ -209,11 +209,6 @@ func processInfoHash(input string) (string, error) {
 	return "", fmt.Errorf("invalid infohash: %s", input)
 }
 
-func NewLogger(prefix string, output *os.File) *log.Logger {
-	f := fmt.Sprintf("[%s] ", prefix)
-	return log.New(output, f, log.LstdFlags)
-}
-
 func GetInfohashFromURL(url string) (string, error) {
 	// Download the torrent file
 	var magnetLink string

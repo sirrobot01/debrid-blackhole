@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"goBlack/cmd"
 	"goBlack/common"
@@ -17,6 +18,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmd.Start(conf)
+	ctx := context.Background()
+	if err := cmd.Start(ctx, conf); err != nil {
+		log.Fatal(err)
+	}
 
 }
