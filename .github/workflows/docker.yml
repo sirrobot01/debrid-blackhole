@@ -15,13 +15,9 @@ jobs:
 
       - name: Get version
         id: get_version
-        env:
-          GITHUB_REF: ${{ github.ref }}
         run: |
-          if [[ "${GITHUB_REF}" == 'refs/heads/main' ]]; then
-            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          fi
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
