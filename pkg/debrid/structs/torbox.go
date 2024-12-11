@@ -34,7 +34,7 @@ type torboxInfo struct {
 	DownloadState   string      `json:"download_state"`
 	Seeds           int         `json:"seeds"`
 	Peers           int         `json:"peers"`
-	Ratio           int         `json:"ratio"`
+	Ratio           float64     `json:"ratio"`
 	Progress        float64     `json:"progress"`
 	DownloadSpeed   int         `json:"download_speed"`
 	UploadSpeed     int         `json:"upload_speed"`
