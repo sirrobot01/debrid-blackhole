@@ -163,6 +163,9 @@ func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymli
 
 		dbt, err := db.SubmitMagnet(debridTorrent)
 		if err != nil || dbt.Id == "" {
+			if dbt != nil {
+				dbt.Delete()
+			}
 			logger.Printf("Error submitting magnet: %s", err)
 			continue
 		}

@@ -61,6 +61,11 @@ func (s *Server) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 
 	if contentType == "multipart/form-data" {
 		files := r.MultipartForm.File["torrents"]
+		if len(files) == 0 {
+			s.logger.Printf("No files provided\n")
+			http.Error(w, "No files provided", http.StatusBadRequest)
+			return
+		}
 		for _, fileHeader := range files {
 			if err := s.qbit.AddTorrent(ctx, fileHeader, category); err != nil {
 				s.logger.Printf("Error adding torrent: %v\n", err)

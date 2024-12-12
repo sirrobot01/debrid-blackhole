@@ -97,6 +97,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		dbT, err := debridTorrent.Debrid.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Printf("Error checking status: %v", err)
+			go debridTorrent.Delete()
 			q.MarkAsFailed(torrent)
 			_ = arr.Refresh()
 			return
