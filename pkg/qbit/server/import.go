@@ -72,6 +72,9 @@ func (i *ImportRequest) Process(s *Server) (err error) {
 	torrent := q.CreateTorrentFromMagnet(magnet, i.Arr.Name)
 	debridTorrent, err := debrid.ProcessTorrent(q.Debrid, magnet, i.Arr, i.IsSymlink)
 	if err != nil || debridTorrent == nil {
+		if debridTorrent != nil {
+			go debridTorrent.Delete()
+		}
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")
 		}
@@ -95,8 +98,11 @@ func (i *ImportRequest) BetaProcess(s *Server) (err error) {
 	}
 	debridTorrent, err := debrid.ProcessTorrent(q.Debrid, magnet, i.Arr, true)
 	if err != nil || debridTorrent == nil {
+		if debridTorrent != nil {
+			go debridTorrent.Delete()
+		}
 		if err == nil {
-			err = errors.New("failed to process torrent")
+			err = fmt.Errorf("failed to process torrent")
 		}
 		return err
 	}
