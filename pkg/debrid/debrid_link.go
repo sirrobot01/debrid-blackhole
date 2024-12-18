@@ -89,7 +89,7 @@ func (r *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 
 func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 	torrent := &Torrent{}
-	url := fmt.Sprintf("%s/seedbox/list/?ids=%s", r.Host, id)
+	url := fmt.Sprintf("%s/seedbox/list?ids=%s", r.Host, id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := r.client.MakeRequest(req)
 	if err != nil {
@@ -113,6 +113,9 @@ func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 	}
 	data := dt[0]
 	status := "downloading"
+	if data.Status == 100 {
+		status = "downloaded"
+	}
 	name := common.RemoveInvalidChars(data.Name)
 	torrent.Id = data.ID
 	torrent.Name = name
@@ -185,8 +188,8 @@ func (r *DebridLink) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 
 func (r *DebridLink) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error) {
 	for {
-		torrent, err := r.GetTorrent(torrent.Id)
-
+		t, err := r.GetTorrent(torrent.Id)
+		torrent = t
 		if err != nil || torrent == nil {
 			return torrent, err
 		}
@@ -248,6 +251,7 @@ func NewDebridLink(dc common.DebridConfig, cache *common.Cache) *DebridLink {
 	rl := common.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
+		"Content-Type":  "application/json",
 	}
 	client := common.NewRLHTTPClient(rl, headers)
 	logger := common.NewLogger(dc.Name, os.Stdout)

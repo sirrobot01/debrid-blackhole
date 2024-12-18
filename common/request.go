@@ -75,7 +75,9 @@ func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 	b, _ := io.ReadAll(res.Body)
 	statusOk := strconv.Itoa(res.StatusCode)[0] == '2'
 	if !statusOk {
-		return nil, fmt.Errorf("unexpected status code: %d", res.StatusCode)
+		// Add status code error to the body
+		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)
+		return nil, fmt.Errorf(string(b))
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()

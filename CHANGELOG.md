@@ -92,3 +92,8 @@
 - -Fix Torbox bug
 - Update CI/CD
 - Update Readme
+
+#### 0.3.1
+
+- Add DebridLink Support
+- Refactor error handling

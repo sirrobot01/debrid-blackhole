@@ -21,13 +21,11 @@ import (
 func (q *QBit) AddMagnet(ctx context.Context, url, category string) error {
 	magnet, err := common.GetMagnetFromUrl(url)
 	if err != nil {
-		q.logger.Printf("Error parsing magnet link: %v\n", err)
-		return err
+		return fmt.Errorf("error parsing magnet link: %w", err)
 	}
 	err = q.Process(ctx, magnet, category)
 	if err != nil {
-		q.logger.Println("Failed to process magnet:", err)
-		return err
+		return fmt.Errorf("failed to process torrent: %w", err)
 	}
 	return nil
 }
@@ -38,13 +36,11 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 	var reader io.Reader = file
 	magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
 	if err != nil {
-		q.logger.Printf("Error reading file: %s", fileHeader.Filename)
-		return err
+		return fmt.Errorf("error reading file: %s \n %w", fileHeader.Filename, err)
 	}
 	err = q.Process(ctx, magnet, category)
 	if err != nil {
-		q.logger.Println("Failed to process torrent:", err)
-		return err
+		return fmt.Errorf("failed to process torrent: %w", err)
 	}
 	return nil
 }
@@ -58,6 +54,9 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 	isSymlink := ctx.Value("isSymlink").(bool)
 	debridTorrent, err := debrid.ProcessTorrent(q.Debrid, magnet, a, isSymlink)
 	if err != nil || debridTorrent == nil {
+		if debridTorrent != nil {
+			go debridTorrent.Delete()
+		}
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")
 		}

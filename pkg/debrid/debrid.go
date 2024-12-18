@@ -147,6 +147,8 @@ func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymli
 		Size:     magnet.Size,
 	}
 
+	errs := make([]error, 0)
+
 	for index, db := range d.debrids {
 		log.Println("Processing debrid: ", db.GetName())
 		logger := db.GetLogger()
@@ -162,18 +164,21 @@ func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymli
 		}
 
 		dbt, err := db.SubmitMagnet(debridTorrent)
-		if err != nil || dbt.Id == "" {
-			if dbt != nil {
-				dbt.Delete()
-			}
-			logger.Printf("Error submitting magnet: %s", err)
+		if dbt != nil {
+			dbt.Debrid = db
+			dbt.Arr = a
+		}
+		if err != nil || dbt == nil || dbt.Id == "" {
+			errs = append(errs, err)
 			continue
 		}
 		logger.Printf("Torrent: %s submitted to %s", dbt.Name, db.GetName())
 		d.lastUsed = index
-		dbt.Debrid = db
-		dbt.Arr = a
 		return db.CheckStatus(dbt, isSymlink)
 	}
-	return nil, fmt.Errorf("failed to process torrent")
+	err := fmt.Errorf("failed to process torrent")
+	for _, e := range errs {
+		err = fmt.Errorf("%w\n%w", err, e)
+	}
+	return nil, err
 }

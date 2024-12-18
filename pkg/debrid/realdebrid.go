@@ -180,12 +180,11 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		torrent.Status = status
 		torrent.Debrid = r
 		if status == "error" || status == "dead" || status == "magnet_error" {
-			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
+			return torrent, fmt.Errorf("torrent: %s has error: %s", torrent.Name, status)
 		} else if status == "waiting_files_selection" {
 			files := GetTorrentFiles(data)
 			torrent.Files = files
 			if len(files) == 0 {
-				go torrent.Delete()
 				return torrent, fmt.Errorf("no video files found")
 			}
 			filesId := make([]string, 0)
@@ -214,7 +213,6 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 			break
 		} else if status == "downloading" {
 			if !r.DownloadUncached {
-				go torrent.Delete()
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

@@ -74,7 +74,11 @@ func (t *Torrent) GetMountFolder(rClonePath string) string {
 }
 
 func (t *Torrent) Delete() {
+	if t.Debrid == nil {
+		return
+	}
 	t.Debrid.DeleteTorrent(t)
+
 }
 
 type TorrentFile struct {

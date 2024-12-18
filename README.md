@@ -9,13 +9,16 @@ This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid & To
 - Proxy support for the Arrs
 - Real Debrid Support
 - Torbox Support
+- Debrid Link Support
 - Multi-Debrid Providers support
+- UI for adding torrents directly to *arrs
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
 
 ### Supported Debrid Providers
 - Real Debrid
 - Torbox
+- Debrid Link
 
 ### Changelog
 
@@ -66,7 +69,7 @@ Download the binary from the releases page and run it with the config file.
       "name": "torbox",
       "host": "https://api.torbox.app/v1",
       "api_key": "torbox_api_key",
-      "folder": "data/realdebrid/torrents/",
+      "folder": "data/torbox/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": true
@@ -76,6 +79,15 @@ Download the binary from the releases page and run it with the config file.
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
       "folder": "data/realdebrid/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": false
+    },
+    {
+      "name": "debridlink",
+      "host": "https://debrid-link.com/api/v2",
+      "api_key": "debridlink_key",
+      "folder": "data/debridlink/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false
@@ -162,6 +174,12 @@ Setting Up Qbittorrent in Arr
   - Sequential Download -> `No`|`Yes` (If you want to download the torrents locally instead of symlink)
   - Test
   - Save
+
+### UI for adding torrents
+
+![UI](./doc/ui.png)
+
+The UI is a simple web interface that allows you to add torrents directly to the Arrs(Sonarr, Radarr, etc)
 
 ### TODO
 - [ ] A proper name!!!!

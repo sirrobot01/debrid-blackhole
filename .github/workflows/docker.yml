@@ -40,8 +40,8 @@ jobs:
           push: true
           tags: cy01/blackhole:beta
 
-      - name: Build and push for main branch with version
-        if: github.ref == 'refs/heads/main' && steps.get_version.outputs.VERSION != ''
+      - name: Build and push for main branch
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -50,12 +50,3 @@ jobs:
           tags: |
             cy01/blackhole:latest
             cy01/blackhole:${{ steps.get_version.outputs.VERSION }}
-
-      - name: Build and push for main branch without version
-        if: github.ref == 'refs/heads/main' && steps.get_version.outputs.VERSION == ''
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: true
-          tags: cy01/blackhole:latest
