@@ -12,12 +12,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version
         id: get_version
         run: |
-          echo "latest_tag=$(git tag | sort --version-sort | tail -n1)" >> $GITHUB_ENV
-          echo "latest tag: $latest_tag"
+          echo "All tags:"
+          git tag
+          LATEST_TAG=$(git tag | sort -V | tail -n1)
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_ENV
+          echo "Found tag: ${LATEST_TAG}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
