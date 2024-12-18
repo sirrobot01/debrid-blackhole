@@ -18,11 +18,8 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          echo "All tags:"
-          git tag
           LATEST_TAG=$(git tag | sort -V | tail -n1)
           echo "latest_tag=${LATEST_TAG}" >> $GITHUB_ENV
-          echo "Found tag: ${LATEST_TAG}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
