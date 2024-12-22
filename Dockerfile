@@ -24,5 +24,7 @@ COPY --from=builder /app/README.md /README.md
 
 EXPOSE 8181
 
+VOLUME ["/app"]
+
 # Run
 CMD ["/blackhole", "--config", "/app/config.json"]
