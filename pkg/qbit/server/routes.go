@@ -45,6 +45,7 @@ func (s *Server) Routes(r chi.Router) http.Handler {
 		r.Get("/episodes/{contentId}", s.handleEpisodes)
 		r.Post("/add", s.handleAddContent)
 		r.Get("/search", s.handleSearch)
+		r.Get("/cached", s.handleCheckCached)
 	})
 	return r
 }

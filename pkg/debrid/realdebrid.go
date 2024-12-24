@@ -168,7 +168,6 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		var data structs.RealDebridTorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
-		fmt.Println("RD STATUS: ", status)
 		name := common.RemoveInvalidChars(data.OriginalFilename)
 		torrent.Name = name // Important because some magnet changes the name
 		torrent.Folder = name
@@ -181,7 +180,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		torrent.Links = data.Links
 		torrent.Status = status
 		torrent.Debrid = r
-		downloading_status := []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
+		downloadingStatus := []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error: %s", torrent.Name, status)
 		} else if status == "waiting_files_selection" {
@@ -214,7 +213,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 				}
 			}
 			break
-		} else if slices.Contains(downloading_status, status) {
+		} else if slices.Contains(downloadingStatus, status) {
 			if !r.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}

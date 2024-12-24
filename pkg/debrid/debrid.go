@@ -34,10 +34,13 @@ type Service interface {
 	GetLogger() *log.Logger
 }
 
-func NewDebrid(debs []common.DebridConfig, cache *common.Cache) *DebridService {
+func NewDebrid(debs []common.DebridConfig, maxCachedSize int) *DebridService {
 	debrids := make([]Service, 0)
+	// Divide the cache size by the number of debrids
+	maxCacheSize := maxCachedSize / len(debs)
+
 	for _, dc := range debs {
-		d := createDebrid(dc, cache)
+		d := createDebrid(dc, common.NewCache(maxCacheSize))
 		d.GetLogger().Println("Debrid Service started")
 		debrids = append(debrids, d)
 	}
@@ -114,26 +117,27 @@ func getTorrentInfo(filePath string) (*Torrent, error) {
 
 func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[string]bool) {
 	result := make(map[string]bool)
+	hashes := make([]string, 0)
 
-	//if len(infohashes) == 0 {
-	//	return hashes, result
-	//}
-	//if len(infohashes) == 1 {
-	//	if cache.Exists(infohashes[0]) {
-	//		return hashes, map[string]bool{infohashes[0]: true}
-	//	}
-	//	return infohashes, result
-	//}
-	//
-	//cachedHashes := cache.GetMultiple(infohashes)
-	//for _, h := range infohashes {
-	//	_, exists := cachedHashes[h]
-	//	if !exists {
-	//		hashes = append(hashes, h)
-	//	} else {
-	//		result[h] = true
-	//	}
-	//}
+	if len(infohashes) == 0 {
+		return hashes, result
+	}
+	if len(infohashes) == 1 {
+		if cache.Exists(infohashes[0]) {
+			return hashes, map[string]bool{infohashes[0]: true}
+		}
+		return infohashes, result
+	}
+
+	cachedHashes := cache.GetMultiple(infohashes)
+	for _, h := range infohashes {
+		_, exists := cachedHashes[h]
+		if !exists {
+			hashes = append(hashes, h)
+		} else {
+			result[h] = true
+		}
+	}
 
 	return infohashes, result
 }

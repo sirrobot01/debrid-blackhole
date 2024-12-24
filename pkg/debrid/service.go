@@ -11,3 +11,12 @@ func (d *DebridService) Get() Service {
 	}
 	return d.debrids[d.lastUsed]
 }
+
+func (d *DebridService) GetByName(name string) Service {
+	for _, deb := range d.debrids {
+		if deb.GetName() == name {
+			return deb
+		}
+	}
+	return nil
+}

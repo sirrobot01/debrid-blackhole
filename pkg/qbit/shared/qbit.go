@@ -16,7 +16,6 @@ type QBit struct {
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	Debrid          *debrid.DebridService
-	cache           *common.Cache
 	Storage         *TorrentStorage
 	debug           bool
 	logger          *log.Logger
@@ -24,7 +23,7 @@ type QBit struct {
 	RefreshInterval int
 }
 
-func NewQBit(config *common.Config, deb *debrid.DebridService, cache *common.Cache, logger *log.Logger) *QBit {
+func NewQBit(config *common.Config, deb *debrid.DebridService, logger *log.Logger) *QBit {
 	cfg := config.QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8182")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
@@ -36,7 +35,6 @@ func NewQBit(config *common.Config, deb *debrid.DebridService, cache *common.Cac
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Debrid:          deb,
-		cache:           cache,
 		debug:           cfg.Debug,
 		Storage:         NewTorrentStorage("torrents.json"),
 		logger:          logger,

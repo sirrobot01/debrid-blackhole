@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"goBlack/common"
 	"goBlack/pkg/arr"
+	"goBlack/pkg/debrid"
 	"html/template"
 	"net/http"
+	"strings"
 )
 
 type AddRequest struct {
@@ -111,4 +113,37 @@ func (s *Server) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.JSONResponse(w, importReq, http.StatusOK)
+}
+
+func (s *Server) handleCheckCached(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_hashes := r.URL.Query().Get("hash")
+	if _hashes == "" {
+		http.Error(w, "No hashes provided", http.StatusBadRequest)
+		return
+	}
+	hashes := strings.Split(_hashes, ",")
+	if len(hashes) == 0 {
+		http.Error(w, "No hashes provided", http.StatusBadRequest)
+		return
+	}
+	db := r.URL.Query().Get("debrid")
+	var deb debrid.Service
+	if db == "" {
+		// use the first debrid
+		deb = s.qbit.Debrid.Get()
+	} else {
+		deb = s.qbit.Debrid.GetByName(db)
+	}
+	if deb == nil {
+		http.Error(w, "Invalid debrid", http.StatusBadRequest)
+		return
+	}
+	res := deb.IsAvailable(hashes)
+	result := make(map[string]bool)
+	for _, h := range hashes {
+		_, exists := res[h]
+		result[h] = exists
+	}
+	common.JSONResponse(w, result, http.StatusOK)
 }

@@ -12,9 +12,8 @@ import (
 
 func Start(ctx context.Context, config *common.Config) error {
 	maxCacheSize := cmp.Or(config.MaxCacheSize, 1000)
-	cache := common.NewCache(maxCacheSize)
 
-	deb := debrid.NewDebrid(config.Debrids, cache)
+	deb := debrid.NewDebrid(config.Debrids, maxCacheSize)
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -23,7 +22,7 @@ func Start(ctx context.Context, config *common.Config) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := proxy.NewProxy(*config, deb, cache).Start(ctx); err != nil {
+			if err := proxy.NewProxy(*config, deb).Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()
@@ -32,7 +31,7 @@ func Start(ctx context.Context, config *common.Config) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := qbit.Start(ctx, config, deb, cache); err != nil {
+			if err := qbit.Start(ctx, config, deb); err != nil {
 				errChan <- err
 			}
 		}()

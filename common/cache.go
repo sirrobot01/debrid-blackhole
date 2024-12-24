@@ -40,14 +40,16 @@ func (c *Cache) AddMultiple(values map[string]bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for value := range values {
-		if _, exists := c.data[value]; !exists {
-			if len(c.order) >= c.maxItems {
-				delete(c.data, c.order[0])
-				c.order = c.order[1:]
+	for value, exists := range values {
+		if !exists {
+			if _, exists := c.data[value]; !exists {
+				if len(c.order) >= c.maxItems {
+					delete(c.data, c.order[0])
+					c.order = c.order[1:]
+				}
+				c.data[value] = struct{}{}
+				c.order = append(c.order, value)
 			}
-			c.data[value] = struct{}{}
-			c.order = append(c.order, value)
 		}
 	}
 }

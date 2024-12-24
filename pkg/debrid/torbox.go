@@ -45,8 +45,8 @@ func (r *Torbox) IsAvailable(infohashes []string) map[string]bool {
 	}
 
 	// Divide hashes into groups of 100
-	for i := 0; i < len(hashes); i += 200 {
-		end := i + 200
+	for i := 0; i < len(hashes); i += 100 {
+		end := i + 100
 		if end > len(hashes) {
 			end = len(hashes)
 		}
@@ -165,9 +165,6 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	torrent.Filename = name
 	torrent.OriginalFilename = name
 	files := make([]TorrentFile, 0)
-	if len(data.Files) == 0 {
-		return torrent, fmt.Errorf("no files found for torrent: %s", name)
-	}
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
 		if (!common.RegexMatch(common.VIDEOMATCH, fileName) &&
@@ -183,10 +180,13 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 		}
 		files = append(files, file)
 	}
-	if len(files) == 0 {
-		return torrent, fmt.Errorf("no video files found")
+	var cleanPath string
+	if len(files) > 0 {
+		cleanPath = path.Clean(data.Files[0].Name)
+	} else {
+		cleanPath = path.Clean(data.Name)
 	}
-	cleanPath := path.Clean(data.Files[0].Name)
+
 	torrent.OriginalFilename = strings.Split(cleanPath, "/")[0]
 	torrent.Files = files
 	torrent.Debrid = r
@@ -229,7 +229,7 @@ func (r *Torbox) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
 }
 
 func (r *Torbox) DeleteTorrent(torrent *Torrent) {
-	url := fmt.Sprintf("%s/api//torrents/controltorrent/%s", r.Host, torrent.Id)
+	url := fmt.Sprintf("%s/api/torrents/controltorrent/%s", r.Host, torrent.Id)
 	payload := map[string]string{"torrent_id": torrent.Id, "action": "Delete"}
 	jsonPayload, _ := json.Marshal(payload)
 	req, _ := http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(jsonPayload))

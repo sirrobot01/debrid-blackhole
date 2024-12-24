@@ -39,8 +39,8 @@ func (r *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 	}
 
 	// Divide hashes into groups of 100
-	for i := 0; i < len(hashes); i += 200 {
-		end := i + 200
+	for i := 0; i < len(hashes); i += 100 {
+		end := i + 100
 		if end > len(hashes) {
 			end = len(hashes)
 		}

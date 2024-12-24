@@ -22,9 +22,9 @@ type Server struct {
 	debug  bool
 }
 
-func NewServer(config *common.Config, deb *debrid.DebridService, cache *common.Cache) *Server {
+func NewServer(config *common.Config, deb *debrid.DebridService) *Server {
 	logger := common.NewLogger("QBit", os.Stdout)
-	q := shared.NewQBit(config, deb, cache, logger)
+	q := shared.NewQBit(config, deb, logger)
 	return &Server{
 		qbit:   q,
 		logger: logger,

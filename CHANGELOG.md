@@ -97,3 +97,12 @@
 
 - Add DebridLink Support
 - Refactor error handling
+
+#### 0.3.2
+
+- Fix DebridLink not downloading
+- Fix Torbox with uncached torrents
+- Add new /internal/cached endpoint to check if an hash is cached
+- implement per-debrid local cache
+- Fix file check for torbox
+- Other minor bug fixes
