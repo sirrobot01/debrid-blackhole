@@ -10,6 +10,7 @@ type TorrentStorage struct {
 	torrents map[string]*Torrent
 	mu       sync.RWMutex
 	order    []string
+	filename string // Added to store the filename for persistence
 }
 
 func loadTorrentsFromJSON(filename string) (map[string]*Torrent, error) {
@@ -25,7 +26,7 @@ func loadTorrentsFromJSON(filename string) (map[string]*Torrent, error) {
 }
 
 func NewTorrentStorage(filename string) *TorrentStorage {
-	// Open the json file and read the data
+	// Open the JSON file and read the data
 	torrents, err := loadTorrentsFromJSON(filename)
 	if err != nil {
 		torrents = make(map[string]*Torrent)
@@ -38,6 +39,7 @@ func NewTorrentStorage(filename string) *TorrentStorage {
 	return &TorrentStorage{
 		torrents: torrents,
 		order:    order,
+		filename: filename,
 	}
 }
 
@@ -46,6 +48,7 @@ func (ts *TorrentStorage) Add(torrent *Torrent) {
 	defer ts.mu.Unlock()
 	ts.torrents[torrent.Hash] = torrent
 	ts.order = append(ts.order, torrent.Hash)
+	ts.saveToFile()
 }
 
 func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
@@ -55,55 +58,14 @@ func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
 		ts.order = append(ts.order, torrent.Hash)
 	}
 	ts.torrents[torrent.Hash] = torrent
-}
-
-func (ts *TorrentStorage) GetByID(id string) *Torrent {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	for _, torrent := range ts.torrents {
-		if torrent.ID == id {
-			return torrent
-		}
-	}
-	return nil
-}
-
-func (ts *TorrentStorage) Get(hash string) *Torrent {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	return ts.torrents[hash]
-}
-
-func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string) []*Torrent {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	torrents := make([]*Torrent, 0)
-	for _, id := range ts.order {
-		torrent := ts.torrents[id]
-		if category != "" && torrent.Category != category {
-			continue
-		}
-		if filter != "" && torrent.State != filter {
-			continue
-		}
-		torrents = append(torrents, torrent)
-	}
-	if len(hashes) > 0 {
-		filtered := make([]*Torrent, 0, len(torrents))
-		for _, hash := range hashes {
-			if torrent := ts.torrents[hash]; torrent != nil {
-				filtered = append(filtered, torrent)
-			}
-		}
-		torrents = filtered
-	}
-	return torrents
+	ts.saveToFile()
 }
 
 func (ts *TorrentStorage) Update(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.torrents[torrent.Hash] = torrent
+	ts.saveToFile()
 }
 
 func (ts *TorrentStorage) Delete(hash string) {
@@ -127,14 +89,20 @@ func (ts *TorrentStorage) Delete(hash string) {
 			return
 		}
 	}
+	ts.saveToFile()
 }
 
-func (ts *TorrentStorage) Save(filename string) error {
+func (ts *TorrentStorage) Save() error {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	data, err := json.Marshal(ts.torrents)
+	return ts.saveToFile()
+}
+
+// saveToFile is a helper function to write the current state to the JSON file
+func (ts *TorrentStorage) saveToFile() error {
+	data, err := json.MarshalIndent(ts.torrents, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, data, 0644)
+	return os.WriteFile(ts.filename, data, 0644)
 }
