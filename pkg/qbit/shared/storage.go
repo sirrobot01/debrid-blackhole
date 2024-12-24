@@ -48,7 +48,7 @@ func (ts *TorrentStorage) Add(torrent *Torrent) {
 	defer ts.mu.Unlock()
 	ts.torrents[torrent.Hash] = torrent
 	ts.order = append(ts.order, torrent.Hash)
-	ts.saveToFile()
+	_ = ts.saveToFile()
 }
 
 func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
@@ -58,14 +58,57 @@ func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
 		ts.order = append(ts.order, torrent.Hash)
 	}
 	ts.torrents[torrent.Hash] = torrent
-	ts.saveToFile()
+	_ = ts.saveToFile()
+}
+
+func (ts *TorrentStorage) GetByID(id string) *Torrent {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	for _, torrent := range ts.torrents {
+		if torrent.ID == id {
+			return torrent
+		}
+	}
+	return nil
+}
+
+func (ts *TorrentStorage) Get(hash string) *Torrent {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	return ts.torrents[hash]
+}
+
+func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string) []*Torrent {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	torrents := make([]*Torrent, 0)
+	for _, id := range ts.order {
+		torrent := ts.torrents[id]
+		if category != "" && torrent.Category != category {
+			continue
+		}
+		if filter != "" && torrent.State != filter {
+			continue
+		}
+		torrents = append(torrents, torrent)
+	}
+	if len(hashes) > 0 {
+		filtered := make([]*Torrent, 0, len(torrents))
+		for _, hash := range hashes {
+			if torrent := ts.torrents[hash]; torrent != nil {
+				filtered = append(filtered, torrent)
+			}
+		}
+		torrents = filtered
+	}
+	return torrents
 }
 
 func (ts *TorrentStorage) Update(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.torrents[torrent.Hash] = torrent
-	ts.saveToFile()
+	_ = ts.saveToFile()
 }
 
 func (ts *TorrentStorage) Delete(hash string) {
@@ -89,7 +132,7 @@ func (ts *TorrentStorage) Delete(hash string) {
 			return
 		}
 	}
-	ts.saveToFile()
+	_ = ts.saveToFile()
 }
 
 func (ts *TorrentStorage) Save() error {
