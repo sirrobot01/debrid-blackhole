@@ -105,7 +105,7 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.T
 		q.logger.Printf("Failed to create symlink: %s: %v\n", fullPath, err)
 	}
 	// Check if the file exists
-	if !common.FileReady(fullPath) {
-		q.logger.Printf("Symlink not ready: %s\n", fullPath)
-	}
+	//if !common.FileReady(fullPath) {
+	//	q.logger.Printf("Symlink not ready: %s\n", fullPath)
+	//}
 }

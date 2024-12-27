@@ -167,9 +167,11 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	files := make([]TorrentFile, 0)
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
-		if (!common.RegexMatch(common.VIDEOMATCH, fileName) &&
-			!common.RegexMatch(common.SUBMATCH, fileName) &&
-			!common.RegexMatch(common.MUSICMATCH, fileName)) || common.RegexMatch(common.SAMPLEMATCH, fileName) {
+		if common.RegexMatch(common.SAMPLEMATCH, fileName) {
+			// Skip sample files
+			continue
+		}
+		if !common.RegexMatch(common.VIDEOMATCH, fileName) && !common.RegexMatch(common.MUSICMATCH, fileName) {
 			continue
 		}
 		file := TorrentFile{

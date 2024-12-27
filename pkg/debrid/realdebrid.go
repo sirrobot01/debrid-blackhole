@@ -35,9 +35,11 @@ func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
 	files := make([]TorrentFile, 0)
 	for _, f := range data.Files {
 		name := filepath.Base(f.Path)
-		if (!common.RegexMatch(common.VIDEOMATCH, name) &&
-			!common.RegexMatch(common.SUBMATCH, name) &&
-			!common.RegexMatch(common.MUSICMATCH, name)) || common.RegexMatch(common.SAMPLEMATCH, name) {
+		if common.RegexMatch(common.SAMPLEMATCH, name) {
+			// Skip sample files
+			continue
+		}
+		if !common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.MUSICMATCH, name) {
 			continue
 		}
 		fileId := f.ID
