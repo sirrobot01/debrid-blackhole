@@ -10,3 +10,4 @@ docker-compose.yml
 *.log.*
 dist/
 tmp/**
+torrents.json

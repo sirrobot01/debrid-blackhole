@@ -123,7 +123,7 @@ func (r *Torbox) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	return torrent, nil
 }
 
-func getStatus(status string, finished bool) string {
+func getTorboxStatus(status string, finished bool) string {
 	if finished {
 		return "downloaded"
 	}
@@ -159,7 +159,7 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	torrent.Bytes = data.Size
 	torrent.Folder = name
 	torrent.Progress = data.Progress * 100
-	torrent.Status = getStatus(data.DownloadState, data.DownloadFinished)
+	torrent.Status = getTorboxStatus(data.DownloadState, data.DownloadFinished)
 	torrent.Speed = data.DownloadSpeed
 	torrent.Seeders = data.Seeds
 	torrent.Filename = name

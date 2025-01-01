@@ -106,3 +106,10 @@
 - implement per-debrid local cache
 - Fix file check for torbox
 - Other minor bug fixes
+
+
+#### 0.3.3
+
+- Add AllDebrid Support
+- Fix Torbox not downloading uncached torrents
+- Fix Rar files being downloaded

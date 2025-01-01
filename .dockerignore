@@ -6,4 +6,4 @@ docker-compose.yml
 **/.idea/
 *.magnet
 **.torrent
-
+torrents.json

@@ -66,7 +66,7 @@ func (t *Torrent) GetMountFolder(rClonePath string) string {
 	}
 
 	for _, path := range possiblePaths {
-		if path != "" && common.FileReady(filepath.Join(rClonePath, path)) {
+		if common.FileReady(filepath.Join(rClonePath, path)) {
 			return path
 		}
 	}

@@ -56,6 +56,8 @@ func createDebrid(dc common.DebridConfig, cache *common.Cache) Service {
 		return NewTorbox(dc, cache)
 	case "debridlink":
 		return NewDebridLink(dc, cache)
+	case "alldebrid":
+		return NewAllDebrid(dc, cache)
 	default:
 		return NewRealDebrid(dc, cache)
 	}

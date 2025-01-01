@@ -19,6 +19,7 @@ The proxy is useful in filtering out un-cached Real Debrid torrents
 - Real Debrid
 - Torbox
 - Debrid Link
+- All Debrid
 
 ### Changelog
 
@@ -91,6 +92,15 @@ Download the binary from the releases page and run it with the config file.
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false
+    },
+    {
+      "name": "alldebrid",
+      "host": "http://api.alldebrid.com/v4.1",
+      "api_key": "alldebrid_key",
+      "folder": "/media/remote/alldebrid/magnet/",
+      "rate_limit": "600/minute",
+      "download_uncached": false,
+      "check_cached": false
     }
   ],
   "proxy": {
@@ -122,7 +132,7 @@ Download the binary from the releases page and run it with the config file.
 - The `name` key is the name of the debrid provider
 - The `host` key is the API endpoint of the debrid provider
 - The `api_key` key is the API key of the debrid provider
-- The `folder` key is the folder where the torrents will be downloaded. e.g `data/realdebrid/torrents/`
+- The `folder` key is the folder where your debrid folder is mounted(webdav, rclone, zurg etc). e.g `data/realdebrid/torrents/`, `/media/remote/alldebrid/magnets/`
 - The `rate_limit` key is the rate limit of the debrid provider(null by default)
 - The `download_uncached` bool key is used to download uncached torrents(disabled by default)
 - The `check_cached` bool key is used to check if the torrent is cached(disabled by default)
@@ -184,9 +194,9 @@ The UI is a simple web interface that allows you to add torrents directly to the
 ### TODO
 - [ ] A proper name!!!!
 - [ ] Debrid
-  - [ ] Add more Debrid Providers
+  - [x] Add more Debrid Providers
 
 - [ ] Qbittorrent
   - [ ] Add more Qbittorrent features
-  - [ ] Persist torrents on restart/server crash
+  - [x] Persist torrents on restart/server crash
 - [ ] Add tests
