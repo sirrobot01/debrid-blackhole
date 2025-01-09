@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"goBlack/common"
+	"goBlack/pkg/arr"
 	"goBlack/pkg/debrid"
 	"goBlack/pkg/qbit/shared"
 	"log"
@@ -22,9 +23,9 @@ type Server struct {
 	debug  bool
 }
 
-func NewServer(config *common.Config, deb *debrid.DebridService) *Server {
+func NewServer(config *common.Config, deb *debrid.DebridService, arrs *arr.Storage) *Server {
 	logger := common.NewLogger("QBit", os.Stdout)
-	q := shared.NewQBit(config, deb, logger)
+	q := shared.NewQBit(config, deb, logger, arrs)
 	return &Server{
 		qbit:   q,
 		logger: logger,

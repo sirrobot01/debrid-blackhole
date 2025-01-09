@@ -38,12 +38,26 @@ type QBitTorrentConfig struct {
 	RefreshInterval int      `json:"refresh_interval"`
 }
 
+type ArrConfig struct {
+	Name  string `json:"name"`
+	Host  string `json:"host"`
+	Token string `json:"token"`
+}
+
+type RepairConfig struct {
+	Enabled    bool   `json:"enabled"`
+	Interval   string `json:"interval"`
+	RunOnStart bool   `json:"run_on_start"`
+}
+
 type Config struct {
 	Debrid       DebridConfig      `json:"debrid"`
 	Debrids      []DebridConfig    `json:"debrids"`
 	Proxy        ProxyConfig       `json:"proxy"`
 	MaxCacheSize int               `json:"max_cache_size"`
 	QBitTorrent  QBitTorrentConfig `json:"qbittorrent"`
+	Arrs         []ArrConfig       `json:"arrs"`
+	Repair       RepairConfig      `json:"repair"`
 }
 
 func validateDebrids(debrids []DebridConfig) error {

@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -251,17 +250,22 @@ func GetInfohashFromURL(url string) (string, error) {
 }
 
 func JoinURL(base string, paths ...string) (string, error) {
-	// Parse the base URL
-	u, err := url.Parse(base)
+	// Split the last path component to separate query parameters
+	lastPath := paths[len(paths)-1]
+	parts := strings.Split(lastPath, "?")
+	paths[len(paths)-1] = parts[0]
+
+	joined, err := url.JoinPath(base, paths...)
 	if err != nil {
 		return "", err
 	}
 
-	// Join the path components
-	u.Path = path.Join(u.Path, path.Join(paths...))
+	// Add back query parameters if they exist
+	if len(parts) > 1 {
+		return joined + "?" + parts[1], nil
+	}
 
-	// Return the resulting URL as a string
-	return u.String(), nil
+	return joined, nil
 }
 
 func FileReady(path string) bool {

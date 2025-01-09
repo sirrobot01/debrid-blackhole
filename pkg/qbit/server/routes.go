@@ -46,6 +46,7 @@ func (s *Server) Routes(r chi.Router) http.Handler {
 		r.Post("/add", s.handleAddContent)
 		r.Get("/search", s.handleSearch)
 		r.Get("/cached", s.handleCheckCached)
+		r.Post("/repair", s.handleRepair)
 	})
 	return r
 }

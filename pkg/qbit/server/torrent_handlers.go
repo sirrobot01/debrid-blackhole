@@ -43,6 +43,7 @@ func (s *Server) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	s.logger.Printf("isSymlink: %v\n", isSymlink)
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
+	atleastOne := false
 
 	var urlList []string
 	if urls != "" {
@@ -56,6 +57,7 @@ func (s *Server) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		atleastOne = true
 	}
 
 	if contentType == "multipart/form-data" && len(r.MultipartForm.File["torrents"]) > 0 {
@@ -66,7 +68,13 @@ func (s *Server) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			atleastOne = true
 		}
+	}
+
+	if !atleastOne {
+		http.Error(w, "No valid URLs or torrents provided", http.StatusBadRequest)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)

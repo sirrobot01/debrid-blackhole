@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"goBlack/common"
-	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 )
@@ -23,7 +21,6 @@ const (
 
 var (
 	client *common.RLHTTPClient = common.NewRLHTTPClient(nil, nil)
-	logger *log.Logger          = common.NewLogger("QBit", os.Stdout)
 )
 
 type Arr struct {
@@ -87,11 +84,12 @@ func inferType(host, name string) Type {
 	}
 }
 
-func NewStorage() *Storage {
+func NewStorage(cfg []common.ArrConfig) *Storage {
 	arrs := make(map[string]*Arr)
-	//for name, arrCfg := range cfg {
-	//	arrs[name] = NewArr(name, arrCfg.Host, arrCfg.Token, inferType(arrCfg.Host, name))
-	//}
+	for _, a := range cfg {
+		name := a.Name
+		arrs[name] = NewArr(name, a.Host, a.Token, inferType(a.Host, name))
+	}
 	return &Storage{
 		Arrs: arrs,
 	}
