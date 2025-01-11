@@ -58,7 +58,7 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 	return filepath.Join(parent, t.Arr.Name, t.Folder)
 }
 
-func (t *Torrent) GetMountFolder(rClonePath string) string {
+func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 	possiblePaths := []string{
 		t.OriginalFilename,
 		t.Filename,
@@ -67,10 +67,10 @@ func (t *Torrent) GetMountFolder(rClonePath string) string {
 
 	for _, path := range possiblePaths {
 		if common.FileReady(filepath.Join(rClonePath, path)) {
-			return path
+			return path, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 func (t *Torrent) Delete() {

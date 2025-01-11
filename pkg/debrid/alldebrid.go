@@ -127,6 +127,7 @@ func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 		files = append(files, file)
 	}
 	parentFolder := data.Filename
+
 	if data.NbLinks == 1 {
 		// All debrid doesn't return the parent folder for single file torrents
 		parentFolder = ""
