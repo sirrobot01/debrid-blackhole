@@ -188,7 +188,8 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	}
 
 	if t.TorrentPath == "" {
-		t.TorrentPath = filepath.Base(debridTorrent.GetMountFolder(rcLoneMount))
+		tPath, _ := debridTorrent.GetMountFolder(rcLoneMount)
+		t.TorrentPath = filepath.Base(tPath)
 	}
 	savePath := filepath.Join(q.DownloadFolder, t.Category) + string(os.PathSeparator)
 	torrentPath := filepath.Join(savePath, t.TorrentPath) + string(os.PathSeparator)
