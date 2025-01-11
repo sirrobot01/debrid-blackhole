@@ -1,6 +1,7 @@
 package debrid
 
 import (
+	"fmt"
 	"goBlack/common"
 	"goBlack/pkg/arr"
 	"os"
@@ -70,7 +71,7 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 			return path, nil
 		}
 	}
-	return "", nil
+	return "", fmt.Errorf("no path found")
 }
 
 func (t *Torrent) Delete() {
