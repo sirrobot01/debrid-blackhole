@@ -12,6 +12,7 @@ This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid & To
 - Debrid Link Support
 - Multi-Debrid Providers support
 - UI for adding torrents directly to *arrs
+- Repair Worker for missing files (**NEW**)
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
 
@@ -117,7 +118,19 @@ Download the binary from the releases page and run it with the config file.
     "download_folder": "/media/symlinks/",
     "categories": ["sonarr", "radarr"],
     "refresh_interval": 5
-  }
+  },
+  "arrs": [
+    {
+      "name": "sonarr",
+      "host": "http://host:8989",
+      "token": "arr_key"
+    },
+    {
+      "name": "radarr",
+      "host": "http://host:7878",
+      "token": "arr_key"
+    }
+  ]
 }
 ```
 
@@ -137,6 +150,12 @@ Download the binary from the releases page and run it with the config file.
 - The `download_uncached` bool key is used to download uncached torrents(disabled by default)
 - The `check_cached` bool key is used to check if the torrent is cached(disabled by default)
 
+##### Repair Config (**NEW**)
+The `repair` key is used to enable the repair worker
+- The `enabled` key is used to enable the repair worker
+- The `interval` key is the interval in either minutes, seconds, hours, days. Use any of this format, e.g 12:00, 5:00, 1h, 1d, 1m, 1s.
+- The `run_on_start` key is used to run the repair worker on start
+
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
 - The `port` key is the port the proxy will listen on
@@ -150,6 +169,14 @@ Download the binary from the releases page and run it with the config file.
 - The `download_folder` is the folder where the torrents will be downloaded. e.g `/media/symlinks/`
 - The `categories` key is used to filter out torrents based on the category. e.g `sonarr`, `radarr`
 - The `refresh_interval` key is used to set the interval in minutes to refresh the Arrs Monitored Downloads(it's in seconds). The default value is `5` seconds
+
+
+##### Arrs Config
+This is an array of Arrs(Sonarr, Radarr, etc) that will be used to download the torrents. This is not required if you already set up the Qbittorrent in the Arrs with the host, token.
+This is particularly useful if you want to use the Repair tool without using Qbittorent
+- The `name` key is the name of the Arr/ Category
+- The `host` key is the host of the Arr
+- The `token` key is the API token of the Arr
 
 ### Proxy
 
@@ -185,11 +212,25 @@ Setting Up Qbittorrent in Arr
   - Test
   - Save
 
-### UI for adding torrents
+### Repair Worker
+
+The repair worker is a simple worker that checks for missing files in the Arrs(Sonarr, Radarr, etc). It's particularly useful for files either deleted by the Debrid provider or files with bad symlinks.
+
+- Search for broken symlinks/files
+- Search for missing files
+- Search for deleted/unreadable files
+
+
+### UI
 
 ![UI](./doc/ui.png)
 
-The UI is a simple web interface that allows you to add torrents directly to the Arrs(Sonarr, Radarr, etc)
+The UI is a simple web interface that allows you to add torrents directly to the Arrs(Sonarr, Radarr, etc) or trigger the Repair Worker.
+
+UI Features
+
+- Adding new torrents
+- Triggering the Repair Worker
 
 ### TODO
 - [ ] A proper name!!!!

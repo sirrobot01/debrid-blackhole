@@ -54,6 +54,9 @@ func (q *QBit) ProcessSymlink(debridTorrent *debrid.Torrent) (string, error) {
 	var wg sync.WaitGroup
 	files := debridTorrent.Files
 	ready := make(chan debrid.TorrentFile, len(files))
+	if len(files) == 0 {
+		return "", fmt.Errorf("no video files found")
+	}
 
 	q.logger.Printf("Checking %d files...", len(files))
 	rCloneBase := debridTorrent.Debrid.GetMountPath()
@@ -86,9 +89,9 @@ func (q *QBit) ProcessSymlink(debridTorrent *debrid.Torrent) (string, error) {
 
 func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) (string, error) {
 	for {
-		torrentPath := debridTorrent.GetMountFolder(rclonePath)
-		if torrentPath != "" {
-			return torrentPath, nil
+		torrentPath, err := debridTorrent.GetMountFolder(rclonePath)
+		if err == nil {
+			return torrentPath, err
 		}
 		time.Sleep(time.Second)
 	}

@@ -23,11 +23,10 @@ type QBit struct {
 	RefreshInterval int
 }
 
-func NewQBit(config *common.Config, deb *debrid.DebridService, logger *log.Logger) *QBit {
+func NewQBit(config *common.Config, deb *debrid.DebridService, logger *log.Logger, arrs *arr.Storage) *QBit {
 	cfg := config.QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8182")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
-	arrs := arr.NewStorage()
 	return &QBit{
 		Username:        cfg.Username,
 		Password:        cfg.Password,

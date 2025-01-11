@@ -3,6 +3,8 @@ package server
 import (
 	"embed"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"goBlack/common"
 	"goBlack/pkg/arr"
 	"goBlack/pkg/debrid"
@@ -31,6 +33,12 @@ type ContentResponse struct {
 	Title string `json:"title"`
 	Type  string `json:"type"`
 	ArrID string `json:"arr"`
+}
+
+type RepairRequest struct {
+	ArrName string `json:"arr"`
+	TVIds   string `json:"tvIds"`
+	Async   bool   `json:"async"`
 }
 
 //go:embed static/index.html
@@ -62,7 +70,7 @@ func (s *Server) handleContent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid arr", http.StatusBadRequest)
 		return
 	}
-	contents := _arr.GetContents()
+	contents, _ := _arr.GetMedia("")
 	w.Header().Set("Content-Type", "application/json")
 	common.JSONResponse(w, contents, http.StatusOK)
 }
@@ -146,4 +154,56 @@ func (s *Server) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 		result[h] = exists
 	}
 	common.JSONResponse(w, result, http.StatusOK)
+}
+
+func (s *Server) handleRepair(w http.ResponseWriter, r *http.Request) {
+	var req RepairRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	tvids := []string{""}
+	if req.TVIds != "" {
+		tvids = strings.Split(req.TVIds, ",")
+	}
+
+	_arr := s.qbit.Arrs.Get(req.ArrName)
+	arrs := make([]*arr.Arr, 0)
+	if _arr != nil {
+		arrs = append(arrs, _arr)
+	} else {
+		arrs = s.qbit.Arrs.GetAll()
+	}
+
+	if len(arrs) == 0 {
+		http.Error(w, "No arrays found to repair", http.StatusNotFound)
+		return
+	}
+
+	if req.Async {
+		for _, a := range arrs {
+			for _, tvId := range tvids {
+				go a.Repair(tvId)
+			}
+		}
+		common.JSONResponse(w, "Repair process started", http.StatusOK)
+		return
+	}
+
+	var errs []error
+	for _, a := range arrs {
+		for _, tvId := range tvids {
+			if err := a.Repair(tvId); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		combinedErr := errors.Join(errs...)
+		http.Error(w, fmt.Sprintf("Failed to repair: %v", combinedErr), http.StatusInternalServerError)
+		return
+	}
+
+	common.JSONResponse(w, "Repair completed", http.StatusOK)
 }
