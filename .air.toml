@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ."
+  cmd = "bash -c 'VERSION=$(git describe --tags --always --abbrev=0 2>/dev/null || echo dev) && go build -ldflags \"-X github.com/sirrobot01/debrid-blackhole/pkg/version.Version=$VERSION -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel=beta\" -o ./tmp/main .'"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata", "data"]
   exclude_file = []

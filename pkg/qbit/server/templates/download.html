@@ -1,0 +1,74 @@
+{{ define "download" }}
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-cloud-download me-2"></i>Add New Download</h4>
+            </div>
+            <div class="card-body">
+                <form id="downloadForm">
+                    <div class="mb-3">
+                        <label for="magnetURI" class="form-label">Magnet Link or Torrent URL</label>
+                        <textarea class="form-control" id="magnetURI" rows="3" placeholder="Paste your magnet link here..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Enter Category</label>
+                        <input type="text" class="form-control" id="category" placeholder="Enter Category(e.g sonarr, radarr, radarr4k)">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="isSymlink">
+                            <label class="form-check-label" for="isSymlink">
+                                Download real files instead of symlinks
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="submitDownload">
+                        <i class="bi bi-cloud-upload me-2"></i>Add to Download Queue
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // Handle form submission
+            document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const submitBtn = document.getElementById('submitDownload');
+                const originalText = submitBtn.innerHTML;
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+
+                try {
+                    const response = await fetch('/internal/add', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url: document.getElementById('magnetURI').value,
+                            arr: document.getElementById('category').value,
+                            notSymlink: document.getElementById('isSymlink').checked
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(await response.text());
+
+                    alert('Download added successfully!');
+                    document.getElementById('magnetURI').value = '';
+                } catch (error) {
+                    alert(`Error adding download: ${error.message}`);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+        });
+    </script>
+{{ end }}

@@ -3,7 +3,7 @@ package arr
 import (
 	"bytes"
 	"encoding/json"
-	"goBlack/common"
+	"github.com/sirrobot01/debrid-blackhole/common"
 	"net/http"
 	"strings"
 	"sync"

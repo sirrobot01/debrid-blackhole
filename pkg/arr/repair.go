@@ -1,7 +1,7 @@
 package arr
 
 import (
-	"goBlack/common"
+	"github.com/sirrobot01/debrid-blackhole/common"
 	"io"
 	"log"
 	"net/http"

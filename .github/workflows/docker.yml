@@ -21,6 +21,15 @@ jobs:
           LATEST_TAG=$(git tag | sort -V | tail -n1)
           echo "latest_tag=${LATEST_TAG}" >> $GITHUB_ENV
 
+      - name: Set channel
+        id: set_channel
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/beta' ]]; then
+            echo "CHANNEL=beta" >> $GITHUB_ENV
+          else
+            echo "CHANNEL=stable" >> $GITHUB_ENV
+          fi
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -41,6 +50,9 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: cy01/blackhole:beta
+          build-args: |
+            VERSION=${{ env.latest_tag }}
+            CHANNEL=${{ env.CHANNEL }}
 
       - name: Build and push for main branch
         if: github.ref == 'refs/heads/main'
@@ -52,3 +64,6 @@ jobs:
           tags: |
             cy01/blackhole:latest
             cy01/blackhole:${{ env.latest_tag }}
+          build-args: |
+            VERSION=${{ env.latest_tag }}
+            CHANNEL=${{ env.CHANNEL }}

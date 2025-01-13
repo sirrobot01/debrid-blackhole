@@ -3,12 +3,12 @@ package cmd
 import (
 	"cmp"
 	"context"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
-	"goBlack/pkg/proxy"
-	"goBlack/pkg/qbit"
-	"goBlack/pkg/repair"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
+	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
+	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
 	"log"
 	"sync"
 )

@@ -21,6 +21,14 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
+
+      - name: Set Release Channel
+        run: |
+          if [[ ${{ github.ref }} == refs/tags/beta* ]]; then
+            echo "RELEASE_CHANNEL=beta" >> $GITHUB_ENV
+          else
+            echo "RELEASE_CHANNEL=stable" >> $GITHUB_ENV
+          fi
           
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5

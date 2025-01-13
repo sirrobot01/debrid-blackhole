@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
+	"github.com/go-chi/chi/v5"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
+	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -41,81 +45,89 @@ type RepairRequest struct {
 	Async   bool   `json:"async"`
 }
 
-//go:embed static/index.html
+//go:embed templates/*
 var content embed.FS
 
-func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFS(content, "static/index.html")
-	if err != nil {
+type uiHandler struct {
+	qbit   *shared.QBit
+	logger *log.Logger
+	debug  bool
+}
+
+var templates *template.Template
+
+func init() {
+	currentDir := "pkg/qbit/server"
+	templates = template.Must(template.ParseFiles(
+		currentDir+"/templates/layout.html",
+		currentDir+"/templates/index.html",
+		currentDir+"/templates/download.html",
+		currentDir+"/templates/repair.html",
+		currentDir+"/templates/config.html",
+	))
+}
+
+func (u *uiHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"Page":  "index",
+		"Title": "Torrents",
+	}
+	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
 
-	err = tmpl.Execute(w, nil)
-	if err != nil {
+func (u *uiHandler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"Page":  "download",
+		"Title": "Download",
+	}
+	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func (s *Server) handleGetArrs(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, s.qbit.Arrs.GetAll(), http.StatusOK)
-}
-
-func (s *Server) handleContent(w http.ResponseWriter, r *http.Request) {
-	arrName := r.URL.Query().Get("arr")
-	_arr := s.qbit.Arrs.Get(arrName)
-	if _arr == nil {
-		http.Error(w, "Invalid arr", http.StatusBadRequest)
+func (u *uiHandler) RepairHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"Page":  "repair",
+		"Title": "Repair",
+	}
+	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	contents, _ := _arr.GetMedia("")
-	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, contents, http.StatusOK)
 }
 
-func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	// arrName := r.URL.Query().Get("arr")
-	term := r.URL.Query().Get("term")
-	results, err := arr.SearchTMDB(term)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+func (u *uiHandler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"Page":  "config",
+		"Title": "Config",
+	}
+	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, results.Results, http.StatusOK)
 }
 
-func (s *Server) handleSeasons(w http.ResponseWriter, r *http.Request) {
-	// arrId := r.URL.Query().Get("arrId")
-	// contentId := chi.URLParam(r, "contentId")
-	seasons := []string{"Season 1", "Season 2", "Season 3", "Season 4", "Season 5"}
+func (u *uiHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, seasons, http.StatusOK)
+	common.JSONResponse(w, u.qbit.Arrs.GetAll(), http.StatusOK)
 }
 
-func (s *Server) handleEpisodes(w http.ResponseWriter, r *http.Request) {
-	// arrId := r.URL.Query().Get("arrId")
-	// contentId := chi.URLParam(r, "contentId")
-	// seasonIds := strings.Split(r.URL.Query().Get("seasons"), ",")
-	episodes := []string{"Episode 1", "Episode 2", "Episode 3", "Episode 4", "Episode 5"}
-	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, episodes, http.StatusOK)
-}
-
-func (s *Server) handleAddContent(w http.ResponseWriter, r *http.Request) {
+func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	var req AddRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_arr := s.qbit.Arrs.Get(req.Arr)
+	_arr := u.qbit.Arrs.Get(req.Arr)
 	if _arr == nil {
 		_arr = arr.NewArr(req.Arr, "", "", arr.Sonarr)
 	}
 	importReq := NewImportRequest(req.Url, _arr, !req.NotSymlink)
-	err := importReq.Process(s)
+	err := importReq.Process(u.qbit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -123,7 +135,7 @@ func (s *Server) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	common.JSONResponse(w, importReq, http.StatusOK)
 }
 
-func (s *Server) handleCheckCached(w http.ResponseWriter, r *http.Request) {
+func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_hashes := r.URL.Query().Get("hash")
 	if _hashes == "" {
@@ -139,9 +151,9 @@ func (s *Server) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 	var deb debrid.Service
 	if db == "" {
 		// use the first debrid
-		deb = s.qbit.Debrid.Get()
+		deb = u.qbit.Debrid.Get()
 	} else {
-		deb = s.qbit.Debrid.GetByName(db)
+		deb = u.qbit.Debrid.GetByName(db)
 	}
 	if deb == nil {
 		http.Error(w, "Invalid debrid", http.StatusBadRequest)
@@ -156,7 +168,7 @@ func (s *Server) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 	common.JSONResponse(w, result, http.StatusOK)
 }
 
-func (s *Server) handleRepair(w http.ResponseWriter, r *http.Request) {
+func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 	var req RepairRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -167,12 +179,12 @@ func (s *Server) handleRepair(w http.ResponseWriter, r *http.Request) {
 		tvids = strings.Split(req.TVIds, ",")
 	}
 
-	_arr := s.qbit.Arrs.Get(req.ArrName)
+	_arr := u.qbit.Arrs.Get(req.ArrName)
 	arrs := make([]*arr.Arr, 0)
 	if _arr != nil {
 		arrs = append(arrs, _arr)
 	} else {
-		arrs = s.qbit.Arrs.GetAll()
+		arrs = u.qbit.Arrs.GetAll()
 	}
 
 	if len(arrs) == 0 {
@@ -183,7 +195,12 @@ func (s *Server) handleRepair(w http.ResponseWriter, r *http.Request) {
 	if req.Async {
 		for _, a := range arrs {
 			for _, tvId := range tvids {
-				go a.Repair(tvId)
+				go func() {
+					err := a.Repair(tvId)
+					if err != nil {
+						u.logger.Printf("Failed to repair: %v", err)
+					}
+				}()
 			}
 		}
 		common.JSONResponse(w, "Repair process started", http.StatusOK)
@@ -206,4 +223,30 @@ func (s *Server) handleRepair(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.JSONResponse(w, "Repair completed", http.StatusOK)
+}
+
+func (u *uiHandler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
+	v := version.GetInfo()
+	w.Header().Set("Content-Type", "application/json")
+	common.JSONResponse(w, v, http.StatusOK)
+}
+
+func (u *uiHandler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	common.JSONResponse(w, u.qbit.Storage.GetAll("", "", nil), http.StatusOK)
+}
+
+func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) {
+	hash := chi.URLParam(r, "hash")
+	if hash == "" {
+		http.Error(w, "No hash provided", http.StatusBadRequest)
+		return
+	}
+	u.qbit.Storage.Delete(hash)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (u *uiHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	common.JSONResponse(w, common.CONFIG, http.StatusOK)
 }

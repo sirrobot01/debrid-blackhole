@@ -2,8 +2,8 @@ package repair
 
 import (
 	"context"
-	"goBlack/common"
-	"goBlack/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"log"
 	"os"
 	"os/signal"

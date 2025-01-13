@@ -3,8 +3,8 @@ package debrid
 import (
 	"encoding/json"
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
 	"net/http"
 	gourl "net/url"
@@ -82,6 +82,42 @@ func getAlldebridStatus(statusCode int) string {
 	}
 }
 
+func flattenFiles(files []structs.AllDebridMagnetFile, parentPath string, index *int) []TorrentFile {
+	result := make([]TorrentFile, 0)
+
+	for _, f := range files {
+		currentPath := f.Name
+		if parentPath != "" {
+			currentPath = filepath.Join(parentPath, f.Name)
+		}
+
+		if f.Elements != nil {
+			// This is a folder, recurse into it
+			result = append(result, flattenFiles(f.Elements, currentPath, index)...)
+		} else {
+			// This is a file
+			fileName := filepath.Base(f.Name)
+			if common.RegexMatch(common.SAMPLEMATCH, fileName) {
+				continue
+			}
+			if !common.RegexMatch(common.VIDEOMATCH, fileName) && !common.RegexMatch(common.MUSICMATCH, fileName) {
+				continue
+			}
+
+			*index++
+			file := TorrentFile{
+				Id:   strconv.Itoa(*index),
+				Name: fileName,
+				Size: f.Size,
+				Path: currentPath,
+			}
+			result = append(result, file)
+		}
+	}
+
+	return result
+}
+
 func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 	torrent := &Torrent{}
 	url := fmt.Sprintf("%s/magnet/status?id=%s", r.Host, id)
@@ -108,24 +144,8 @@ func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 	torrent.Seeders = data.Seeders
 	torrent.Filename = name
 	torrent.OriginalFilename = name
-	files := make([]TorrentFile, 0)
-	for index, f := range data.Files {
-		fileName := filepath.Base(f.Name)
-		if common.RegexMatch(common.SAMPLEMATCH, fileName) {
-			// Skip sample files
-			continue
-		}
-		if !common.RegexMatch(common.VIDEOMATCH, fileName) && !common.RegexMatch(common.MUSICMATCH, fileName) {
-			continue
-		}
-		file := TorrentFile{
-			Id:   strconv.Itoa(index),
-			Name: fileName,
-			Size: f.Size,
-			Path: fileName,
-		}
-		files = append(files, file)
-	}
+	index := -1
+	files := flattenFiles(data.Files, "", &index)
 	parentFolder := data.Filename
 
 	if data.NbLinks == 1 {

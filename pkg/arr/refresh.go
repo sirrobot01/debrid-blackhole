@@ -3,7 +3,7 @@ package arr
 import (
 	"cmp"
 	"fmt"
-	"goBlack/common"
+	"github.com/sirrobot01/debrid-blackhole/common"
 	"net/http"
 	"strconv"
 	"strings"

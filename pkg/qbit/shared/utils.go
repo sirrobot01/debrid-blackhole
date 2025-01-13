@@ -1,8 +1,8 @@
 package shared
 
 import (
-	"goBlack/common"
-	"goBlack/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"path/filepath"
 	"sync"
 	"time"

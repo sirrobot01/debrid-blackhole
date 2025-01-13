@@ -2,9 +2,9 @@ package shared
 
 import (
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/debrid"
-	"goBlack/pkg/downloaders"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/downloaders"
 	"os"
 	"path/filepath"
 	"sync"
@@ -57,7 +57,6 @@ func (q *QBit) ProcessSymlink(debridTorrent *debrid.Torrent) (string, error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no video files found")
 	}
-
 	q.logger.Printf("Checking %d files...", len(files))
 	rCloneBase := debridTorrent.Debrid.GetMountPath()
 	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/

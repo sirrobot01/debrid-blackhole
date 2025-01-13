@@ -5,29 +5,31 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
+type AllDebridMagnetFile struct {
+	Name     string                `json:"n"`
+	Size     int64                 `json:"s"`
+	Link     string                `json:"l"`
+	Elements []AllDebridMagnetFile `json:"e"`
+}
 type magnetInfo struct {
-	Id             int    `json:"id"`
-	Filename       string `json:"filename"`
-	Size           int64  `json:"size"`
-	Hash           string `json:"hash"`
-	Status         string `json:"status"`
-	StatusCode     int    `json:"statusCode"`
-	UploadDate     int    `json:"uploadDate"`
-	Downloaded     int64  `json:"downloaded"`
-	Uploaded       int64  `json:"uploaded"`
-	DownloadSpeed  int    `json:"downloadSpeed"`
-	UploadSpeed    int    `json:"uploadSpeed"`
-	Seeders        int    `json:"seeders"`
-	CompletionDate int    `json:"completionDate"`
-	Type           string `json:"type"`
-	Notified       bool   `json:"notified"`
-	Version        int    `json:"version"`
-	NbLinks        int    `json:"nbLinks"`
-	Files          []struct {
-		Name string `json:"n"`
-		Size int64  `json:"s"`
-		Link string `json:"l"`
-	} `json:"files"`
+	Id             int                   `json:"id"`
+	Filename       string                `json:"filename"`
+	Size           int64                 `json:"size"`
+	Hash           string                `json:"hash"`
+	Status         string                `json:"status"`
+	StatusCode     int                   `json:"statusCode"`
+	UploadDate     int                   `json:"uploadDate"`
+	Downloaded     int64                 `json:"downloaded"`
+	Uploaded       int64                 `json:"uploaded"`
+	DownloadSpeed  int                   `json:"downloadSpeed"`
+	UploadSpeed    int                   `json:"uploadSpeed"`
+	Seeders        int                   `json:"seeders"`
+	CompletionDate int                   `json:"completionDate"`
+	Type           string                `json:"type"`
+	Notified       bool                  `json:"notified"`
+	Version        int                   `json:"version"`
+	NbLinks        int                   `json:"nbLinks"`
+	Files          []AllDebridMagnetFile `json:"files"`
 }
 
 type AllDebridTorrentInfoResponse struct {

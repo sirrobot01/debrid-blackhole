@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"flag"
-	"goBlack/cmd"
-	"goBlack/common"
+	"github.com/sirrobot01/debrid-blackhole/cmd"
+	"github.com/sirrobot01/debrid-blackhole/common"
 	"log"
 )
 
@@ -15,6 +15,7 @@ func main() {
 
 	// Load the config file
 	conf, err := common.LoadConfig(configPath)
+	common.CONFIG = conf
 	if err != nil {
 		log.Fatal(err)
 	}

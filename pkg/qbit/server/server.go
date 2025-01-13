@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
-	"goBlack/pkg/qbit/shared"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
 	"log"
 	"net/http"
 	"os"
@@ -35,12 +35,14 @@ func NewServer(config *common.Config, deb *debrid.DebridService, arrs *arr.Stora
 
 func (s *Server) Start(ctx context.Context) error {
 	r := chi.NewRouter()
-	if s.debug {
-		r.Use(middleware.Logger)
-	}
 	r.Use(middleware.Recoverer)
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	s.Routes(r)
+	q := qbitHandler{qbit: s.qbit, logger: s.logger}
+	ui := uiHandler{qbit: s.qbit, logger: common.NewLogger("UI", os.Stdout)}
+
+	// Register routes
+	q.Routes(r)
+	ui.Routes(r)
 
 	go s.qbit.StartWorker(context.Background())
 

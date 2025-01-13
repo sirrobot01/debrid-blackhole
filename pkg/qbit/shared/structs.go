@@ -1,6 +1,6 @@
 package shared
 
-import "goBlack/pkg/debrid"
+import "github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 
 type BuildInfo struct {
 	Libtorrent string `json:"libtorrent"`
@@ -217,6 +217,7 @@ type Torrent struct {
 	Uploaded          int64   `json:"uploaded,omitempty"`
 	UploadedSession   int64   `json:"uploaded_session,omitempty"`
 	Upspeed           int     `json:"upspeed,omitempty"`
+	Source            string  `json:"source,omitempty"`
 }
 
 func (t *Torrent) IsReady() bool {

@@ -64,6 +64,8 @@ Download the binary from the releases page and run it with the config file.
 ```
 
 #### Config
+
+This is the default config file. You can create a `config.json` file in the root directory of the project or mount it in the docker-compose file.
 ```json
 {
   "debrids": [
@@ -219,18 +221,6 @@ The repair worker is a simple worker that checks for missing files in the Arrs(S
 - Search for broken symlinks/files
 - Search for missing files
 - Search for deleted/unreadable files
-
-
-### UI
-
-![UI](./doc/ui.png)
-
-The UI is a simple web interface that allows you to add torrents directly to the Arrs(Sonarr, Radarr, etc) or trigger the Repair Worker.
-
-UI Features
-
-- Adding new torrents
-- Triggering the Repair Worker
 
 ### TODO
 - [ ] A proper name!!!!

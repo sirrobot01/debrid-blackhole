@@ -3,8 +3,8 @@ package debrid
 import (
 	"encoding/json"
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
 	"net/http"
 	gourl "net/url"

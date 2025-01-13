@@ -3,8 +3,8 @@ package debrid
 import (
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
-	"goBlack/common"
-	"goBlack/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"log"
 	"path/filepath"
 )

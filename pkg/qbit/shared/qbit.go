@@ -2,9 +2,9 @@ package shared
 
 import (
 	"cmp"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"log"
 	"os"
 )

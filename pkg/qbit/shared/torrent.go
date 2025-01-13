@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"io"
 	"mime/multipart"
 	"os"
@@ -46,7 +46,7 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 }
 
 func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category string) error {
-	torrent := q.CreateTorrentFromMagnet(magnet, category)
+	torrent := q.CreateTorrentFromMagnet(magnet, category, "auto")
 	a, ok := ctx.Value("arr").(*arr.Arr)
 	if !ok {
 		return fmt.Errorf("arr not found in context")
@@ -68,13 +68,14 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 	return nil
 }
 
-func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category string) *Torrent {
+func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category, source string) *Torrent {
 	torrent := &Torrent{
 		ID:        uuid.NewString(),
 		Hash:      strings.ToLower(magnet.InfoHash),
 		Name:      magnet.Name,
 		Size:      magnet.Size,
 		Category:  category,
+		Source:    source,
 		State:     "downloading",
 		MagnetUri: magnet.Link,
 

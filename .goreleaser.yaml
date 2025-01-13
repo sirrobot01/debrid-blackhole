@@ -2,7 +2,6 @@ version: 1
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
 
 builds:
@@ -16,6 +15,10 @@ builds:
       - amd64
       - arm
       - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version={{.Version}}
+      - -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel={{.Env.RELEASE_CHANNEL}}
 
 
 archives:

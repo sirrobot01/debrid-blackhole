@@ -167,3 +167,5 @@ func LoadConfig(path string) (*Config, error) {
 
 	return config, nil
 }
+
+var CONFIG *Config = nil

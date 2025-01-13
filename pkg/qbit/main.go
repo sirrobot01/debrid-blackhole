@@ -3,10 +3,10 @@ package qbit
 import (
 	"context"
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/arr"
-	"goBlack/pkg/debrid"
-	"goBlack/pkg/qbit/server"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/server"
 )
 
 func Start(ctx context.Context, config *common.Config, deb *debrid.DebridService, arrs *arr.Storage) error {

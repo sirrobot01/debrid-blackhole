@@ -2,51 +2,68 @@ package server
 
 import (
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
 )
 
-func (s *Server) Routes(r chi.Router) http.Handler {
+func (q *qbitHandler) Routes(r chi.Router) http.Handler {
 	r.Route("/api/v2", func(r chi.Router) {
-		r.Use(s.CategoryContext)
-		r.Post("/auth/login", s.handleLogin)
+		if q.debug {
+			r.Use(middleware.Logger)
+		}
+		r.Use(q.CategoryContext)
+		r.Post("/auth/login", q.handleLogin)
 
 		r.Group(func(r chi.Router) {
-			r.Use(s.authContext)
+			r.Use(q.authContext)
 			r.Route("/torrents", func(r chi.Router) {
 				r.Use(HashesCtx)
-				r.Get("/info", s.handleTorrentsInfo)
-				r.Post("/add", s.handleTorrentsAdd)
-				r.Post("/delete", s.handleTorrentsDelete)
-				r.Get("/categories", s.handleCategories)
-				r.Post("/createCategory", s.handleCreateCategory)
+				r.Get("/info", q.handleTorrentsInfo)
+				r.Post("/add", q.handleTorrentsAdd)
+				r.Post("/delete", q.handleTorrentsDelete)
+				r.Get("/categories", q.handleCategories)
+				r.Post("/createCategory", q.handleCreateCategory)
 
-				r.Get("/pause", s.handleTorrentsPause)
-				r.Get("/resume", s.handleTorrentsResume)
-				r.Get("/recheck", s.handleTorrentRecheck)
-				r.Get("/properties", s.handleTorrentProperties)
-				r.Get("/files", s.handleTorrentFiles)
+				r.Get("/pause", q.handleTorrentsPause)
+				r.Get("/resume", q.handleTorrentsResume)
+				r.Get("/recheck", q.handleTorrentRecheck)
+				r.Get("/properties", q.handleTorrentProperties)
+				r.Get("/files", q.handleTorrentFiles)
 			})
 
 			r.Route("/app", func(r chi.Router) {
-				r.Get("/version", s.handleVersion)
-				r.Get("/webapiVersion", s.handleWebAPIVersion)
-				r.Get("/preferences", s.handlePreferences)
-				r.Get("/buildInfo", s.handleBuildInfo)
-				r.Get("/shutdown", s.shutdown)
+				r.Get("/version", q.handleVersion)
+				r.Get("/webapiVersion", q.handleWebAPIVersion)
+				r.Get("/preferences", q.handlePreferences)
+				r.Get("/buildInfo", q.handleBuildInfo)
+				r.Get("/shutdown", q.shutdown)
 			})
 		})
 
 	})
-	r.Get("/", s.handleHome)
-	r.Route("/internal", func(r chi.Router) {
-		r.Get("/arrs", s.handleGetArrs)
-		r.Get("/content", s.handleContent)
-		r.Get("/seasons/{contentId}", s.handleSeasons)
-		r.Get("/episodes/{contentId}", s.handleEpisodes)
-		r.Post("/add", s.handleAddContent)
-		r.Get("/search", s.handleSearch)
-		r.Get("/cached", s.handleCheckCached)
-		r.Post("/repair", s.handleRepair)
+	return r
+}
+
+func (u *uiHandler) Routes(r chi.Router) http.Handler {
+	r.Group(func(r chi.Router) {
+		if u.debug {
+			r.Use(middleware.Logger)
+		}
+		r.Get("/", u.IndexHandler)
+		r.Get("/download", u.DownloadHandler)
+		r.Get("/repair", u.RepairHandler)
+		r.Get("/config", u.ConfigHandler)
+		r.Route("/internal", func(r chi.Router) {
+			r.Get("/arrs", u.handleGetArrs)
+			r.Post("/add", u.handleAddContent)
+			r.Get("/cached", u.handleCheckCached)
+			r.Post("/repair", u.handleRepairMedia)
+			r.Get("/torrents", u.handleGetTorrents)
+			r.Delete("/torrents/{hash}", u.handleDeleteTorrent)
+			r.Get("/config", u.handleGetConfig)
+			r.Get("/version", u.handleGetVersion)
+		})
 	})
+
 	return r
 }

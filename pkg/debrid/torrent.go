@@ -2,8 +2,8 @@ package debrid
 
 import (
 	"fmt"
-	"goBlack/common"
-	"goBlack/pkg/arr"
+	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
 	"path/filepath"
 )

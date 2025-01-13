@@ -1,4 +1,4 @@
-module goBlack
+module github.com/sirrobot01/debrid-blackhole
 
 go 1.22
 
