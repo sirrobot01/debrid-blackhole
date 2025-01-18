@@ -35,7 +35,7 @@ fi
 
 # Set tag based on branch
 if [ "$BETA" = true ]; then
-    TAG="beta-$VERSION"
+    TAG="$VERSION-beta"
     BRANCH="beta"
 else
     TAG="$VERSION"

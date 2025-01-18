@@ -57,13 +57,13 @@ type uiHandler struct {
 var templates *template.Template
 
 func init() {
-	currentDir := "pkg/qbit/server"
-	templates = template.Must(template.ParseFiles(
-		currentDir+"/templates/layout.html",
-		currentDir+"/templates/index.html",
-		currentDir+"/templates/download.html",
-		currentDir+"/templates/repair.html",
-		currentDir+"/templates/config.html",
+	templates = template.Must(template.ParseFS(
+		content,
+		"templates/layout.html",
+		"templates/index.html",
+		"templates/download.html",
+		"templates/repair.html",
+		"templates/config.html",
 	))
 }
 
