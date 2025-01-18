@@ -3,9 +3,9 @@ package debrid
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
-	"log"
 	"net/http"
 	gourl "net/url"
 	"os"
@@ -27,7 +27,7 @@ func (r *RealDebrid) GetName() string {
 	return r.Name
 }
 
-func (r *RealDebrid) GetLogger() *log.Logger {
+func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
@@ -89,13 +89,13 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
 		resp, err := r.client.MakeRequest(req)
 		if err != nil {
-			log.Println("Error checking availability:", err)
+			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
 		var data structs.RealDebridAvailabilityResponse
 		err = json.Unmarshal(resp, &data)
 		if err != nil {
-			log.Println("Error marshalling availability:", err)
+			r.logger.Info().Msgf("Error marshalling availability: %v", err)
 			return result
 		}
 		for _, h := range hashes[i:end] {
@@ -121,7 +121,7 @@ func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 		return nil, err
 	}
 	err = json.Unmarshal(resp, &data)
-	log.Printf("Torrent: %s added with id: %s\n", torrent.Name, data.Id)
+	r.logger.Info().Msgf("Torrent: %s added with id: %s", torrent.Name, data.Id)
 	torrent.Id = data.Id
 
 	return torrent, nil
@@ -164,7 +164,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 	for {
 		resp, err := r.client.MakeRequest(req)
 		if err != nil {
-			log.Println("ERROR Checking file: ", err)
+			r.logger.Info().Msgf("ERROR Checking file: %v", err)
 			return torrent, err
 		}
 		var data structs.RealDebridTorrentInfo
@@ -207,7 +207,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		} else if status == "downloaded" {
 			files := GetTorrentFiles(data)
 			torrent.Files = files
-			log.Printf("Torrent: %s downloaded to RD\n", torrent.Name)
+			r.logger.Info().Msgf("Torrent: %s downloaded to RD", torrent.Name)
 			if !isSymlink {
 				err = r.GetDownloadLinks(torrent)
 				if err != nil {
@@ -233,9 +233,9 @@ func (r *RealDebrid) DeleteTorrent(torrent *Torrent) {
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := r.client.MakeRequest(req)
 	if err == nil {
-		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
+		r.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
 	} else {
-		r.logger.Printf("Error deleting torrent: %s", err)
+		r.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}
 }
 
@@ -279,7 +279,7 @@ func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, os.Stdout)
+	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
 	return &RealDebrid{
 		BaseDebrid: BaseDebrid{
 			Name:             "realdebrid",

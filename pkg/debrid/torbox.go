@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
@@ -30,7 +31,7 @@ func (r *Torbox) GetName() string {
 	return r.Name
 }
 
-func (r *Torbox) GetLogger() *log.Logger {
+func (r *Torbox) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
@@ -69,13 +70,13 @@ func (r *Torbox) IsAvailable(infohashes []string) map[string]bool {
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
 		resp, err := r.client.MakeRequest(req)
 		if err != nil {
-			log.Println("Error checking availability:", err)
+			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
 		var res structs.TorBoxAvailableResponse
 		err = json.Unmarshal(resp, &res)
 		if err != nil {
-			log.Println("Error marshalling availability:", err)
+			r.logger.Info().Msgf("Error marshalling availability: %v", err)
 			return result
 		}
 		if res.Data == nil {
@@ -117,7 +118,7 @@ func (r *Torbox) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	}
 	dt := *data.Data
 	torrentId := strconv.Itoa(dt.Id)
-	log.Printf("Torrent: %s added with id: %s\n", torrent.Name, torrentId)
+	log.Printf("Torrent: %s added with id: %s", torrent.Name, torrentId)
 	torrent.Id = torrentId
 
 	return torrent, nil
@@ -208,7 +209,7 @@ func (r *Torbox) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "downloaded" {
-			r.logger.Printf("Torrent: %s downloaded\n", torrent.Name)
+			r.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
 				err = r.GetDownloadLinks(torrent)
 				if err != nil {
@@ -237,9 +238,9 @@ func (r *Torbox) DeleteTorrent(torrent *Torrent) {
 	req, _ := http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(jsonPayload))
 	_, err := r.client.MakeRequest(req)
 	if err == nil {
-		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
+		r.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
 	} else {
-		r.logger.Printf("Error deleting torrent: %s", err)
+		r.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}
 }
 
@@ -288,7 +289,7 @@ func NewTorbox(dc common.DebridConfig, cache *common.Cache) *Torbox {
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, os.Stdout)
+	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
 	return &Torbox{
 		BaseDebrid: BaseDebrid{
 			Name:             "torbox",

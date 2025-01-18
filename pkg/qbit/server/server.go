@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,17 +19,15 @@ import (
 
 type Server struct {
 	qbit   *shared.QBit
-	logger *log.Logger
-	debug  bool
+	logger zerolog.Logger
 }
 
 func NewServer(config *common.Config, deb *debrid.DebridService, arrs *arr.Storage) *Server {
-	logger := common.NewLogger("QBit", os.Stdout)
+	logger := common.NewLogger("QBit", config.QBitTorrent.LogLevel, os.Stdout)
 	q := shared.NewQBit(config, deb, logger, arrs)
 	return &Server{
 		qbit:   q,
 		logger: logger,
-		debug:  config.QBitTorrent.Debug,
 	}
 }
 
@@ -37,8 +35,10 @@ func (s *Server) Start(ctx context.Context) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	q := qbitHandler{qbit: s.qbit, logger: s.logger}
-	ui := uiHandler{qbit: s.qbit, logger: common.NewLogger("UI", os.Stdout)}
+	logLevel := s.logger.GetLevel().String()
+	debug := logLevel == "debug"
+	q := qbitHandler{qbit: s.qbit, logger: s.logger, debug: debug}
+	ui := uiHandler{qbit: s.qbit, logger: common.NewLogger("UI", s.logger.GetLevel().String(), os.Stdout), debug: debug}
 
 	// Register routes
 	q.Routes(r)
@@ -46,7 +46,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	go s.qbit.StartWorker(context.Background())
 
-	s.logger.Printf("Starting QBit server on :%s", s.qbit.Port)
+	s.logger.Info().Msgf("Starting QBit server on :%s", s.qbit.Port)
 	port := fmt.Sprintf(":%s", s.qbit.Port)
 	srv := &http.Server{
 		Addr:    port,
@@ -58,12 +58,12 @@ func (s *Server) Start(ctx context.Context) error {
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Printf("Error starting server: %v\n", err)
+			s.logger.Info().Msgf("Error starting server: %v", err)
 			stop()
 		}
 	}()
 
 	<-ctx.Done()
-	fmt.Println("Shutting down gracefully...")
+	s.logger.Info().Msg("Shutting down gracefully...")
 	return srv.Shutdown(context.Background())
 }

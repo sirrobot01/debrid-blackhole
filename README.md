@@ -1,30 +1,28 @@
-### GoBlackHole(with Debrid Proxy Support)
+### DecyphArr(with Debrid Proxy Support)
 
-This is a Golang implementation go Torrent QbitTorrent with a **Real Debrid & Torbox Support**.
+![ui](doc/main.png)
+
+This is a Golang implementation go Torrent QbitTorrent with a **Multiple Debrid service support**.
 
 
 ### Features
 
 - Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, etc)
+- A Full-fledged UI for managing torrents
 - Proxy support for the Arrs
 - Real Debrid Support
 - Torbox Support
 - Debrid Link Support
 - Multi-Debrid Providers support
-- UI for adding torrents directly to *arrs
 - Repair Worker for missing files (**NEW**)
 
 The proxy is useful in filtering out un-cached Real Debrid torrents
 
 ### Supported Debrid Providers
-- Real Debrid
-- Torbox
-- Debrid Link
-- All Debrid
-
-### Changelog
-
-- View the [CHANGELOG.md](CHANGELOG.md) for the latest changes
+- [Real Debrid](https://real-debrid.com)
+- [Torbox](https://torbox.app)
+- [Debrid Link](https://debrid-link.com)
+- [All Debrid](https://alldebrid.com)
 
 
 #### Installation
@@ -63,7 +61,28 @@ Download the binary from the releases page and run it with the config file.
 ./blackhole --config /path/to/config.json
 ```
 
-#### Config
+### Usage
+- The UI is available at `http://localhost:8282`
+- Setup the config.json file. Scroll down for the sample config file
+- Setup docker compose/ binary with the config file
+- Start the service
+- Connect to Sonarr/Radarr/Lidarr
+
+#### Connecting to Sonarr/Radarr
+
+- Sonarr/Radarr
+  - Settings -> Download Client -> Add Client -> qBittorrent
+  - Host: `localhost` # or the IP of the server
+  - Port: `8282` # or the port set in the config file/ docker-compose env
+  - Username: `http://sonarr:8989` # Your arr host with http/https
+  - Password: `sonarr_token` # Your arr token
+  - Category: e.g `sonarr`, `radarr`
+  - Use SSL -> `No`
+  - Sequential Download -> `No`|`Yes` (If you want to download the torrents locally instead of symlink)
+  - Test
+  - Save
+
+#### Sample Config
 
 This is the default config file. You can create a `config.json` file in the root directory of the project or mount it in the docker-compose file.
 ```json
@@ -109,7 +128,7 @@ This is the default config file. You can create a `config.json` file in the root
   "proxy": {
     "enabled": true,
     "port": "8100",
-    "debug": false,
+    "log_level": "info",
     "username": "username",
     "password": "password",
     "cached_only": true
@@ -119,7 +138,8 @@ This is the default config file. You can create a `config.json` file in the root
     "port": "8282",
     "download_folder": "/media/symlinks/",
     "categories": ["sonarr", "radarr"],
-    "refresh_interval": 5
+    "refresh_interval": 5,
+    "log_level": "info"
   },
   "arrs": [
     {
@@ -132,11 +152,21 @@ This is the default config file. You can create a `config.json` file in the root
       "host": "http://host:7878",
       "token": "arr_key"
     }
-  ]
+  ],
+  "repair": {
+    "enabled": true,
+    "interval": "12h",
+    "run_on_start": false
+  },
+  "log_level": "info"
 }
 ```
 
 #### Config Notes
+
+##### Log Level
+- The `log_level` key is used to set the log level of the application. The default value is `info`
+- The log level can be set to `debug`, `info`, `warn`, `error`
 ##### Max Cache Size
 - The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent
 - The default value is `1000`
@@ -161,7 +191,7 @@ The `repair` key is used to enable the repair worker
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
 - The `port` key is the port the proxy will listen on
-- The `debug` key is used to enable debug logs
+- The `log_level` key is used to set the log level of the proxy. The default value is `info`
 - The `username` and `password` keys are used for basic authentication
 - The `cached_only` means only cached torrents will be returned
 
@@ -180,39 +210,12 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 - The `host` key is the host of the Arr
 - The `token` key is the API token of the Arr
 
+
 ### Proxy
 
 The proxy is useful in filtering out un-cached Real Debrid torrents. 
 The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 
 The proxy listens on the port `8181` by default. The username and password can be set in the config file.
-
-Setting Up Proxy in Arr
-
-- Sonarr/Radarr
-  - Settings -> General -> Use Proxy
-  - Hostname: `localhost` # or the IP of the server
-  - Port: `8181` # or the port set in the config file
-  - Username: `username` # or the username set in the config file
-  - Password: `password` # or the password set in the config file
-  - Bypass Proxy for Local Addresses -> `No`
-
-### Qbittorrent
-
-The qBittorrent is a mock qBittorrent API that supports the Arrs(Sonarr, Radarr, etc).
-
-Setting Up Qbittorrent in Arr
-
-- Sonarr/Radarr
-  - Settings -> Download Client -> Add Client -> qBittorrent
-  - Host: `localhost` # or the IP of the server
-  - Port: `8282` # or the port set in the config file/ docker-compose env
-  - Username: `http://sonarr:8989` # Your arr host with http/https
-  - Password: `sonarr_token` # Your arr token
-  - Category: e.g `sonarr`, `radarr`
-  - Use SSL -> `No`
-  - Sequential Download -> `No`|`Yes` (If you want to download the torrents locally instead of symlink)
-  - Test
-  - Save
 
 ### Repair Worker
 
@@ -222,9 +225,15 @@ The repair worker is a simple worker that checks for missing files in the Arrs(S
 - Search for missing files
 - Search for deleted/unreadable files
 
+
+### Changelog
+
+- View the [CHANGELOG.md](CHANGELOG.md) for the latest changes
+
+
 ### TODO
 - [ ] A proper name!!!!
-- [ ] Debrid
+- [x] Debrid
   - [x] Add more Debrid Providers
 
 - [ ] Qbittorrent

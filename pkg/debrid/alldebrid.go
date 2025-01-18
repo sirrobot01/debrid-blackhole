@@ -3,9 +3,9 @@ package debrid
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
-	"log"
 	"net/http"
 	gourl "net/url"
 	"os"
@@ -25,7 +25,7 @@ func (r *AllDebrid) GetName() string {
 	return r.Name
 }
 
-func (r *AllDebrid) GetLogger() *log.Logger {
+func (r *AllDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
@@ -65,7 +65,7 @@ func (r *AllDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	}
 	magnet := magnets[0]
 	torrentId := strconv.Itoa(magnet.ID)
-	r.logger.Printf("Torrent: %s added with id: %s\n", torrent.Name, torrentId)
+	r.logger.Info().Msgf("Torrent: %s added with id: %s", torrent.Name, torrentId)
 	torrent.Id = torrentId
 
 	return torrent, nil
@@ -129,7 +129,7 @@ func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 	var res structs.AllDebridTorrentInfoResponse
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
-		r.logger.Printf("Error unmarshalling torrent info: %s\n", err)
+		r.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)
 		return torrent, err
 	}
 	data := res.Data.Magnets
@@ -169,7 +169,7 @@ func (r *AllDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, err
 		}
 		status := torrent.Status
 		if status == "downloaded" {
-			r.logger.Printf("Torrent: %s downloaded\n", torrent.Name)
+			r.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
 				err = r.GetDownloadLinks(torrent)
 				if err != nil {
@@ -198,9 +198,9 @@ func (r *AllDebrid) DeleteTorrent(torrent *Torrent) {
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	_, err := r.client.MakeRequest(req)
 	if err == nil {
-		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
+		r.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
 	} else {
-		r.logger.Printf("Error deleting torrent: %s", err)
+		r.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}
 }
 
@@ -243,7 +243,7 @@ func NewAllDebrid(dc common.DebridConfig, cache *common.Cache) *AllDebrid {
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, os.Stdout)
+	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
 	return &AllDebrid{
 		BaseDebrid: BaseDebrid{
 			Name:             "alldebrid",

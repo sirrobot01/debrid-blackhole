@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/auth"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/valyala/fastjson"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -75,7 +75,7 @@ type Proxy struct {
 	password   string
 	cachedOnly bool
 	debrid     debrid.Service
-	logger     *log.Logger
+	logger     zerolog.Logger
 }
 
 func NewProxy(config common.Config, deb *debrid.DebridService) *Proxy {
@@ -84,12 +84,11 @@ func NewProxy(config common.Config, deb *debrid.DebridService) *Proxy {
 	return &Proxy{
 		port:       port,
 		enabled:    cfg.Enabled,
-		debug:      cfg.Debug,
 		username:   cfg.Username,
 		password:   cfg.Password,
 		cachedOnly: *cfg.CachedOnly,
 		debrid:     deb.Get(),
-		logger:     common.NewLogger("Proxy", os.Stdout),
+		logger:     common.NewLogger("Proxy", cfg.LogLevel, os.Stdout),
 	}
 }
 
@@ -229,7 +228,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		p.logger.Println("Error reading response body:", err)
+		p.logger.Info().Msgf("Error reading response body: %v", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -241,7 +240,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	var rss RSS
 	err = xml.Unmarshal(body, &rss)
 	if err != nil {
-		p.logger.Printf("Error unmarshalling XML: %v", err)
+		p.logger.Info().Msgf("Error unmarshalling XML: %v", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -279,10 +278,10 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	}
 
 	if len(newItems) > 0 {
-		p.logger.Printf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
+		p.logger.Info().Msgf("[%s Report]: %d/%d items are cached || Found %d infohash", indexer, len(newItems), len(rss.Channel.Items), len(hashes))
 	} else {
 		// This will prevent the indexer from being disabled by the arr
-		p.logger.Printf("[%s Report]: No Items are cached; Return only first item with [UnCached]", indexer)
+		p.logger.Info().Msgf("[%s Report]: No Items are cached; Return only first item with [UnCached]", indexer)
 		item := rss.Channel.Items[0]
 		item.Title = fmt.Sprintf("%s [UnCached]", item.Title)
 		newItems = append(newItems, item)
@@ -291,7 +290,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 	rss.Channel.Items = newItems
 	modifiedBody, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		p.logger.Printf("Error marshalling XML: %v", err)
+		p.logger.Info().Msgf("Error marshalling XML: %v", err)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp
 	}
@@ -332,13 +331,13 @@ func (p *Proxy) Start(ctx context.Context) error {
 		Addr:    portFmt,
 		Handler: proxy,
 	}
-	p.logger.Printf("[*] Starting proxy server on %s\n", portFmt)
+	p.logger.Info().Msgf("Starting proxy server on %s", portFmt)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			p.logger.Printf("Error starting proxy server: %v\n", err)
+			p.logger.Info().Msgf("Error starting proxy server: %v", err)
 		}
 	}()
 	<-ctx.Done()
-	p.logger.Println("Shutting down gracefully...")
+	p.logger.Info().Msg("Shutting down gracefully...")
 	return srv.Shutdown(context.Background())
 }

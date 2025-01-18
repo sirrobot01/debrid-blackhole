@@ -1,9 +1,9 @@
 package arr
 
 import (
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	repairLogger *log.Logger = common.NewLogger("Repair", os.Stdout)
+	repairLogger zerolog.Logger = common.NewLogger("repair", "info", os.Stdout)
 )
 
 func (a *Arr) SearchMissing(id int) {
@@ -37,40 +37,41 @@ func (a *Arr) SearchMissing(id int) {
 			MovieId: id,
 		}
 	default:
-		repairLogger.Printf("Unknown arr type: %s\n", a.Type)
+		repairLogger.Info().Msgf("Unknown arr type: %s", a.Type)
 		return
 	}
 
 	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 	if err != nil {
-		repairLogger.Printf("Failed to search missing: %v\n", err)
+		repairLogger.Info().Msgf("Failed to search missing: %v", err)
 		return
 	}
 	if statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'; !statusOk {
-		repairLogger.Printf("Failed to search missing: %s\n", resp.Status)
+		repairLogger.Info().Msgf("Failed to search missing: %s", resp.Status)
 		return
 	}
 }
 
 func (a *Arr) Repair(tmdbId string) error {
 
-	repairLogger.Printf("Starting repair for %s\n", a.Name)
+	repairLogger.Info().Msgf("Starting repair for %s", a.Name)
 	media, err := a.GetMedia(tmdbId)
 	if err != nil {
-		repairLogger.Printf("Failed to get %s media: %v\n", a.Type, err)
+		repairLogger.Info().Msgf("Failed to get %s media: %v", a.Type, err)
 		return err
 	}
-	repairLogger.Printf("Found %d %s media\n", len(media), a.Type)
+	repairLogger.Info().Msgf("Found %d %s media", len(media), a.Type)
 
 	brokenMedia := a.processMedia(media)
-	repairLogger.Printf("Found %d %s broken media files\n", len(brokenMedia), a.Type)
+	repairLogger.Info().Msgf("Found %d %s broken media files", len(brokenMedia), a.Type)
 
 	// Automatic search for missing files
 	for _, m := range brokenMedia {
+		repairLogger.Debug().Msgf("Searching missing for %s", m.Title)
 		a.SearchMissing(m.Id)
 	}
-	repairLogger.Printf("Search missing completed for %s\n", a.Name)
-	repairLogger.Printf("Repair completed for %s\n", a.Name)
+	repairLogger.Info().Msgf("Search missing completed for %s", a.Name)
+	repairLogger.Info().Msgf("Repair completed for %s", a.Name)
 	return nil
 }
 
@@ -145,19 +146,24 @@ func (a *Arr) checkMediaFilesParallel(m Content) bool {
 		go func() {
 			defer fileWg.Done()
 			for f := range fileJobs {
+				repairLogger.Debug().Msgf("Checking file: %s", f.Path)
 				isBroken := false
 				if fileIsSymlinked(f.Path) {
+					repairLogger.Debug().Msgf("File is symlinked: %s", f.Path)
 					if !fileIsCorrectSymlink(f.Path) {
+						repairLogger.Debug().Msgf("File is broken: %s", f.Path)
 						isBroken = true
 						if err := a.DeleteFile(f.Id); err != nil {
-							repairLogger.Printf("Failed to delete file: %s %d: %v\n", f.Path, f.Id, err)
+							repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 						}
 					}
 				} else {
+					repairLogger.Debug().Msgf("File is not symlinked: %s", f.Path)
 					if !fileIsReadable(f.Path) {
+						repairLogger.Debug().Msgf("File is broken: %s", f.Path)
 						isBroken = true
 						if err := a.DeleteFile(f.Id); err != nil {
-							repairLogger.Printf("Failed to delete file: %s %d: %v\n", f.Path, f.Id, err)
+							repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 						}
 					}
 				}
@@ -195,14 +201,14 @@ func (a *Arr) checkMediaFiles(m Content) bool {
 			if !fileIsCorrectSymlink(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
-					repairLogger.Printf("Failed to delete file: %s %d: %v\n", f.Path, f.Id, err)
+					repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
 			}
 		} else {
 			if !fileIsReadable(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
-					repairLogger.Printf("Failed to delete file: %s %d: %v\n", f.Path, f.Id, err)
+					repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
 			}
 		}

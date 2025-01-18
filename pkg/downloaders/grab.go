@@ -37,7 +37,7 @@ Loop:
 	for {
 		select {
 		case <-t.C:
-			fmt.Printf("  %s: transferred %d / %d bytes (%.2f%%)\n",
+			fmt.Printf("  %s: transferred %d / %d bytes (%.2f%%)",
 				resp.Filename,
 				resp.BytesComplete(),
 				resp.Size(),

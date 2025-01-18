@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
@@ -24,7 +25,7 @@ func (r *DebridLink) GetName() string {
 	return r.Name
 }
 
-func (r *DebridLink) GetLogger() *log.Logger {
+func (r *DebridLink) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
@@ -63,13 +64,13 @@ func (r *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
 		resp, err := r.client.MakeRequest(req)
 		if err != nil {
-			log.Println("Error checking availability:", err)
+			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
 		var data structs.DebridLinkAvailableResponse
 		err = json.Unmarshal(resp, &data)
 		if err != nil {
-			log.Println("Error marshalling availability:", err)
+			r.logger.Info().Msgf("Error marshalling availability: %v", err)
 			return result
 		}
 		if data.Value == nil {
@@ -159,7 +160,7 @@ func (r *DebridLink) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	}
 	data := *res.Value
 	status := "downloading"
-	log.Printf("Torrent: %s added with id: %s\n", torrent.Name, data.ID)
+	log.Printf("Torrent: %s added with id: %s", torrent.Name, data.ID)
 	name := common.RemoveInvalidChars(data.Name)
 	torrent.Id = data.ID
 	torrent.Name = name
@@ -197,7 +198,7 @@ func (r *DebridLink) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		} else if status == "downloaded" {
-			r.logger.Printf("Torrent: %s downloaded\n", torrent.Name)
+			r.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
 				err = r.GetDownloadLinks(torrent)
 				if err != nil {
@@ -224,9 +225,9 @@ func (r *DebridLink) DeleteTorrent(torrent *Torrent) {
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := r.client.MakeRequest(req)
 	if err == nil {
-		r.logger.Printf("Torrent: %s deleted\n", torrent.Name)
+		r.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
 	} else {
-		r.logger.Printf("Error deleting torrent: %s", err)
+		r.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}
 }
 
@@ -254,7 +255,7 @@ func NewDebridLink(dc common.DebridConfig, cache *common.Cache) *DebridLink {
 		"Content-Type":  "application/json",
 	}
 	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, os.Stdout)
+	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
 	return &DebridLink{
 		BaseDebrid: BaseDebrid{
 			Name:             "debridlink",

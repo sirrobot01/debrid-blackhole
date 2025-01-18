@@ -92,11 +92,11 @@ func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category, source s
 func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *arr.Arr, isSymlink bool) {
 	for debridTorrent.Status != "downloaded" {
 		progress := debridTorrent.Progress
-		q.logger.Printf("%s Download Progress: %.2f%%", debridTorrent.Debrid.GetName(), progress)
-		time.Sleep(4 * time.Second)
+		q.logger.Debug().Msgf("%s -> (%s) Download Progress: %.2f%%", debridTorrent.Debrid.GetName(), debridTorrent.Name, progress)
+		time.Sleep(10 * time.Second)
 		dbT, err := debridTorrent.Debrid.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
-			q.logger.Printf("Error checking status: %v", err)
+			q.logger.Error().Msgf("Error checking status: %v", err)
 			go debridTorrent.Delete()
 			q.MarkAsFailed(torrent)
 			_ = arr.Refresh()
@@ -118,7 +118,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	if err != nil {
 		q.MarkAsFailed(torrent)
 		go debridTorrent.Delete()
-		q.logger.Printf("Error: %v", err)
+		q.logger.Info().Msgf("Error: %v", err)
 		return
 	}
 	torrent.TorrentPath = filepath.Base(torrentPath)
@@ -181,7 +181,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 		debridTorrent, _ = db.GetTorrent(t.ID)
 	}
 	if debridTorrent == nil {
-		q.logger.Printf("Torrent with ID %s not found in %s", t.ID, db.GetName())
+		q.logger.Info().Msgf("Torrent with ID %s not found in %s", t.ID, db.GetName())
 		return t
 	}
 	if debridTorrent.Status != "downloaded" {

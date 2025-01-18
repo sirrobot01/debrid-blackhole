@@ -6,7 +6,7 @@ import (
 )
 
 func (q *QBit) StartWorker(ctx context.Context) {
-	q.logger.Println("Qbit Worker started")
+	q.logger.Info().Msg("Qbit Worker started")
 	q.StartRefreshWorker(ctx)
 }
 
@@ -16,7 +16,7 @@ func (q *QBit) StartRefreshWorker(ctx context.Context) {
 	for {
 		select {
 		case <-refreshCtx.Done():
-			q.logger.Println("Qbit Refresh Worker stopped")
+			q.logger.Info().Msg("Qbit Refresh Worker stopped")
 			return
 		case <-refreshTicker.C:
 			torrents := q.Storage.GetAll("", "", nil)

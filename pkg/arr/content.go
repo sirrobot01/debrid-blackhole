@@ -15,7 +15,7 @@ func (a *Arr) GetMedia(tvId string) ([]Content, error) {
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		// This is Radarr
-		log.Printf("Radarr detected\n")
+		log.Printf("Radarr detected")
 		a.Type = Radarr
 		return GetMovies(a, tvId)
 	}

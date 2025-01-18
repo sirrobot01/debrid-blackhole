@@ -22,7 +22,7 @@ type DebridConfig struct {
 type ProxyConfig struct {
 	Port       string `json:"port"`
 	Enabled    bool   `json:"enabled"`
-	Debug      bool   `json:"debug"`
+	LogLevel   string `json:"log_level"`
 	Username   string `json:"username"`
 	Password   string `json:"password"`
 	CachedOnly *bool  `json:"cached_only"`
@@ -32,7 +32,7 @@ type QBitTorrentConfig struct {
 	Username        string   `json:"username"`
 	Password        string   `json:"password"`
 	Port            string   `json:"port"`
-	Debug           bool     `json:"debug"`
+	LogLevel        string   `json:"log_level"`
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	RefreshInterval int      `json:"refresh_interval"`
@@ -51,6 +51,7 @@ type RepairConfig struct {
 }
 
 type Config struct {
+	LogLevel     string            `json:"log_level"`
 	Debrid       DebridConfig      `json:"debrid"`
 	Debrids      []DebridConfig    `json:"debrids"`
 	Proxy        ProxyConfig       `json:"proxy"`

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -15,7 +15,7 @@ import (
 
 type qbitHandler struct {
 	qbit   *shared.QBit
-	logger *log.Logger
+	logger zerolog.Logger
 	debug  bool
 }
 
@@ -148,21 +148,21 @@ func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) 
 	case "multipart/form-data":
 		err := r.ParseMultipartForm(32 << 20) // 32MB max memory
 		if err != nil {
-			q.logger.Printf("Error parsing form: %v\n", err)
+			q.logger.Info().Msgf("Error parsing form: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	case "application/x-www-form-urlencoded":
 		err := r.ParseForm()
 		if err != nil {
-			q.logger.Printf("Error parsing form: %v\n", err)
+			q.logger.Info().Msgf("Error parsing form: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 
 	isSymlink := strings.ToLower(r.FormValue("sequentialDownload")) != "true"
-	q.logger.Printf("isSymlink: %v\n", isSymlink)
+	q.logger.Info().Msgf("isSymlink: %v", isSymlink)
 	urls := r.FormValue("urls")
 	category := r.FormValue("category")
 	atleastOne := false
@@ -175,7 +175,7 @@ func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) 
 	ctx = context.WithValue(ctx, "isSymlink", isSymlink)
 	for _, url := range urlList {
 		if err := q.qbit.AddMagnet(ctx, url, category); err != nil {
-			q.logger.Printf("Error adding magnet: %v\n", err)
+			q.logger.Info().Msgf("Error adding magnet: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -186,7 +186,7 @@ func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) 
 		files := r.MultipartForm.File["torrents"]
 		for _, fileHeader := range files {
 			if err := q.qbit.AddTorrent(ctx, fileHeader, category); err != nil {
-				q.logger.Printf("Error adding torrent: %v\n", err)
+				q.logger.Info().Msgf("Error adding torrent: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}

@@ -6,6 +6,23 @@
             </div>
             <div class="card-body">
                 <form id="configForm">
+                    <div class="section mb-5">
+                        <h5 class="border-bottom pb-2">General Configuration</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="qbitDebug">Log Level</label>
+                                <select class="form-select" name="qbit.log_level" id="log-level" disabled>
+                                    <option value="info">Info</option>
+                                    <option value="debug">Debug</option>
+                                    <option value="warn">Warning</option>
+                                    <option value="error">Error</option>
+                                    <option value="trace">Trace</option>
+                                </select>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Debrid Configuration -->
                     <div class="section mb-5">
                         <h5 class="border-bottom pb-2">Debrid Configuration</h5>
@@ -37,9 +54,15 @@
                                 <input type="number" class="form-control" name="qbit.refresh_interval">
                             </div>
                             <div class="col-12 mb-3">
-                                <div class="form-check">
-                                    <input type="checkbox" disabled class="form-check-input" name="qbit.debug" id="qbitDebug">
-                                    <label class="form-check-label" for="qbitDebug">Enable Debug Mode</label>
+                                <div class="form-group">
+                                    <label for="qbitDebug">Log Level</label>
+                                    <select class="form-select" name="qbit.log_level" id="qbitDebug" disabled>
+                                        <option value="info">Info</option>
+                                        <option value="debug">Debug</option>
+                                        <option value="warn">Warning</option>
+                                        <option value="error">Error</option>
+                                        <option value="trace">Trace</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -142,7 +165,6 @@
             fetch('/internal/config')
                 .then(response => response.json())
                 .then(config => {
-                    console.log(config)
                     // Load Debrid configs
                     config.debrids?.forEach(debrid => {
                         addDebridConfig(debrid);
@@ -180,6 +202,12 @@
                             }
                         });
                     }
+
+                    // Load general config
+
+                    const logLevel = document.getElementById('log-level');
+                    logLevel.value = config.log_level;
+
                 });
 
             // Handle form submission

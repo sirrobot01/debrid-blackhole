@@ -3,9 +3,9 @@ package debrid
 import (
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"log"
 	"path/filepath"
 )
 
@@ -17,7 +17,7 @@ type BaseDebrid struct {
 	client           *common.RLHTTPClient
 	cache            *common.Cache
 	MountPath        string
-	logger           *log.Logger
+	logger           zerolog.Logger
 	CheckCached      bool
 }
 
@@ -31,7 +31,7 @@ type Service interface {
 	GetCheckCached() bool
 	GetTorrent(id string) (*Torrent, error)
 	GetName() string
-	GetLogger() *log.Logger
+	GetLogger() zerolog.Logger
 }
 
 func NewDebrid(debs []common.DebridConfig, maxCachedSize int) *DebridService {
@@ -41,7 +41,8 @@ func NewDebrid(debs []common.DebridConfig, maxCachedSize int) *DebridService {
 
 	for _, dc := range debs {
 		d := createDebrid(dc, common.NewCache(maxCacheSize))
-		d.GetLogger().Println("Debrid Service started")
+		logger := d.GetLogger()
+		logger.Info().Msg("Debrid Service started")
 		debrids = append(debrids, d)
 	}
 	d := &DebridService{debrids: debrids, lastUsed: 0}
@@ -156,16 +157,17 @@ func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymli
 	errs := make([]error, 0)
 
 	for index, db := range d.debrids {
-		log.Println("Processing debrid: ", db.GetName())
 		logger := db.GetLogger()
-		logger.Printf("Torrent Hash: %s", debridTorrent.InfoHash)
+		logger.Info().Msgf("Processing debrid: %s", db.GetName())
+
+		logger.Info().Msgf("Torrent Hash: %s", debridTorrent.InfoHash)
 		if db.GetCheckCached() {
 			hash, exists := db.IsAvailable([]string{debridTorrent.InfoHash})[debridTorrent.InfoHash]
 			if !exists || !hash {
-				logger.Printf("Torrent: %s is not cached", debridTorrent.Name)
+				logger.Info().Msgf("Torrent: %s is not cached", debridTorrent.Name)
 				continue
 			} else {
-				logger.Printf("Torrent: %s is cached(or downloading)", debridTorrent.Name)
+				logger.Info().Msgf("Torrent: %s is cached(or downloading)", debridTorrent.Name)
 			}
 		}
 
@@ -178,7 +180,7 @@ func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymli
 			errs = append(errs, err)
 			continue
 		}
-		logger.Printf("Torrent: %s submitted to %s", dbt.Name, db.GetName())
+		logger.Info().Msgf("Torrent: %s submitted to %s", dbt.Name, db.GetName())
 		d.lastUsed = index
 		return db.CheckStatus(dbt, isSymlink)
 	}

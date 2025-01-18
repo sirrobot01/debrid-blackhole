@@ -2,15 +2,14 @@ package server
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
 )
 
 func (q *qbitHandler) Routes(r chi.Router) http.Handler {
 	r.Route("/api/v2", func(r chi.Router) {
-		if q.debug {
-			r.Use(middleware.Logger)
-		}
+		//if q.debug {
+		//	r.Use(middleware.Logger)
+		//}
 		r.Use(q.CategoryContext)
 		r.Post("/auth/login", q.handleLogin)
 
@@ -46,9 +45,9 @@ func (q *qbitHandler) Routes(r chi.Router) http.Handler {
 
 func (u *uiHandler) Routes(r chi.Router) http.Handler {
 	r.Group(func(r chi.Router) {
-		if u.debug {
-			r.Use(middleware.Logger)
-		}
+		//if u.debug {
+		//	r.Use(middleware.Logger)
+		//}
 		r.Get("/", u.IndexHandler)
 		r.Get("/download", u.DownloadHandler)
 		r.Get("/repair", u.RepairHandler)

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"html/template"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -50,7 +50,7 @@ var content embed.FS
 
 type uiHandler struct {
 	qbit   *shared.QBit
-	logger *log.Logger
+	logger zerolog.Logger
 	debug  bool
 }
 
@@ -198,7 +198,7 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 				go func() {
 					err := a.Repair(tvId)
 					if err != nil {
-						u.logger.Printf("Failed to repair: %v", err)
+						u.logger.Info().Msgf("Failed to repair: %v", err)
 					}
 				}()
 			}

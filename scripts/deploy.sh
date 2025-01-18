@@ -46,7 +46,6 @@ echo "Deploying version $VERSION to $BRANCH branch..."
 
 # Ensure we're on the right branch
 git checkout $BRANCH || exit 1
-git pull origin $BRANCH || exit 1
 
 # Create and push tag
 echo "Creating tag $TAG..."

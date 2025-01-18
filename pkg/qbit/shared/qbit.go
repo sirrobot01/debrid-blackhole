@@ -2,10 +2,10 @@ package shared
 
 import (
 	"cmp"
+	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
-	"log"
 	"os"
 )
 
@@ -18,12 +18,12 @@ type QBit struct {
 	Debrid          *debrid.DebridService
 	Storage         *TorrentStorage
 	debug           bool
-	logger          *log.Logger
+	logger          zerolog.Logger
 	Arrs            *arr.Storage
 	RefreshInterval int
 }
 
-func NewQBit(config *common.Config, deb *debrid.DebridService, logger *log.Logger, arrs *arr.Storage) *QBit {
+func NewQBit(config *common.Config, deb *debrid.DebridService, logger zerolog.Logger, arrs *arr.Storage) *QBit {
 	cfg := config.QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8182")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
@@ -34,7 +34,6 @@ func NewQBit(config *common.Config, deb *debrid.DebridService, logger *log.Logge
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Debrid:          deb,
-		debug:           cfg.Debug,
 		Storage:         NewTorrentStorage("torrents.json"),
 		logger:          logger,
 		Arrs:            arrs,

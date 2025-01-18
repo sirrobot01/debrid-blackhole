@@ -39,7 +39,7 @@
 - Rewrote the whole codebase
 
 
-#### 0.2.0
+### 0.2.0
 - Implement 0.2.0-beta changes
 - Removed Blackhole
 - Added QbitTorrent API
@@ -107,9 +107,17 @@
 - Fix file check for torbox
 - Other minor bug fixes
 
-
 #### 0.3.3
 
 - Add AllDebrid Support
 - Fix Torbox not downloading uncached torrents
 - Fix Rar files being downloaded
+
+#### 0.4.0
+
+- Add support for multiple debrid providers
+- A full-fledged UI for adding torrents, repairing files, viewing config and managing torrents
+- Add a more robust logging system
+- Fix issues with Alldebrid
+  - Fix file transversal bug
+  - Fix files with no parent directory
