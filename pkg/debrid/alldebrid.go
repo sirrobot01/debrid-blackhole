@@ -133,27 +133,30 @@ func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 		return torrent, err
 	}
 	data := res.Data.Magnets
+	status := getAlldebridStatus(data.StatusCode)
 	name := data.Filename
 	torrent.Id = id
 	torrent.Name = name
-	torrent.Bytes = data.Size
-	torrent.Folder = name
-	torrent.Progress = float64((data.Downloaded / data.Size) * 100)
-	torrent.Status = getAlldebridStatus(data.StatusCode)
-	torrent.Speed = data.DownloadSpeed
-	torrent.Seeders = data.Seeders
+	torrent.Status = status
 	torrent.Filename = name
 	torrent.OriginalFilename = name
-	index := -1
-	files := flattenFiles(data.Files, "", &index)
-	parentFolder := data.Filename
+	torrent.Folder = name
+	if status == "downloaded" {
+		torrent.Bytes = data.Size
 
-	if data.NbLinks == 1 {
-		// All debrid doesn't return the parent folder for single file torrents
-		parentFolder = ""
+		torrent.Progress = float64((data.Downloaded / data.Size) * 100)
+		torrent.Speed = data.DownloadSpeed
+		torrent.Seeders = data.Seeders
+		index := -1
+		files := flattenFiles(data.Files, "", &index)
+		parentFolder := data.Filename
+		if data.NbLinks == 1 {
+			// All debrid doesn't return the parent folder for single file torrents
+			parentFolder = ""
+		}
+		torrent.OriginalFilename = parentFolder
+		torrent.Files = files
 	}
-	torrent.OriginalFilename = parentFolder
-	torrent.Files = files
 	torrent.Debrid = r
 	return torrent, nil
 }

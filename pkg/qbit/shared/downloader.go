@@ -110,7 +110,7 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.T
 	// Combine the directory and filename to form a full path
 	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
 	// Create a symbolic link if file doesn't exist
-	torrentFilePath := filepath.Join(torrentMountPath, file.Name) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
+	torrentFilePath := filepath.Join(torrentMountPath, file.Path) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
 	err := os.Symlink(torrentFilePath, fullPath)
 	if err != nil {
 		q.logger.Info().Msgf("Failed to create symlink: %s: %v", fullPath, err)

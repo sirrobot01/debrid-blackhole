@@ -134,6 +134,7 @@ func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 			Id:   f.ID,
 			Name: f.Name,
 			Size: f.Size,
+			Path: f.Name,
 		}
 	}
 	torrent.Files = files
@@ -178,6 +179,7 @@ func (r *DebridLink) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 			Id:   f.ID,
 			Name: f.Name,
 			Size: f.Size,
+			Path: f.Name,
 			Link: f.DownloadURL,
 		}
 	}

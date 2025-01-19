@@ -248,5 +248,11 @@ func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) 
 
 func (u *uiHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	common.JSONResponse(w, common.CONFIG, http.StatusOK)
+	config := common.CONFIG
+	arrCfgs := make([]common.ArrConfig, 0)
+	for _, a := range u.qbit.Arrs.GetAll() {
+		arrCfgs = append(arrCfgs, common.ArrConfig{Host: a.Host, Name: a.Name, Token: a.Token})
+	}
+	config.Arrs = arrCfgs
+	common.JSONResponse(w, config, http.StatusOK)
 }

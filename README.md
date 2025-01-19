@@ -39,8 +39,7 @@ services:
     user: "1000:1000"
     volumes:
       - ./logs:/app/logs
-      - ~/plex/media:/media
-      - ~/plex/media/symlinks/:/media/symlinks/
+      - /mnt/:/mnt
       - ~/plex/configs/blackhole/config.json:/app/config.json # Config file, see below
     environment:
       - PUID=1000
@@ -92,7 +91,7 @@ This is the default config file. You can create a `config.json` file in the root
       "name": "torbox",
       "host": "https://api.torbox.app/v1",
       "api_key": "torbox_api_key",
-      "folder": "data/torbox/torrents/",
+      "folder": "/mnt/remote/torbox/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": true
@@ -101,7 +100,7 @@ This is the default config file. You can create a `config.json` file in the root
       "name": "realdebrid",
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
-      "folder": "data/realdebrid/torrents/",
+      "folder": "/mnt/remote/realdebrid/__all__/",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false
@@ -110,7 +109,7 @@ This is the default config file. You can create a `config.json` file in the root
       "name": "debridlink",
       "host": "https://debrid-link.com/api/v2",
       "api_key": "debridlink_key",
-      "folder": "data/debridlink/torrents/",
+      "folder": "/mnt/remote/debridlink/torrents/",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false
@@ -119,7 +118,7 @@ This is the default config file. You can create a `config.json` file in the root
       "name": "alldebrid",
       "host": "http://api.alldebrid.com/v4.1",
       "api_key": "alldebrid_key",
-      "folder": "/media/remote/alldebrid/magnet/",
+      "folder": "/mnt/remote/alldebrid/magnet/",
       "rate_limit": "600/minute",
       "download_uncached": false,
       "check_cached": false
@@ -136,7 +135,7 @@ This is the default config file. You can create a `config.json` file in the root
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
-    "download_folder": "/media/symlinks/",
+    "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"],
     "refresh_interval": 5,
     "log_level": "info"

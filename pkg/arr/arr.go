@@ -112,7 +112,9 @@ func (as *Storage) GetAll() []*Arr {
 	defer as.mu.RUnlock()
 	arrs := make([]*Arr, 0, len(as.Arrs))
 	for _, arr := range as.Arrs {
-		arrs = append(arrs, arr)
+		if arr.Host != "" && arr.Token != "" {
+			arrs = append(arrs, arr)
+		}
 	}
 	return arrs
 }
