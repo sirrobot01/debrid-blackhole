@@ -117,7 +117,10 @@
 
 - Add support for multiple debrid providers
 - A full-fledged UI for adding torrents, repairing files, viewing config and managing torrents
-- Add a more robust logging system
 - Fix issues with Alldebrid
   - Fix file transversal bug
   - Fix files with no parent directory
+- Logging
+  - Add a more robust logging system
+  - Add logging to a file
+  - Add logging to the UI

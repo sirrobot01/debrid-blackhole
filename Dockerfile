@@ -21,8 +21,9 @@ FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /blackhole /blackhole
 COPY --from=builder /app/README.md /README.md
+ENV LOG_PATH=/app/logs
 
-EXPOSE 8181
+EXPOSE 8181 8282
 
 VOLUME ["/app"]
 

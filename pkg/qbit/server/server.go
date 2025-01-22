@@ -11,6 +11,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,6 +42,7 @@ func (s *Server) Start(ctx context.Context) error {
 	ui := uiHandler{qbit: s.qbit, logger: common.NewLogger("UI", s.logger.GetLevel().String(), os.Stdout), debug: debug}
 
 	// Register routes
+	r.Get("/logs", s.GetLogs)
 	q.Routes(r)
 	ui.Routes(r)
 
@@ -66,4 +68,30 @@ func (s *Server) Start(ctx context.Context) error {
 	<-ctx.Done()
 	s.logger.Info().Msg("Shutting down gracefully...")
 	return srv.Shutdown(context.Background())
+}
+
+func (s *Server) GetLogs(w http.ResponseWriter, r *http.Request) {
+	logFile := common.GetLogPath()
+
+	// Open and read the file
+	file, err := os.Open(logFile)
+	if err != nil {
+		http.Error(w, "Error reading log file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Set headers
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", "inline; filename=application.log")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	// Stream the file
+	_, err = io.Copy(w, file)
+	if err != nil {
+		http.Error(w, "Error streaming log file", http.StatusInternalServerError)
+		return
+	}
 }

@@ -158,6 +158,7 @@ func (q *QBit) UpdateTorrentMin(t *Torrent, debridTorrent *debrid.Torrent) *Torr
 	t.Name = debridTorrent.Name
 	t.AddedOn = addedOn.Unix()
 	t.DebridTorrent = debridTorrent
+	t.Debrid = debridTorrent.Debrid.GetName()
 	t.Size = totalSize
 	t.Completed = sizeCompleted
 	t.Downloaded = sizeCompleted

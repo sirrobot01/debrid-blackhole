@@ -11,3 +11,4 @@ docker-compose.yml
 dist/
 tmp/**
 torrents.json
+logs/**

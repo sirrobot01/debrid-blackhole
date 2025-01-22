@@ -4,6 +4,27 @@
 
 This is a Golang implementation go Torrent QbitTorrent with a **Multiple Debrid service support**.
 
+### Table of Contents
+
+- [Features](#features)
+- [Supported Debrid Providers](#supported-debrid-providers)
+- [Installation](#installation)
+  - [Docker Compose](#docker-compose)
+  - [Binary](#binary)
+- [Usage](#usage)
+- [Connecting to Sonarr/Radarr](#connecting-to-sonarrradarr)
+- [Sample Config](#sample-config)
+- [Config Notes](#config-notes)
+  - [Log Level](#log-level)
+  - [Max Cache Size](#max-cache-size)
+  - [Debrid Config](#debrid-config)
+  - [Proxy Config](#proxy-config)
+  - [Qbittorrent Config](#qbittorrent-config)
+  - [Arrs Config](#arrs-config)
+- [Proxy](#proxy)
+- [Repair Worker](#repair-worker)
+- [Changelog](#changelog)
+- [TODO](#todo)
 
 ### Features
 
@@ -25,7 +46,8 @@ The proxy is useful in filtering out un-cached Real Debrid torrents
 - [All Debrid](https://alldebrid.com)
 
 
-#### Installation
+### Installation
+
 ##### Docker Compose
 ```yaml
 version: '3.7'
@@ -38,7 +60,7 @@ services:
       - "8181:8181" # Proxy
     user: "1000:1000"
     volumes:
-      - ./logs:/app/logs
+      - ./logs/:/app/logs
       - /mnt/:/mnt
       - ~/plex/configs/blackhole/config.json:/app/config.json # Config file, see below
     environment:

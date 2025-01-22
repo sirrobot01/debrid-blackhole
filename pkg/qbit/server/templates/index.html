@@ -22,12 +22,12 @@
                             <th>Progress</th>
                             <th>Speed</th>
                             <th>Category</th>
+                            <th>Debrid</th>
                             <th>State</th>
                             <th>Actions</th>
                         </tr>
                         </thead>
                         <tbody id="torrentsList">
-                        <!-- Will be populated by JavaScript -->
                         </tbody>
                     </table>
                 </div>
@@ -51,6 +51,7 @@
             </td>
             <td>${formatSpeed(torrent.dlspeed)}</td>
             <td><span class="badge bg-secondary">${torrent.category || 'None'}</span></td>
+            <td><span class="badge bg-secondary">${torrent.debrid || 'None'}</span></td>
             <td><span class="badge ${getStateColor(torrent.state)}">${torrent.state}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}')">

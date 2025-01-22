@@ -45,9 +45,6 @@ func (q *qbitHandler) Routes(r chi.Router) http.Handler {
 
 func (u *uiHandler) Routes(r chi.Router) http.Handler {
 	r.Group(func(r chi.Router) {
-		//if u.debug {
-		//	r.Use(middleware.Logger)
-		//}
 		r.Get("/", u.IndexHandler)
 		r.Get("/download", u.DownloadHandler)
 		r.Get("/repair", u.RepairHandler)
