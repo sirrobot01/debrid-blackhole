@@ -40,9 +40,9 @@ type ContentResponse struct {
 }
 
 type RepairRequest struct {
-	ArrName string `json:"arr"`
-	TVIds   string `json:"tvIds"`
-	Async   bool   `json:"async"`
+	ArrName  string   `json:"arr"`
+	MediaIds []string `json:"mediaIds"`
+	Async    bool     `json:"async"`
 }
 
 //go:embed templates/*
@@ -174,10 +174,6 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	tvids := []string{""}
-	if req.TVIds != "" {
-		tvids = strings.Split(req.TVIds, ",")
-	}
 
 	_arr := u.qbit.Arrs.Get(req.ArrName)
 	arrs := make([]*arr.Arr, 0)
@@ -192,9 +188,14 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mediaIds := req.MediaIds
+	if len(mediaIds) == 0 {
+		mediaIds = []string{""}
+	}
+
 	if req.Async {
 		for _, a := range arrs {
-			for _, tvId := range tvids {
+			for _, tvId := range mediaIds {
 				go func() {
 					err := a.Repair(tvId)
 					if err != nil {
@@ -209,7 +210,7 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 	var errs []error
 	for _, a := range arrs {
-		for _, tvId := range tvids {
+		for _, tvId := range mediaIds {
 			if err := a.Repair(tvId); err != nil {
 				errs = append(errs, err)
 			}

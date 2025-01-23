@@ -3,7 +3,6 @@ package arr
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -15,7 +14,7 @@ func (a *Arr) GetMedia(tvId string) ([]Content, error) {
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		// This is Radarr
-		log.Printf("Radarr detected")
+		repairLogger.Info().Msg("Radarr detected")
 		a.Type = Radarr
 		return GetMovies(a, tvId)
 	}

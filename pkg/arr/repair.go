@@ -12,9 +12,15 @@ import (
 	"sync"
 )
 
-var (
-	repairLogger zerolog.Logger = common.NewLogger("repair", "info", os.Stdout)
-)
+var repairLogger *zerolog.Logger
+
+func getLogger() *zerolog.Logger {
+	if repairLogger == nil {
+		logger := common.NewLogger("repair", common.CONFIG.LogLevel, os.Stdout)
+		repairLogger = &logger
+	}
+	return repairLogger
+}
 
 func (a *Arr) SearchMissing(id int) {
 	var payload interface{}
@@ -37,41 +43,40 @@ func (a *Arr) SearchMissing(id int) {
 			MovieId: id,
 		}
 	default:
-		repairLogger.Info().Msgf("Unknown arr type: %s", a.Type)
+		getLogger().Info().Msgf("Unknown arr type: %s", a.Type)
 		return
 	}
 
 	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 	if err != nil {
-		repairLogger.Info().Msgf("Failed to search missing: %v", err)
+		getLogger().Info().Msgf("Failed to search missing: %v", err)
 		return
 	}
 	if statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'; !statusOk {
-		repairLogger.Info().Msgf("Failed to search missing: %s", resp.Status)
+		getLogger().Info().Msgf("Failed to search missing: %s", resp.Status)
 		return
 	}
 }
 
 func (a *Arr) Repair(tmdbId string) error {
 
-	repairLogger.Info().Msgf("Starting repair for %s", a.Name)
+	getLogger().Info().Msgf("Starting repair for %s", a.Name)
 	media, err := a.GetMedia(tmdbId)
 	if err != nil {
-		repairLogger.Info().Msgf("Failed to get %s media: %v", a.Type, err)
+		getLogger().Info().Msgf("Failed to get %s media: %v", a.Type, err)
 		return err
 	}
-	repairLogger.Info().Msgf("Found %d %s media", len(media), a.Type)
+	getLogger().Info().Msgf("Found %d %s media", len(media), a.Type)
 
 	brokenMedia := a.processMedia(media)
-	repairLogger.Info().Msgf("Found %d %s broken media files", len(brokenMedia), a.Type)
+	getLogger().Info().Msgf("Found %d %s broken media files", len(brokenMedia), a.Type)
 
 	// Automatic search for missing files
 	for _, m := range brokenMedia {
-		repairLogger.Debug().Msgf("Searching missing for %s", m.Title)
+		getLogger().Debug().Msgf("Searching missing for %s", m.Title)
 		a.SearchMissing(m.Id)
 	}
-	repairLogger.Info().Msgf("Search missing completed for %s", a.Name)
-	repairLogger.Info().Msgf("Repair completed for %s", a.Name)
+	getLogger().Info().Msgf("Repair completed for %s", a.Name)
 	return nil
 }
 
@@ -79,6 +84,11 @@ func (a *Arr) processMedia(media []Content) []Content {
 	if len(media) <= 1 {
 		var brokenMedia []Content
 		for _, m := range media {
+			// Check if media is accessible
+			if !a.isMediaAccessible(m) {
+				getLogger().Debug().Msgf("Skipping media check for %s - parent directory not accessible", m.Title)
+				continue
+			}
 			if a.checkMediaFiles(m) {
 				brokenMedia = append(brokenMedia, m)
 			}
@@ -101,6 +111,12 @@ func (a *Arr) processMedia(media []Content) []Content {
 		go func() {
 			defer wg.Done()
 			for m := range jobs {
+				// Check if media is accessible
+				// First check if we can access this media's directory
+				if !a.isMediaAccessible(m) {
+					getLogger().Debug().Msgf("Skipping media check for %s - parent directory not accessible", m.Title)
+					continue
+				}
 				if a.checkMediaFilesParallel(m) {
 					results <- m
 				}
@@ -146,24 +162,25 @@ func (a *Arr) checkMediaFilesParallel(m Content) bool {
 		go func() {
 			defer fileWg.Done()
 			for f := range fileJobs {
-				repairLogger.Debug().Msgf("Checking file: %s", f.Path)
+				getLogger().Debug().Msgf("Checking file: %s", f.Path)
 				isBroken := false
+
 				if fileIsSymlinked(f.Path) {
-					repairLogger.Debug().Msgf("File is symlinked: %s", f.Path)
+					getLogger().Debug().Msgf("File is symlinked: %s", f.Path)
 					if !fileIsCorrectSymlink(f.Path) {
-						repairLogger.Debug().Msgf("File is broken: %s", f.Path)
+						getLogger().Debug().Msgf("File is broken: %s", f.Path)
 						isBroken = true
 						if err := a.DeleteFile(f.Id); err != nil {
-							repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+							getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 						}
 					}
 				} else {
-					repairLogger.Debug().Msgf("File is not symlinked: %s", f.Path)
+					getLogger().Debug().Msgf("File is not symlinked: %s", f.Path)
 					if !fileIsReadable(f.Path) {
-						repairLogger.Debug().Msgf("File is broken: %s", f.Path)
+						getLogger().Debug().Msgf("File is broken: %s", f.Path)
 						isBroken = true
 						if err := a.DeleteFile(f.Id); err != nil {
-							repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+							getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 						}
 					}
 				}
@@ -201,19 +218,70 @@ func (a *Arr) checkMediaFiles(m Content) bool {
 			if !fileIsCorrectSymlink(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
-					repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+					getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
 			}
 		} else {
 			if !fileIsReadable(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
-					repairLogger.Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+					getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
 			}
 		}
 	}
 	return isBroken
+}
+
+func (a *Arr) isMediaAccessible(m Content) bool {
+	// We're likely to mount the debrid path.
+	// So instead of checking the arr path, we check the original path
+	// This is because the arr path is likely to be a symlink
+	// And we want to check the actual path where the media is stored
+	// This is to avoid false positives
+
+	if len(m.Files) == 0 {
+		return false
+	}
+
+	// Get the first file to check its target location
+	file := m.Files[0].Path
+
+	var targetPath string
+	fileInfo, err := os.Lstat(file)
+	if err != nil {
+		repairLogger.Debug().Msgf("Cannot stat file %s: %v", file, err)
+		return false
+	}
+
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		// If it's a symlink, get where it points to
+		target, err := os.Readlink(file)
+		if err != nil {
+			repairLogger.Debug().Msgf("Cannot read symlink %s: %v", file, err)
+			return false
+		}
+
+		// If the symlink target is relative, make it absolute
+		if !filepath.IsAbs(target) {
+			dir := filepath.Dir(file)
+			target = filepath.Join(dir, target)
+		}
+		targetPath = target
+	} else {
+		// If it's a regular file, use its path
+		targetPath = file
+	}
+
+	mediaDir := filepath.Dir(targetPath) // Gets /remote/storage/Movie
+	parentDir := filepath.Dir(mediaDir)  // Gets /remote/storage
+
+	_, err = os.Stat(parentDir)
+	if err != nil {
+		repairLogger.Debug().Msgf("Parent directory of target not accessible for media %s: %s", m.Title, parentDir)
+		return false
+	}
+	return true
 }
 
 func fileIsSymlinked(file string) bool {
