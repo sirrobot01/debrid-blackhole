@@ -2,6 +2,8 @@ FROM --platform=$BUILDPLATFORM golang:1.22 as builder
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
+ARG VERSION
+ARG CHANNEL
 
 # Set destination for COPY
 WORKDIR /app
