@@ -60,7 +60,6 @@ services:
       - "8181:8181" # Proxy
     user: "1000:1000"
     volumes:
-      - ./logs/:/app/logs
       - /mnt/:/mnt
       - ~/plex/configs/blackhole/config.json:/app/config.json # Config file, see below
     environment:
