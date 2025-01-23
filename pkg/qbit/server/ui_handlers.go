@@ -176,15 +176,8 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_arr := u.qbit.Arrs.Get(req.ArrName)
-	arrs := make([]*arr.Arr, 0)
-	if _arr != nil {
-		arrs = append(arrs, _arr)
-	} else {
-		arrs = u.qbit.Arrs.GetAll()
-	}
-
-	if len(arrs) == 0 {
-		http.Error(w, "No arrays found to repair", http.StatusNotFound)
+	if _arr == nil {
+		http.Error(w, "No Arrs found to repair", http.StatusNotFound)
 		return
 	}
 
@@ -194,26 +187,22 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Async {
-		for _, a := range arrs {
-			for _, tvId := range mediaIds {
-				go func() {
-					err := a.Repair(tvId)
-					if err != nil {
-						u.logger.Info().Msgf("Failed to repair: %v", err)
-					}
-				}()
-			}
+		for _, tvId := range mediaIds {
+			go func() {
+				err := _arr.Repair(tvId)
+				if err != nil {
+					u.logger.Info().Msgf("Failed to repair: %v", err)
+				}
+			}()
 		}
 		common.JSONResponse(w, "Repair process started", http.StatusOK)
 		return
 	}
 
 	var errs []error
-	for _, a := range arrs {
-		for _, tvId := range mediaIds {
-			if err := a.Repair(tvId); err != nil {
-				errs = append(errs, err)
-			}
+	for _, tvId := range mediaIds {
+		if err := _arr.Repair(tvId); err != nil {
+			errs = append(errs, err)
 		}
 	}
 

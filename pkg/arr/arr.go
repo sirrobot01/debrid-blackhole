@@ -98,7 +98,7 @@ func NewStorage(cfg []common.ArrConfig) *Storage {
 func (as *Storage) AddOrUpdate(arr *Arr) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	as.Arrs[arr.Host] = arr
+	as.Arrs[arr.Name] = arr
 }
 
 func (as *Storage) Get(name string) *Arr {

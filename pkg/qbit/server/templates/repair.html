@@ -60,6 +60,13 @@
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Repairing...';
             let mediaIds = document.getElementById('mediaIds').value.split(',').map(id => id.trim());
+            let arr = document.getElementById('arrSelect').value;
+            if (!arr) {
+                alert('Please select an Arr instance');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                return;
+            }
             try {
                 const response = await fetch('/internal/repair', {
                     method: 'POST',
@@ -74,8 +81,6 @@
                 });
 
                 if (!response.ok) throw new Error(await response.text());
-
-                const result = await response.json();
                 alert('Repair process initiated successfully!');
             } catch (error) {
                 alert(`Error starting repair: ${error.message}`);
