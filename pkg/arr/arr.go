@@ -98,6 +98,9 @@ func NewStorage(cfg []common.ArrConfig) *Storage {
 func (as *Storage) AddOrUpdate(arr *Arr) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
+	if arr.Name == "" {
+		return
+	}
 	as.Arrs[arr.Name] = arr
 }
 
