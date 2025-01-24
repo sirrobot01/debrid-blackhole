@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -266,12 +267,55 @@ func (q *QBit) GetTorrentFiles(t *Torrent) []*TorrentFile {
 	if t.DebridTorrent == nil {
 		return files
 	}
-	for index, file := range t.DebridTorrent.Files {
+	for _, file := range t.DebridTorrent.Files {
 		files = append(files, &TorrentFile{
-			Index: index,
-			Name:  file.Path,
-			Size:  file.Size,
+			Name: file.Path,
+			Size: file.Size,
 		})
 	}
 	return files
+}
+
+func (q *QBit) SetTorrentTags(t *Torrent, tags []string) bool {
+	torrentTags := strings.Split(t.Tags, ",")
+	for _, tag := range tags {
+		if tag == "" {
+			continue
+		}
+		if !slices.Contains(torrentTags, tag) {
+			torrentTags = append(torrentTags, tag)
+		}
+		if !slices.Contains(q.Tags, tag) {
+			q.Tags = append(q.Tags, tag)
+		}
+	}
+	t.Tags = strings.Join(torrentTags, ",")
+	q.Storage.Update(t)
+	return true
+}
+
+func (q *QBit) RemoveTorrentTags(t *Torrent, tags []string) bool {
+	torrentTags := strings.Split(t.Tags, ",")
+	newTorrentTags := common.Remove(torrentTags, tags...)
+	q.Tags = common.Remove(q.Tags, tags...)
+	t.Tags = strings.Join(newTorrentTags, ",")
+	q.Storage.Update(t)
+	return true
+}
+
+func (q *QBit) AddTags(tags []string) bool {
+	for _, tag := range tags {
+		if tag == "" {
+			continue
+		}
+		if !slices.Contains(q.Tags, tag) {
+			q.Tags = append(q.Tags, tag)
+		}
+	}
+	return true
+}
+
+func (q *QBit) RemoveTags(tags []string) bool {
+	q.Tags = common.Remove(q.Tags, tags...)
+	return true
 }

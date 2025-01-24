@@ -20,6 +20,7 @@ type QBit struct {
 	debug           bool
 	logger          zerolog.Logger
 	Arrs            *arr.Storage
+	Tags            []string
 	RefreshInterval int
 }
 

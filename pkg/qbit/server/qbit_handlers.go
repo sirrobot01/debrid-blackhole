@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"github.com/go-chi/chi/v5"
@@ -8,6 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -49,12 +51,12 @@ func (q *qbitHandler) CategoryContext(next http.Handler) http.Handler {
 			category = r.Form.Get("category")
 			if category == "" {
 				// Get from multipart form
-				_ = r.ParseMultipartForm(0)
+				_ = r.ParseMultipartForm(32 << 20)
 				category = r.FormValue("category")
 			}
 		}
 		ctx := r.Context()
-		ctx = context.WithValue(r.Context(), "category", category)
+		ctx = context.WithValue(r.Context(), "category", strings.TrimSpace(category))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -67,8 +69,8 @@ func (q *qbitHandler) authContext(next http.Handler) http.Handler {
 			Name: category,
 		}
 		if err == nil {
-			a.Host = host
-			a.Token = token
+			a.Host = strings.TrimSpace(host)
+			a.Token = strings.TrimSpace(token)
 		}
 		q.qbit.Arrs.AddOrUpdate(a)
 		ctx := context.WithValue(r.Context(), "arr", a)
@@ -87,6 +89,9 @@ func HashesCtx(next http.Handler) http.Handler {
 			// Get hashes from form
 			_ = r.ParseForm()
 			hashes = r.Form["hashes"]
+		}
+		for i, hash := range hashes {
+			hashes[i] = strings.TrimSpace(hash)
 		}
 		ctx := context.WithValue(r.Context(), "hashes", hashes)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -143,54 +148,67 @@ func (q *qbitHandler) handleTorrentsInfo(w http.ResponseWriter, r *http.Request)
 
 func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	contentType := strings.Split(r.Header.Get("Content-Type"), ";")[0]
-	switch contentType {
-	case "multipart/form-data":
-		err := r.ParseMultipartForm(32 << 20) // 32MB max memory
-		if err != nil {
+
+	body, _ := io.ReadAll(r.Body)
+	q.logger.Debug().Msgf("Raw request body: %s", string(body))
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	// Parse form based on content type
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			q.logger.Info().Msgf("Error parsing multipart form: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+		if err := r.ParseForm(); err != nil {
 			q.logger.Info().Msgf("Error parsing form: %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-	case "application/x-www-form-urlencoded":
-		err := r.ParseForm()
-		if err != nil {
-			q.logger.Info().Msgf("Error parsing form: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	} else {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
 	}
 
+	q.logger.Debug().Msgf("All form values: %+v", r.Form)
+	q.logger.Debug().Msgf("URLs value: %q", r.FormValue("urls"))
+	q.logger.Debug().Msgf("Content-Type: %s", r.Header.Get("Content-Type"))
+
 	isSymlink := strings.ToLower(r.FormValue("sequentialDownload")) != "true"
-	q.logger.Info().Msgf("isSymlink: %v", isSymlink)
-	urls := r.FormValue("urls")
 	category := r.FormValue("category")
 	atleastOne := false
 
-	var urlList []string
-	if urls != "" {
-		urlList = strings.Split(urls, "\n")
-	}
-
-	ctx = context.WithValue(ctx, "isSymlink", isSymlink)
-	for _, url := range urlList {
-		if err := q.qbit.AddMagnet(ctx, url, category); err != nil {
-			q.logger.Info().Msgf("Error adding magnet: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+	// Handle magnet URLs
+	if urls := r.FormValue("urls"); urls != "" {
+		var urlList []string
+		for _, u := range strings.Split(urls, "\n") {
+			urlList = append(urlList, strings.TrimSpace(u))
 		}
-		atleastOne = true
-	}
 
-	if contentType == "multipart/form-data" && len(r.MultipartForm.File["torrents"]) > 0 {
-		files := r.MultipartForm.File["torrents"]
-		for _, fileHeader := range files {
-			if err := q.qbit.AddTorrent(ctx, fileHeader, category); err != nil {
-				q.logger.Info().Msgf("Error adding torrent: %v", err)
+		ctx = context.WithValue(ctx, "isSymlink", isSymlink)
+		for _, url := range urlList {
+			if err := q.qbit.AddMagnet(ctx, url, category); err != nil {
+				q.logger.Info().Msgf("Error adding magnet: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			atleastOne = true
+		}
+	}
+
+	// Handle torrent files
+	if r.MultipartForm != nil && r.MultipartForm.File != nil {
+		if files := r.MultipartForm.File["torrents"]; len(files) > 0 {
+			for _, fileHeader := range files {
+				if err := q.qbit.AddTorrent(ctx, fileHeader, category); err != nil {
+					q.logger.Info().Msgf("Error adding torrent: %v", err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				atleastOne = true
+			}
 		}
 	}
 
@@ -303,4 +321,73 @@ func (q *qbitHandler) handleTorrentFiles(w http.ResponseWriter, r *http.Request)
 	}
 	files := q.qbit.GetTorrentFiles(torrent)
 	common.JSONResponse(w, files, http.StatusOK)
+}
+
+func (q *qbitHandler) handleSetCategory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	category := ctx.Value("category").(string)
+	hashes, _ := ctx.Value("hashes").([]string)
+	torrents := q.qbit.Storage.GetAll("", "", hashes)
+	for _, torrent := range torrents {
+		torrent.Category = category
+		q.qbit.Storage.AddOrUpdate(torrent)
+	}
+	common.JSONResponse(w, nil, http.StatusOK)
+}
+
+func (q *qbitHandler) handleAddTorrentTags(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	hashes, _ := ctx.Value("hashes").([]string)
+	tags := strings.Split(r.FormValue("tags"), ",")
+	for i, tag := range tags {
+		tags[i] = strings.TrimSpace(tag)
+	}
+	torrents := q.qbit.Storage.GetAll("", "", hashes)
+	for _, t := range torrents {
+		q.qbit.SetTorrentTags(t, tags)
+	}
+	common.JSONResponse(w, nil, http.StatusOK)
+}
+
+func (q *qbitHandler) handleRemoveTorrentTags(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	hashes, _ := ctx.Value("hashes").([]string)
+	tags := strings.Split(r.FormValue("tags"), ",")
+	for i, tag := range tags {
+		tags[i] = strings.TrimSpace(tag)
+	}
+	torrents := q.qbit.Storage.GetAll("", "", hashes)
+	for _, torrent := range torrents {
+		q.qbit.RemoveTorrentTags(torrent, tags)
+
+	}
+	common.JSONResponse(w, nil, http.StatusOK)
+}
+
+func (q *qbitHandler) handleGetTags(w http.ResponseWriter, r *http.Request) {
+	common.JSONResponse(w, q.qbit.Tags, http.StatusOK)
+}
+
+func (q *qbitHandler) handleCreateTags(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+	tags := strings.Split(r.FormValue("tags"), ",")
+	for i, tag := range tags {
+		tags[i] = strings.TrimSpace(tag)
+	}
+	q.qbit.AddTags(tags)
+	common.JSONResponse(w, nil, http.StatusOK)
 }

@@ -51,7 +51,7 @@
             </td>
             <td>${formatSpeed(torrent.dlspeed)}</td>
             <td><span class="badge bg-secondary">${torrent.category || 'None'}</span></td>
-            <td><span class="badge bg-secondary">${torrent.debrid || 'None'}</span></td>
+            <td>${torrent.debrid || 'None'}</td>
             <td><span class="badge ${getStateColor(torrent.state)}">${torrent.state}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}')">
@@ -93,6 +93,11 @@
                 tbody.innerHTML = torrents.map(torrent => torrentRowTemplate(torrent)).join('');
 
                 // Update category filter options
+                let category = document.getElementById('categoryFilter').value;
+                document.querySelectorAll('#torrentsList tr').forEach(row => {
+                    const rowCategory = row.querySelector('td:nth-child(5)').textContent;
+                    row.style.display = (!category || rowCategory.includes(category)) ? '' : 'none';
+                });
                 updateCategoryFilter(torrents);
             } catch (error) {
                 console.error('Error loading torrents:', error);
