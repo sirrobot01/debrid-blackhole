@@ -2,12 +2,13 @@ package server
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
-	"time"
 )
 
 type ImportRequest struct {
@@ -66,6 +67,9 @@ func (i *ImportRequest) Process(q *shared.QBit) (err error) {
 	// Use this for now.
 	// This sends the torrent to the arr
 	magnet, err := common.GetMagnetFromUrl(i.URI)
+	if err != nil {
+		return fmt.Errorf("error parsing magnet link: %w", err)
+	}
 	torrent := q.CreateTorrentFromMagnet(magnet, i.Arr.Name, "manual")
 	debridTorrent, err := debrid.ProcessTorrent(q.Debrid, magnet, i.Arr, i.IsSymlink)
 	if err != nil || debridTorrent == nil {
