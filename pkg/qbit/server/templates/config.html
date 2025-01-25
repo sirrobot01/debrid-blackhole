@@ -75,7 +75,7 @@
                     </div>
 
                     <!-- Repair Configuration -->
-                    <div class="section">
+                    <div class="section mb-5">
                         <h5 class="border-bottom pb-2">Repair Configuration</h5>
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -92,6 +92,13 @@
                                     <label class="form-check-label" for="repairOnStart">Run on Start</label>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Register Magnet Link Button -->
+                    <div class="section">
+                        <div class="btn btn-primary" onclick="registerMagnetLinkHandler()">
+                            Register Magnet Link Handler
                         </div>
                     </div>
                 </form>
@@ -306,5 +313,32 @@
                 arrCount++;
             }
         });
+
+
+        // Register magnet link handler
+        function registerMagnetLinkHandler() {
+            if ('registerProtocolHandler' in navigator) {
+                try {
+                    navigator.registerProtocolHandler(
+                        'magnet',
+                        `${window.location.origin}/download?magnet=%s`,
+                        'DecyphArr'
+                    );
+                    console.log('Registered magnet link handler successfully.');
+                } catch (error) {
+                    console.error('Failed to register magnet link handler:', error);
+                }
+            }
+
+            // Handle incoming magnet links
+            const urlParams = new URLSearchParams(window.location.search);
+            const magnetLink = urlParams.get('magnet');
+
+            if (magnetLink) {
+                console.log('Received Magnet Link:', magnetLink);
+                // Add logic to handle the magnet link (e.g., start the download)
+                alert(`Magnet Link Received: ${magnetLink}`);
+            }
+        }
     </script>
 {{ end }}
