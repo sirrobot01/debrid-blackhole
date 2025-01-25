@@ -49,7 +49,17 @@
                     const urls = document.getElementById('magnetURI').value
                         .split('\n')
                         .map(url => url.trim())
-                        .filter(url => url);
+                        .filter(url => url.length > 0);
+
+                    if (urls.length === 0) {
+                        alert('Please submit at least one torrent');
+                        return;
+                    }
+                    if (urls.length >= 100) {
+                        alert('Please submit less than 100 torrents at a time');
+                        return;
+                    }
+
 
                     const response = await fetch('/internal/add', {
                         method: 'POST',
