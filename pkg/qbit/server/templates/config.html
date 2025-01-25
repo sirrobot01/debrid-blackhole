@@ -329,16 +329,6 @@
                     console.error('Failed to register magnet link handler:', error);
                 }
             }
-
-            // Handle incoming magnet links
-            const urlParams = new URLSearchParams(window.location.search);
-            const magnetLink = urlParams.get('magnet');
-
-            if (magnetLink) {
-                console.log('Received Magnet Link:', magnetLink);
-                // Add logic to handle the magnet link (e.g., start the download)
-                alert(`Magnet Link Received: ${magnetLink}`);
-            }
         }
     </script>
 {{ end }}
