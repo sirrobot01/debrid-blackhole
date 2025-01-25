@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"github.com/go-chi/chi/v5"
@@ -9,7 +8,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -149,10 +147,6 @@ func (q *qbitHandler) handleTorrentsInfo(w http.ResponseWriter, r *http.Request)
 func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body, _ := io.ReadAll(r.Body)
-	q.logger.Debug().Msgf("Raw request body: %s", string(body))
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
-
 	// Parse form based on content type
 	contentType := r.Header.Get("Content-Type")
 	if strings.Contains(contentType, "multipart/form-data") {
@@ -172,13 +166,10 @@ func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	q.logger.Debug().Msgf("All form values: %+v", r.Form)
-	q.logger.Debug().Msgf("URLs value: %q", r.FormValue("urls"))
-	q.logger.Debug().Msgf("Content-Type: %s", r.Header.Get("Content-Type"))
-
 	isSymlink := strings.ToLower(r.FormValue("sequentialDownload")) != "true"
 	category := r.FormValue("category")
 	atleastOne := false
+	ctx = context.WithValue(ctx, "isSymlink", isSymlink)
 
 	// Handle magnet URLs
 	if urls := r.FormValue("urls"); urls != "" {
@@ -186,8 +177,6 @@ func (q *qbitHandler) handleTorrentsAdd(w http.ResponseWriter, r *http.Request) 
 		for _, u := range strings.Split(urls, "\n") {
 			urlList = append(urlList, strings.TrimSpace(u))
 		}
-
-		ctx = context.WithValue(ctx, "isSymlink", isSymlink)
 		for _, url := range urlList {
 			if err := q.qbit.AddMagnet(ctx, url, category); err != nil {
 				q.logger.Info().Msgf("Error adding magnet: %v", err)

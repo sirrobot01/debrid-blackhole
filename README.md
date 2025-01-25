@@ -174,7 +174,7 @@ This is the default config file. You can create a `config.json` file in the root
     }
   ],
   "repair": {
-    "enabled": true,
+    "enabled": false,
     "interval": "12h",
     "run_on_start": false
   },
@@ -233,7 +233,9 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 
 ### Proxy
 
-The proxy is useful in filtering out un-cached Real Debrid torrents. 
+**Note**: Proxy has stopped working for Real Debrid, Debrid Link, and All Debrid. It still works for Torbox. This is due to the changes in the API of the Debrid Providers.
+
+The proxy is useful in filtering out un-cached Debrid torrents. 
 The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 
 The proxy listens on the port `8181` by default. The username and password can be set in the config file.
 
@@ -252,11 +254,11 @@ The repair worker is a simple worker that checks for missing files in the Arrs(S
 
 
 ### TODO
-- [ ] A proper name!!!!
+- [x] A proper name!!!!
 - [x] Debrid
   - [x] Add more Debrid Providers
 
-- [ ] Qbittorrent
-  - [ ] Add more Qbittorrent features
+- [x] Qbittorrent
+  - [x] Add more Qbittorrent features
   - [x] Persist torrents on restart/server crash
 - [ ] Add tests

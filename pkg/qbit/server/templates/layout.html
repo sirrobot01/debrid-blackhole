@@ -122,8 +122,9 @@
                     const versionBadge = document.getElementById('version-badge');
                     const channelBadge = document.getElementById('channel-badge');
 
-                    versionBadge.textContent = data.version;
-                    channelBadge.textContent = data.channel;
+                    // Add url to version badge
+                    versionBadge.innerHTML = `<a href="https://github.com/sirrobot01/debrid-blackhole/releases/tag/${data.version}" target="_blank" class="text-white">${data.version}</a>`;
+                    channelBadge.textContent = data.channel.charAt(0).toUpperCase() + data.channel.slice(1);
 
                     if (data.channel === 'beta') {
                         channelBadge.classList.add('beta');

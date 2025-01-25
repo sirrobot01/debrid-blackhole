@@ -124,3 +124,7 @@
   - Add a more robust logging system
   - Add logging to a file
   - Add logging to the UI
+- Qbittorrent
+  - Add support for tags(creating, deleting, listing)
+  - Add support for categories(creating, deleting, listing)
+  - Fix issues with arr sending torrents using a different content type.
