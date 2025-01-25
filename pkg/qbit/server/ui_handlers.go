@@ -138,6 +138,10 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, url := range req.URLs {
+		if url == "" {
+			continue
+		}
+
 		importReq := NewImportRequest(url, _arr, !req.NotSymlink)
 		err := importReq.Process(u.qbit)
 		if err != nil {
@@ -147,15 +151,13 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		results = append(results, importReq)
 	}
 
-	response := struct {
+	common.JSONResponse(w, struct {
 		Results []*ImportRequest `json:"results"`
 		Errors  []string         `json:"errors,omitempty"`
 	}{
 		Results: results,
 		Errors:  errors,
-	}
-
-	common.JSONResponse(w, response, http.StatusOK)
+	}, http.StatusOK)
 }
 
 func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
