@@ -2,7 +2,7 @@
 
 ![ui](doc/main.png)
 
-This is a Golang implementation go Torrent QbitTorrent with a **Multiple Debrid service support**.
+This is a Golang implementation of Torrent QbitTorrent with a **Multiple Debrid service support**.
 
 ### Table of Contents
 
