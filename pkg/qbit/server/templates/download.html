@@ -7,8 +7,8 @@
             <div class="card-body">
                 <form id="downloadForm">
                     <div class="mb-3">
-                        <label for="magnetURI" class="form-label">Magnet Link or Torrent URL</label>
-                        <textarea class="form-control" id="magnetURI" rows="3" placeholder="Paste your magnet link here..."></textarea>
+                        <label for="magnetURI" class="form-label">Magnet Link(s) or Torrent URL(s)</label>
+                        <textarea class="form-control" id="magnetURI" rows="8" placeholder="Paste your magnet links or torrent URLs here, one per line..."></textarea>
                     </div>
 
                     <div class="mb-3">
@@ -46,24 +46,44 @@
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
 
                 try {
+                    const urls = document.getElementById('magnetURI').value
+                        .split('\n')
+                        .map(url => url.trim())
+                        .filter(url => url.length > 0);
+
+                    if (urls.length === 0) {
+                        alert('Please submit at least one torrent');
+                        return;
+                    }
+                    if (urls.length >= 100) {
+                        alert('Please submit less than 100 torrents at a time');
+                        return;
+                    }
+
+
                     const response = await fetch('/internal/add', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            url: document.getElementById('magnetURI').value,
+                            urls: urls,
                             arr: document.getElementById('category').value,
                             notSymlink: document.getElementById('isSymlink').checked
                         })
                     });
 
-                    if (!response.ok) throw new Error(await response.text());
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || 'Unknown error');
+                    if (result.errors && result.errors.length > 0) {
+                        alert(`Added ${result.results.length} torrents with ${result.errors.length} errors:\n${result.errors.join('\n')}`);
+                    } else {
+                        alert(`Successfully added ${result.results.length} torrents!`);
+                    }
 
-                    alert('Download added successfully!');
                     document.getElementById('magnetURI').value = '';
                 } catch (error) {
-                    alert(`Error adding download: ${error.message}`);
+                    alert(`Error adding downloads: ${error.message}`);
                 } finally {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalText;

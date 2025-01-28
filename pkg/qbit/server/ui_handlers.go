@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
+	"net/http"
+	"strings"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
@@ -12,9 +16,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
-	"html/template"
-	"net/http"
-	"strings"
 )
 
 type AddRequest struct {
@@ -117,22 +118,46 @@ func (u *uiHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
-	var req AddRequest
+	var req struct {
+		URLs       []string `json:"urls"`
+		Arr        string   `json:"arr"`
+		NotSymlink bool     `json:"notSymlink"`
+	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	results := make([]*ImportRequest, 0, len(req.URLs))
+	errs := make([]string, 0)
+
 	_arr := u.qbit.Arrs.Get(req.Arr)
 	if _arr == nil {
 		_arr = arr.NewArr(req.Arr, "", "", arr.Sonarr)
 	}
-	importReq := NewImportRequest(req.Url, _arr, !req.NotSymlink)
-	err := importReq.Process(u.qbit)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+
+	for _, url := range req.URLs {
+		if url == "" {
+			continue
+		}
+
+		importReq := NewImportRequest(url, _arr, !req.NotSymlink)
+		err := importReq.Process(u.qbit)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
+			continue
+		}
+		results = append(results, importReq)
 	}
-	common.JSONResponse(w, importReq, http.StatusOK)
+
+	common.JSONResponse(w, struct {
+		Results []*ImportRequest `json:"results"`
+		Errors  []string         `json:"errors,omitempty"`
+	}{
+		Results: results,
+		Errors:  errs,
+	}, http.StatusOK)
 }
 
 func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
