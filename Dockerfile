@@ -34,6 +34,8 @@ COPY --from=logsetup /logs /logs
 
 ENV LOG_PATH=/logs
 
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 CMD wget --quiet --tries=1 --spider http://127.0.0.1:${QBIT_PORT:-8282}/internal/version || exit 1
+
 EXPOSE 8181 8282
 
 VOLUME ["/app"]
