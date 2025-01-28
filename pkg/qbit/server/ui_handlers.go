@@ -130,7 +130,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := make([]*ImportRequest, 0, len(req.URLs))
-	errors := make([]string, 0)
+	errs := make([]string, 0)
 
 	_arr := u.qbit.Arrs.Get(req.Arr)
 	if _arr == nil {
@@ -145,7 +145,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		importReq := NewImportRequest(url, _arr, !req.NotSymlink)
 		err := importReq.Process(u.qbit)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("URL %s: %v", url, err))
+			errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
 			continue
 		}
 		results = append(results, importReq)
@@ -156,7 +156,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		Errors  []string         `json:"errors,omitempty"`
 	}{
 		Results: results,
-		Errors:  errors,
+		Errors:  errs,
 	}, http.StatusOK)
 }
 
