@@ -21,6 +21,15 @@
                                 </select>
                             </div>
                             </div>
+                            <!-- Register Magnet Link Button -->
+                             <div class="col-md-6">
+                                <label>
+                                    <!-- Empty label to keep the button aligned -->
+                                </label>
+                                <div class="btn btn-primary w-100" onclick="registerMagnetLinkHandler()">
+                                    Open Magnet Links in DecyphArr
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <!-- Debrid Configuration -->
@@ -75,7 +84,7 @@
                     </div>
 
                     <!-- Repair Configuration -->
-                    <div class="section">
+                    <div class="section mb-5">
                         <h5 class="border-bottom pb-2">Repair Configuration</h5>
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -306,5 +315,22 @@
                 arrCount++;
             }
         });
+
+
+        // Register magnet link handler
+        function registerMagnetLinkHandler() {
+            if ('registerProtocolHandler' in navigator) {
+                try {
+                    navigator.registerProtocolHandler(
+                        'magnet',
+                        `${window.location.origin}/download?magnet=%s`,
+                        'DecyphArr'
+                    );
+                    console.log('Registered magnet link handler successfully.');
+                } catch (error) {
+                    console.error('Failed to register magnet link handler:', error);
+                }
+            }
+        }
     </script>
 {{ end }}
