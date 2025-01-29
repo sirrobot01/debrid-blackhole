@@ -5,20 +5,25 @@
                 <h4 class="mb-0"><i class="bi bi-cloud-download me-2"></i>Add New Download</h4>
             </div>
             <div class="card-body">
-                <form id="downloadForm">
+                <form id="downloadForm" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="magnetURI" class="form-label">Magnet Link(s) or Torrent URL(s)</label>
-                        <textarea class="form-control" id="magnetURI" rows="8" placeholder="Paste your magnet links or torrent URLs here, one per line..."></textarea>
+                        <textarea class="form-control" id="magnetURI" name="urls" rows="8" placeholder="Paste your magnet links or torrent URLs here, one per line..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="torrentFiles" class="form-label">Torrent Files</label>
+                        <input type="file" class="form-control" id="torrentFiles" name="torrents" multiple accept=".torrent">
                     </div>
 
                     <div class="mb-3">
                         <label for="category" class="form-label">Enter Category</label>
-                        <input type="text" class="form-control" id="category" placeholder="Enter Category(e.g sonarr, radarr, radarr4k)">
+                        <input type="text" class="form-control" id="category" name="arr" placeholder="Enter Category (e.g sonarr, radarr, radarr4k)">
                     </div>
 
                     <div class="mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="isSymlink">
+                            <input class="form-check-input" type="checkbox" id="isSymlink" name="notSymlink">
                             <label class="form-check-label" for="isSymlink">
                                 Download real files instead of symlinks
                             </label>
@@ -46,31 +51,40 @@
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
 
                 try {
+                    const formData = new FormData();
+                    
+                    // Add URLs if present
                     const urls = document.getElementById('magnetURI').value
                         .split('\n')
                         .map(url => url.trim())
                         .filter(url => url.length > 0);
 
-                    if (urls.length === 0) {
-                        alert('Please submit at least one torrent');
+                    if (urls.length > 0) {
+                        formData.append('urls', urls.join('\n'));
+                    }
+
+                    // Add torrent files if present
+                    const fileInput = document.getElementById('torrentFiles');
+                    for (let i = 0; i < fileInput.files.length; i++) {
+                        formData.append('torrents', fileInput.files[i]);
+                    }
+
+                    if (urls.length === 0 && fileInput.files.length === 0) {
+                        alert('Please submit at least one torrent or URL');
                         return;
                     }
+
                     if (urls.length >= 100) {
                         alert('Please submit less than 100 torrents at a time');
                         return;
                     }
 
+                    formData.append('arr', document.getElementById('category').value);
+                    formData.append('notSymlink', document.getElementById('isSymlink').checked);
 
                     const response = await fetch('/internal/add', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            urls: urls,
-                            arr: document.getElementById('category').value,
-                            notSymlink: document.getElementById('isSymlink').checked
-                        })
+                        body: formData
                     });
 
                     const result = await response.json();
@@ -82,6 +96,7 @@
                     }
 
                     document.getElementById('magnetURI').value = '';
+                    document.getElementById('torrentFiles').value = '';
                 } catch (error) {
                     alert(`Error adding downloads: ${error.message}`);
                 } finally {
