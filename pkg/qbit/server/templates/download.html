@@ -74,8 +74,8 @@
                         return;
                     }
 
-                    if (urls.length >= 100) {
-                        alert('Please submit less than 100 torrents at a time');
+                    if (urls.length + fileInput.files.length > 100) {
+                        alert('Please submit up to 100 downloads at a time');
                         return;
                     }
 
