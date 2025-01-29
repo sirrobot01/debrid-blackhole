@@ -2,11 +2,11 @@ package common
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base32"
 	"encoding/hex"
 	"fmt"
-	"github.com/anacrolix/torrent/metainfo"
 	"io"
 	"log"
 	"math/rand"
@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type Magnet struct {
@@ -61,6 +63,28 @@ func GetMagnetFromUrl(url string) (*Magnet, error) {
 	return nil, fmt.Errorf("invalid url")
 }
 
+func GetMagnetFromBytes(torrentData []byte) (*Magnet, error) {
+	// Create a scanner to read the file line by line
+	mi, err := metainfo.Load(bytes.NewReader(torrentData))
+	if err != nil {
+		return nil, err
+	}
+	hash := mi.HashInfoBytes()
+	infoHash := hash.HexString()
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return nil, err
+	}
+	log.Println("InfoHash: ", infoHash)
+	magnet := &Magnet{
+		InfoHash: infoHash,
+		Name:     info.Name,
+		Size:     info.Length,
+		Link:     mi.Magnet(&hash, &info).String(),
+	}
+	return magnet, nil
+}
+
 func OpenMagnetFile(filePath string) string {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -103,27 +127,7 @@ func OpenMagnetHttpURL(magnetLink string) (*Magnet, error) {
 			return
 		}
 	}(resp) // Ensure the response is closed after the function ends
-
-	// Create a scanner to read the file line by line
-
-	mi, err := metainfo.Load(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	hash := mi.HashInfoBytes()
-	infoHash := hash.HexString()
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		return nil, err
-	}
-	log.Println("InfoHash: ", infoHash)
-	magnet := &Magnet{
-		InfoHash: infoHash,
-		Name:     info.Name,
-		Size:     info.Length,
-		Link:     mi.Magnet(&hash, &info).String(),
-	}
-	return magnet, nil
+	return GetMagnetFromFile(resp.Body, magnetLink)
 }
 
 func GetMagnetInfo(magnetLink string) (*Magnet, error) {
