@@ -37,8 +37,8 @@
     <script>
         const torrentRowTemplate = (torrent) => `
         <tr>
-            <td class="text-break">${torrent.name}</td>
-            <td>${formatBytes(torrent.size)}</td>
+            <td class="text-nowrap text-truncate overflow-hidden" style="max-width: 350px;" title="${torrent.name}">${torrent.name}</td>
+            <td class="text-nowrap">${formatBytes(torrent.size)}</td>
             <td style="min-width: 150px;">
                 <div class="progress" style="height: 8px;">
                     <div class="progress-bar" role="progressbar"
@@ -59,7 +59,7 @@
                 </button>
             </td>
         </tr>
-    `;
+        `;
 
         function formatBytes(bytes) {
             if (!bytes) return '0 B';
