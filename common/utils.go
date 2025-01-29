@@ -30,23 +30,11 @@ type Magnet struct {
 
 func GetMagnetFromFile(file io.Reader, filePath string) (*Magnet, error) {
 	if filepath.Ext(filePath) == ".torrent" {
-		mi, err := metainfo.Load(file)
+		torrentData, err := io.ReadAll(file)
 		if err != nil {
 			return nil, err
 		}
-		hash := mi.HashInfoBytes()
-		infoHash := hash.HexString()
-		info, err := mi.UnmarshalInfo()
-		if err != nil {
-			return nil, err
-		}
-		magnet := &Magnet{
-			InfoHash: infoHash,
-			Name:     info.Name,
-			Size:     info.Length,
-			Link:     mi.Magnet(&hash, &info).String(),
-		}
-		return magnet, nil
+		return GetMagnetFromBytes(torrentData)
 	} else {
 		// .magnet file
 		magnetLink := ReadMagnetFile(file)
