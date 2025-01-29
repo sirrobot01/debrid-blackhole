@@ -115,7 +115,11 @@ func OpenMagnetHttpURL(magnetLink string) (*Magnet, error) {
 			return
 		}
 	}(resp) // Ensure the response is closed after the function ends
-	return GetMagnetFromFile(resp.Body, magnetLink)
+	torrentData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+	return GetMagnetFromBytes(torrentData)
 }
 
 func GetMagnetInfo(magnetLink string) (*Magnet, error) {
