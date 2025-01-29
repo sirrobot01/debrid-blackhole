@@ -1,27 +1,16 @@
 package main
 
 import (
-	"context"
-	"flag"
-	"github.com/sirrobot01/debrid-blackhole/cmd"
-	"github.com/sirrobot01/debrid-blackhole/common"
-	"log"
+	"fmt"
+	"os"
+
+	"github.com/sirrobot01/debrid-blackhole/pkg/cli"
+	_ "github.com/sirrobot01/debrid-blackhole/pkg/cli/commands"
 )
 
 func main() {
-	var configPath string
-	flag.StringVar(&configPath, "config", "config.json", "path to the config file")
-	flag.Parse()
-
-	// Load the config file
-	conf, err := common.LoadConfig(configPath)
-	common.CONFIG = conf
-	if err != nil {
-		log.Fatal(err)
+	if err := cli.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
-	ctx := context.Background()
-	if err := cmd.Start(ctx, conf); err != nil {
-		log.Fatal(err)
-	}
-
 }

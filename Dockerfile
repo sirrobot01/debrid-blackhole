@@ -36,5 +36,8 @@ EXPOSE 8181 8282
 
 VOLUME ["/app"]
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/blackhole", "health", "--config", "/app/config.json"]
+
 # Run
-CMD ["/blackhole", "--config", "/app/config.json"]
+CMD ["/blackhole", "serve", "--config", "/app/config.json"]
