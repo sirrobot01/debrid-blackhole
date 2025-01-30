@@ -35,6 +35,22 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const loadSavedDownloadOptions = () => {
+                const savedCategory = localStorage.getItem('downloadCategory');
+                const savedSymlink = localStorage.getItem('downloadSymlink');
+                document.getElementById('category').value = savedCategory || '';
+                document.getElementById('isSymlink').checked = savedSymlink === 'true'
+            };
+
+            const saveCurrentDownloadOptions = () => {
+                const category = document.getElementById('category').value;
+                const isSymlink = document.getElementById('isSymlink').checked;
+                localStorage.setItem('downloadCategory', category);
+                localStorage.setItem('downloadSymlink', isSymlink.toString());
+            };
+
+            // Load the last used download options from local storage
+            loadSavedDownloadOptions();
 
             // Handle form submission
             document.getElementById('downloadForm').addEventListener('submit', async (e) => {
@@ -90,7 +106,11 @@
                 }
             });
 
-            // Read the URL parameters for a magnet link and add it to the download textarea if found
+            // Save the download options to local storage when they change
+            document.getElementById('category').addEventListener('change', saveCurrentDownloadOptions);
+            document.getElementById('isSymlink').addEventListener('change', saveCurrentDownloadOptions);
+
+            // Read the URL parameters for a magnet link and add it to the download queue if found
             const urlParams = new URLSearchParams(window.location.search);
             const magnetURI = urlParams.get('magnet');
             if (magnetURI) {
