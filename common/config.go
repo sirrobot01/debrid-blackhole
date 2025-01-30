@@ -10,15 +10,16 @@ import (
 )
 
 type DebridConfig struct {
-	Name             string `json:"name"`
-	Host             string `json:"host"`
-	APIKey           string `json:"api_key"`
-	Folder           string `json:"folder"`
-	DownloadUncached bool   `json:"download_uncached"`
-	CheckCached      bool   `json:"check_cached"`
-	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
-	MinFileSize      int64 `json:"min_file_size"`
-	MaxFileSize      int64 `json:"max_file_size"`
+	Name              string   `json:"name"`
+	Host              string   `json:"host"`
+	APIKey            string   `json:"api_key"`
+	Folder            string   `json:"folder"`
+	DownloadUncached  bool     `json:"download_uncached"`
+	CheckCached       bool     `json:"check_cached"`
+	RateLimit         string   `json:"rate_limit"` // 200/minute or 10/second
+	MinFileSize       int64    `json:"min_file_size"`
+	MaxFileSize       int64    `json:"max_file_size"`
+	AllowedExtensions []string `json:"allowed_extensions"`
 }
 
 type ProxyConfig struct {
