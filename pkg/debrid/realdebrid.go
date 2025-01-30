@@ -31,7 +31,7 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
-func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
+func GetTorrentFiles(data structs.RealDebridTorrentInfo, minSize, maxSize int64, allowedExtensions []string) []TorrentFile {
 	files := make([]TorrentFile, 0)
 	for _, f := range data.Files {
 		name := filepath.Base(f.Path)
