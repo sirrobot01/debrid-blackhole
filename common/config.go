@@ -17,6 +17,8 @@ type DebridConfig struct {
 	DownloadUncached bool   `json:"download_uncached"`
 	CheckCached      bool   `json:"check_cached"`
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
+	MinFileSize      int64 `json:"min_file_size"`
+	MaxFileSize      int64 `json:"max_file_size"`
 }
 
 type ProxyConfig struct {
