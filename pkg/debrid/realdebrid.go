@@ -42,6 +42,10 @@ func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
 		if !common.RegexMatch(common.VIDEOMATCH, name) && !common.RegexMatch(common.MUSICMATCH, name) {
 			continue
 		}
+                fileSize := f.Bytes
+                if (minSize > 0 && fileSize < minSize) || (maxSize > 0 && fileSize > maxSize) {
+                        continue 
+                }
 		fileId := f.ID
 		file := TorrentFile{
 			Name: name,
@@ -186,7 +190,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		if status == "error" || status == "dead" || status == "magnet_error" {
 			return torrent, fmt.Errorf("torrent: %s has error: %s", torrent.Name, status)
 		} else if status == "waiting_files_selection" {
-			files := GetTorrentFiles(data)
+			files := GetTorrentFiles(data, r.MinFileSize, r.MaxFileSize)
 			torrent.Files = files
 			if len(files) == 0 {
 				return torrent, fmt.Errorf("no video files found")
@@ -205,7 +209,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 				return torrent, err
 			}
 		} else if status == "downloaded" {
-			files := GetTorrentFiles(data)
+			files := GetTorrentFiles(data, r.MinFileSize, r.MaxFileSize)
 			torrent.Files = files
 			r.logger.Info().Msgf("Torrent: %s downloaded to RD", torrent.Name)
 			if !isSymlink {
@@ -291,6 +295,8 @@ func NewRealDebrid(dc common.DebridConfig, cache *common.Cache) *RealDebrid {
 			MountPath:        dc.Folder,
 			logger:           logger,
 			CheckCached:      dc.CheckCached,
+			MinFileSize:      dc.MinFileSize,
+                        MaxFileSize:      dc.MaxFileSize
 		},
 	}
 }
