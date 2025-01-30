@@ -126,7 +126,7 @@ This is the default config file. You can create a `config.json` file in the root
       "download_uncached": false,
       "check_cached": false
       "min_file_size": 104857600, # for 100 MB or 0 for no limit on min size
-      "max_file_size": 0         # for No limit on max size
+      "max_file_size": 0,         # for No limit on max size
       "allowed_extensions": ["mkv", "mp4", "avi"]
     },
     {
