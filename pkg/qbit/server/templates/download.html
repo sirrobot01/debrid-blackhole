@@ -90,17 +90,12 @@
                 }
             });
 
-            // Read the URL parameters for a magnet link and add it to the download queue if found
+            // Read the URL parameters for a magnet link and add it to the download textarea if found
             const urlParams = new URLSearchParams(window.location.search);
             const magnetURI = urlParams.get('magnet');
             if (magnetURI) {
                 document.getElementById('magnetURI').value = magnetURI;
-                try {
-                    document.getElementById('submitDownload').click();
-                    history.replaceState({}, document.title, window.location.pathname);
-                } catch (error) {
-                    console.error('Error adding download:', error);
-                }
+                history.replaceState({}, document.title, window.location.pathname);
             }
         });
     </script>
