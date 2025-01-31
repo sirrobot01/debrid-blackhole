@@ -124,6 +124,14 @@
          * @param {string} [type='success'] - The type of toast (success, warning, error)
          */
         const createToast = (message, type = 'success') => {
+            type = ['success', 'warning', 'error'].includes(type) ? type : 'success';
+
+            const toastTimeouts = {
+                success: 5000,
+                warning: 10000,
+                error: 15000
+            }
+
             const toastContainer = document.querySelector('.toast-container');
             const toastId = `toast-${Date.now()}`;
             
@@ -145,8 +153,8 @@
             
             const toastElement = document.getElementById(toastId);
             const toast = new bootstrap.Toast(toastElement, {
-            autohide: true,
-            delay: 10000
+                autohide: true,
+                delay: toastTimeouts[type]
             });
             
             toast.show();
