@@ -1,15 +1,21 @@
 {{ define "index" }}
     <div class="container mt-4">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h4 class="mb-0"><i class="bi bi-table me-2"></i>Active Torrents</h4>
-                <div>
-                    <button class="btn btn-outline-danger btn-sm me-2" id="batchDeleteBtn" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center gap-4">
+                <h4 class="mb-0 text-nowrap"><i class="bi bi-table me-2"></i>Active Torrents</h4>
+                <div class="d-flex align-items-center overflow-auto" style="flex-wrap: nowrap; gap: 0.5rem;">
+                    <button class="btn btn-outline-danger btn-sm" id="batchDeleteBtn" style="display: none; flex-shrink: 0;">
                         <i class="bi bi-trash me-1"></i>Delete Selected
                     </button>
-                    <button class="btn btn-outline-secondary btn-sm me-2" id="refreshBtn">
+                    <button class="btn btn-outline-secondary btn-sm me-2" id="refreshBtn" style="flex-shrink: 0;">
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
+                    <select class="form-select form-select-sm d-inline-block w-auto me-2" id="stateFilter" style="flex-shrink: 0;">
+                        <option value="">All States</option>
+                        <option value="downloading">Downloading</option>
+                        <option value="pausedup">Paused</option>
+                        <option value="error">Error</option>
+                    </select>
                     <select class="form-select form-select-sm d-inline-block w-auto" id="categoryFilter">
                         <option value="">All Categories</option>
                     </select>
@@ -41,10 +47,27 @@
         </div>
     </div>
     <script>
+        let refs = {
+            torrentsList: document.getElementById('torrentsList'),
+            categoryFilter: document.getElementById('categoryFilter'),
+            stateFilter: document.getElementById('stateFilter'),
+            selectAll: document.getElementById('selectAll'),
+            batchDeleteBtn: document.getElementById('batchDeleteBtn'),
+            refreshBtn: document.getElementById('refreshBtn'),
+        };
+        let state = {
+            torrents: [],
+            selectedTorrents: new Set(),
+            categories: new Set(),
+            states: new Set('downloading', 'pausedup', 'error'),
+            selectedCategory: refs.categoryFilter?.value || '',
+            selectedState: refs.stateFilter?.value || '',
+        };
+
         const torrentRowTemplate = (torrent) => `
         <tr data-hash="${torrent.hash}">
             <td>
-                <input type="checkbox" class="form-check-input torrent-select" data-hash="${torrent.hash}">
+                <input type="checkbox" class="form-check-input torrent-select" data-hash="${torrent.hash}" ${state.selectedTorrents.has(torrent.hash) ? 'checked' : ''}>
             </td>
             <td class="text-nowrap text-truncate overflow-hidden" style="max-width: 350px;" title="${torrent.name}">${torrent.name}</td>
             <td class="text-nowrap">${formatBytes(torrent.size)}</td>
@@ -91,53 +114,52 @@
             return stateColors[state?.toLowerCase()] || 'bg-secondary';
         }
 
-        let refreshInterval;
-        let selectedTorrents = new Set();
+        function updateUI() {
+            // Filter torrents by selected category and state
+            let filteredTorrents = state.torrents;
+            if (state.selectedCategory) {
+                filteredTorrents = filteredTorrents.filter(t => t.category === state.selectedCategory);
+            }
+            if (state.selectedState) {
+                filteredTorrents = filteredTorrents.filter(t => t.state === state.selectedState);
+            }
+
+            // Update the torrents list table
+            refs.torrentsList.innerHTML = filteredTorrents.map(torrent => torrentRowTemplate(torrent)).join('');
+
+            // Update the category filter dropdown
+            const currentCategories = Array.from(state.categories).sort();
+            const categoryOptions = ['<option value="">All Categories</option>']
+                .concat(currentCategories.map(cat => 
+                    `<option value="${cat}" ${cat === state.selectedCategory ? 'selected' : ''}>${cat}</option>`
+                ));
+            refs.categoryFilter.innerHTML = categoryOptions.join('');
+
+            // Clean up selected torrents that no longer exist
+            state.selectedTorrents = new Set(
+                Array.from(state.selectedTorrents)
+                    .filter(hash => filteredTorrents.some(t => t.hash === hash))
+            );
+
+            // Update batch delete button visibility
+            refs.batchDeleteBtn.style.display = state.selectedTorrents.size > 0 ? '' : 'none';
+
+            // Update the select all checkbox state
+            refs.selectAll.checked = filteredTorrents.length > 0 && filteredTorrents.every(torrent => state.selectedTorrents.has(torrent.hash));
+        }
 
         async function loadTorrents() {
             try {
                 const response = await fetch('/internal/torrents');
                 const torrents = await response.json();
-
-                const tbody = document.getElementById('torrentsList');
-                tbody.innerHTML = torrents.map(torrent => torrentRowTemplate(torrent)).join('');
-
-                restoreSelections();
-
-                // Update category filter options
-                let category = document.getElementById('categoryFilter').value;
-                document.querySelectorAll('#torrentsList tr').forEach(row => {
-                    const rowCategory = row.querySelector('td:nth-child(6)').textContent;
-                    row.style.display = (!category || rowCategory.includes(category)) ? '' : 'none';
-                });
-                updateCategoryFilter(torrents);
+                
+                state.torrents = torrents;
+                state.categories = new Set(torrents.map(t => t.category).filter(Boolean));
+                
+                updateUI();
             } catch (error) {
                 console.error('Error loading torrents:', error);
             }
-        }
-
-        function updateCategoryFilter(torrents) {
-            const categories = [...new Set(torrents.map(t => t.category).filter(Boolean))];
-            const select = document.getElementById('categoryFilter');
-            const currentValue = select.value;
-
-            select.innerHTML = '<option value="">All Categories</option>' +
-                categories.map(cat => `<option value="${cat}" ${cat === currentValue ? 'selected' : ''}>${cat}</option>`).join('');
-        }
-
-        function restoreSelections() {
-            selectedTorrents.forEach(hash => {
-                const checkbox = document.querySelector(`input[data-hash="${hash}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
-            updateBatchDeleteButton();
-        }
-
-        function updateBatchDeleteButton() {
-            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-            batchDeleteBtn.style.display = selectedTorrents.size > 0 ? '' : 'none';
         }
 
         async function deleteTorrent(hash) {
@@ -147,7 +169,6 @@
                 await fetch(`/internal/torrents/${hash}`, {
                     method: 'DELETE'
                 });
-                selectedTorrents.delete(hash);
                 await loadTorrents();
             } catch (error) {
                 console.error('Error deleting torrent:', error);
@@ -156,17 +177,14 @@
         }
 
         async function deleteSelectedTorrents() {
-            if (!confirm(`Are you sure you want to delete ${selectedTorrents.size} selected torrents?`)) return;
+            if (!confirm(`Are you sure you want to delete ${state.selectedTorrents.size} selected torrents?`)) return;
 
             try {
-                const deletePromises = Array.from(selectedTorrents).map(hash =>
+                const deletePromises = Array.from(state.selectedTorrents).map(hash =>
                     fetch(`/internal/torrents/${hash}`, { method: 'DELETE' })
                 );
                 await Promise.all(deletePromises);
-                selectedTorrents.clear();
                 await loadTorrents();
-
-                document.getElementById('selectAll').checked = false;
             } catch (error) {
                 console.error('Error deleting torrents:', error);
                 alert('Failed to delete some torrents');
@@ -175,48 +193,51 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadTorrents();
-            refreshInterval = setInterval(loadTorrents, 5000);
+            const refreshInterval = setInterval(loadTorrents, 5000);
 
-            document.getElementById('refreshBtn').addEventListener('click', loadTorrents);
-            document.getElementById('batchDeleteBtn').addEventListener('click', deleteSelectedTorrents);
+            refs.refreshBtn.addEventListener('click', loadTorrents);
+            refs.batchDeleteBtn.addEventListener('click', deleteSelectedTorrents);
 
-            document.getElementById('selectAll').addEventListener('change', (e) => {
-                const checkboxes = document.querySelectorAll('.torrent-select');
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = e.target.checked;
-                    const hash = checkbox.dataset.hash;
-                    if (e.target.checked) {
-                        selectedTorrents.add(hash);
-                    } else {
-                        selectedTorrents.delete(hash);
-                    }
+            refs.selectAll.addEventListener('change', (e) => {
+                const filteredTorrents = state.torrents.filter(t => {
+                    if (state.selectedCategory && t.category !== state.selectedCategory) return false;
+                    if (state.selectedState && t.state?.toLowerCase() !== state.selectedState.toLowerCase()) return false;
+                    return true;
                 });
-                updateBatchDeleteButton();
+                    
+                if (e.target.checked) {
+                    filteredTorrents.forEach(torrent => state.selectedTorrents.add(torrent.hash));
+                } else {
+                    filteredTorrents.forEach(torrent => state.selectedTorrents.delete(torrent.hash));
+                }
+                updateUI();
             });
 
-            document.getElementById('torrentsList').addEventListener('change', (e) => {
+            refs.torrentsList.addEventListener('change', (e) => {
                 if (e.target.classList.contains('torrent-select')) {
                     const hash = e.target.dataset.hash;
                     if (e.target.checked) {
-                        selectedTorrents.add(hash);
+                        state.selectedTorrents.add(hash);
                     } else {
-                        selectedTorrents.delete(hash);
+                        state.selectedTorrents.delete(hash);
                     }
-                    updateBatchDeleteButton();
+                    updateUI();
                 }
             });
 
-            document.getElementById('categoryFilter').addEventListener('change', (e) => {
-                const category = e.target.value;
-                document.querySelectorAll('#torrentsList tr').forEach(row => {
-                    const rowCategory = row.querySelector('td:nth-child(6)').textContent;
-                    row.style.display = (!category || rowCategory.includes(category)) ? '' : 'none';
-                });
+            refs.categoryFilter.addEventListener('change', (e) => {
+                state.selectedCategory = e.target.value;
+                updateUI();
             });
-        });
 
-        window.addEventListener('beforeunload', () => {
-            clearInterval(refreshInterval);
+            refs.stateFilter.addEventListener('change', (e) => {
+                state.selectedState = e.target.value;
+                updateUI();
+            });
+
+            window.addEventListener('beforeunload', () => {
+                clearInterval(refreshInterval);
+            });
         });
     </script>
 {{ end }}
