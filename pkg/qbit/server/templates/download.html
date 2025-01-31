@@ -6,14 +6,16 @@
             </div>
             <div class="card-body">
                 <form id="downloadForm" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="magnetURI" class="form-label">Magnet Link(s) or Torrent URL(s)</label>
+                    <div class="mb-2">
+                        <label for="magnetURI" class="form-label">Torrent(s)</label>
                         <textarea class="form-control" id="magnetURI" name="urls" rows="8" placeholder="Paste your magnet links or torrent URLs here, one per line..."></textarea>
                     </div>
 
                     <div class="mb-3">
                         <input type="file" class="form-control" id="torrentFiles" name="torrents" multiple accept=".torrent,.magnet">
                     </div>
+
+                    <hr />
 
                     <div class="mb-3">
                         <label for="category" class="form-label">Enter Category</label>
