@@ -72,10 +72,6 @@ func (a *Arr) Repair(tmdbId string) error {
 	getLogger().Info().Msgf("Found %d %s broken media files", len(brokenMedia), a.Type)
 
 	// Automatic search for missing files
-	for _, m := range brokenMedia {
-		getLogger().Debug().Msgf("Searching missing for %s", m.Title)
-		a.SearchMissing(m.Id)
-	}
 	getLogger().Info().Msgf("Repair completed for %s", a.Name)
 	return nil
 }
@@ -90,6 +86,7 @@ func (a *Arr) processMedia(media []Content) []Content {
 				continue
 			}
 			if a.checkMediaFiles(m) {
+				a.SearchMissing(m.Id)
 				brokenMedia = append(brokenMedia, m)
 			}
 		}
@@ -118,6 +115,7 @@ func (a *Arr) processMedia(media []Content) []Content {
 					continue
 				}
 				if a.checkMediaFilesParallel(m) {
+					a.SearchMissing(m.Id)
 					results <- m
 				}
 			}

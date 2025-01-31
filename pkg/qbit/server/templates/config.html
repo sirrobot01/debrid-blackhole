@@ -26,7 +26,7 @@
                                 <label>
                                     <!-- Empty label to keep the button aligned -->
                                 </label>
-                                <div class="btn btn-primary w-100" onclick="registerMagnetLinkHandler()">
+                                <div class="btn btn-primary w-100" onclick="registerMagnetLinkHandler()" id="registerMagnetLink">
                                     Open Magnet Links in DecyphArr
                                 </div>
                             </div>
@@ -326,11 +326,20 @@
                         `${window.location.origin}/download?magnet=%s`,
                         'DecyphArr'
                     );
+                    localStorage.setItem('magnetHandler', 'true');
+                    document.getElementById('registerMagnetLink').innerText = '✅ DecyphArr Can Open Magnet Links';
+                    document.getElementById('registerMagnetLink').classList.add('bg-white', 'text-black');
                     console.log('Registered magnet link handler successfully.');
                 } catch (error) {
                     console.error('Failed to register magnet link handler:', error);
                 }
             }
+        }
+
+        var magnetHandler = localStorage.getItem('magnetHandler');
+        if (magnetHandler === 'true') {
+            document.getElementById('registerMagnetLink').innerText = '✅ DecyphArr Can Open Magnet Links';
+            document.getElementById('registerMagnetLink').classList.add('bg-white', 'text-black');
         }
     </script>
 {{ end }}
