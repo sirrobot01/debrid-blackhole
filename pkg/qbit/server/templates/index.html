@@ -172,7 +172,7 @@
                 await loadTorrents();
             } catch (error) {
                 console.error('Error deleting torrent:', error);
-                alert('Failed to delete torrent');
+                createToast('Failed to delete torrent', 'error');
             }
         }
 
@@ -187,7 +187,7 @@
                 await loadTorrents();
             } catch (error) {
                 console.error('Error deleting torrents:', error);
-                alert('Failed to delete some torrents');
+                createToast('Failed to delete some torrents' , 'error');
             }
         }
 

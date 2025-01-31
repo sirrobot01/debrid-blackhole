@@ -268,9 +268,9 @@
 
                     if (!response.ok) throw new Error(await response.text());
 
-                    alert('Configuration saved successfully!');
+                    createToast('Configuration saved successfully!');
                 } catch (error) {
-                    alert(`Error saving configuration: ${error.message}`);
+                    createToast(`Error saving configuration: ${error.message}`, 'error');
                 }
             });
 
