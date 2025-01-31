@@ -96,8 +96,6 @@
                     } else {
                         alert(`Successfully added ${result.results.length} torrents!`);
                     }
-
-                    document.getElementById('magnetURI').value = '';
                 } catch (error) {
                     alert(`Error adding downloads: ${error.message}`);
                 } finally {

@@ -6,6 +6,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type Arr struct {
@@ -45,8 +46,10 @@ type Torrent struct {
 	Links            []string               `json:"links"`
 	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`
 
-	Debrid Service
-	Arr    *arr.Arr
+	Debrid         Service    `json:"-"`
+	Arr            *arr.Arr   `json:"arr"`
+	Mu             sync.Mutex `json:"-"`
+	SizeDownloaded int64      `json:"-"` // This is used for local download
 }
 
 type TorrentDownloadLinks struct {
