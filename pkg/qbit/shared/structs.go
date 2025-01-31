@@ -1,6 +1,9 @@
 package shared
 
-import "github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+import (
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"sync"
+)
 
 type BuildInfo struct {
 	Libtorrent string `json:"libtorrent"`
@@ -219,6 +222,8 @@ type Torrent struct {
 	UploadedSession   int64   `json:"uploaded_session,omitempty"`
 	Upspeed           int     `json:"upspeed,omitempty"`
 	Source            string  `json:"source,omitempty"`
+
+	Mu sync.Mutex `json:"-"`
 }
 
 func (t *Torrent) IsReady() bool {

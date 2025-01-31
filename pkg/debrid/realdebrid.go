@@ -183,9 +183,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 		torrent.Status = status
 		torrent.Debrid = r
 		downloadingStatus := []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
-		if status == "error" || status == "dead" || status == "magnet_error" {
-			return torrent, fmt.Errorf("torrent: %s has error: %s", torrent.Name, status)
-		} else if status == "waiting_files_selection" {
+		if status == "waiting_files_selection" {
 			files := GetTorrentFiles(data)
 			torrent.Files = files
 			if len(files) == 0 {
@@ -222,6 +220,8 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 			// Break out of the loop if the torrent is downloading.
 			// This is necessary to prevent infinite loop since we moved to sync downloading and async processing
 			break
+		} else {
+			return torrent, fmt.Errorf("torrent: %s has error: %s", torrent.Name, status)
 		}
 
 	}

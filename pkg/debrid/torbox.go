@@ -206,9 +206,7 @@ func (r *Torbox) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
 			return tb, err
 		}
 		status := torrent.Status
-		if status == "error" || status == "dead" || status == "magnet_error" {
-			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
-		} else if status == "downloaded" {
+		if status == "downloaded" {
 			r.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
 				err = r.GetDownloadLinks(torrent)
@@ -225,6 +223,8 @@ func (r *Torbox) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, error)
 			// Break out of the loop if the torrent is downloading.
 			// This is necessary to prevent infinite loop since we moved to sync downloading and async processing
 			break
+		} else {
+			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		}
 
 	}

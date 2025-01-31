@@ -2,7 +2,6 @@ package downloaders
 
 import (
 	"crypto/tls"
-	"fmt"
 	"github.com/cavaliergopher/grab/v3"
 	"net/http"
 	"time"
@@ -21,35 +20,37 @@ func GetGrabClient() *grab.Client {
 	}
 }
 
-func NormalGrab(client *grab.Client, url, filename string) error {
+func NormalGrab(client *grab.Client, url, filename string, progressCallback func(int64)) error {
 	req, err := grab.NewRequest(filename, url)
 	if err != nil {
 		return err
 	}
 	resp := client.Do(req)
-	if err := resp.Err(); err != nil {
-		return err
-	}
 
-	t := time.NewTicker(2 * time.Second)
+	t := time.NewTicker(time.Second)
 	defer t.Stop()
+
+	var lastReported int64
 Loop:
 	for {
 		select {
 		case <-t.C:
-			fmt.Printf("  %s: transferred %d / %d bytes (%.2f%%)",
-				resp.Filename,
-				resp.BytesComplete(),
-				resp.Size(),
-				100*resp.Progress())
-
+			current := resp.BytesComplete()
+			if current != lastReported {
+				if progressCallback != nil {
+					progressCallback(current - lastReported)
+				}
+				lastReported = current
+			}
 		case <-resp.Done:
-			// download is complete
 			break Loop
 		}
 	}
-	if err := resp.Err(); err != nil {
-		return err
+
+	// Report final bytes
+	if progressCallback != nil {
+		progressCallback(resp.BytesComplete() - lastReported)
 	}
-	return nil
+
+	return resp.Err()
 }

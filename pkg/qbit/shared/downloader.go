@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-func (q *QBit) processManualFiles(debridTorrent *debrid.Torrent) (string, error) {
+func (q *QBit) ProcessManualFile(torrent *Torrent) (string, error) {
+	debridTorrent := torrent.DebridTorrent
 	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.DownloadLinks))
 	torrentPath := common.RemoveExtension(debridTorrent.OriginalFilename)
 	parent := common.RemoveInvalidChars(filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentPath))
@@ -20,14 +21,38 @@ func (q *QBit) processManualFiles(debridTorrent *debrid.Torrent) (string, error)
 		// add previous error to the error and return
 		return "", fmt.Errorf("failed to create directory: %s: %v", parent, err)
 	}
-	q.downloadFiles(debridTorrent, parent)
+	q.downloadFiles(torrent, parent)
 	return torrentPath, nil
 }
 
-func (q *QBit) downloadFiles(debridTorrent *debrid.Torrent, parent string) {
+func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
+	debridTorrent := torrent.DebridTorrent
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 5)
-	client := downloaders.GetHTTPClient()
+	totalSize := int64(0)
+	for _, file := range debridTorrent.Files {
+		totalSize += file.Size
+	}
+	debridTorrent.Mu.Lock()
+	debridTorrent.SizeDownloaded = 0 // Reset downloaded bytes
+	debridTorrent.Progress = 0       // Reset progress
+	debridTorrent.Mu.Unlock()
+	client := downloaders.GetGrabClient()
+	progressCallback := func(downloaded int64) {
+		debridTorrent.Mu.Lock()
+		defer debridTorrent.Mu.Unlock()
+		torrent.Mu.Lock()
+		defer torrent.Mu.Unlock()
+
+		// Update total downloaded bytes
+		debridTorrent.SizeDownloaded += downloaded
+
+		// Calculate overall progress
+		if totalSize > 0 {
+			debridTorrent.Progress = float64(debridTorrent.SizeDownloaded) / float64(totalSize) * 100
+		}
+		q.UpdateTorrentMin(torrent, debridTorrent)
+	}
 	for _, link := range debridTorrent.DownloadLinks {
 		if link.DownloadLink == "" {
 			q.logger.Info().Msgf("No download link found for %s", link.Filename)
@@ -38,11 +63,19 @@ func (q *QBit) downloadFiles(debridTorrent *debrid.Torrent, parent string) {
 		go func(link debrid.TorrentDownloadLinks) {
 			defer wg.Done()
 			defer func() { <-semaphore }()
-			err := downloaders.NormalHTTP(client, link.DownloadLink, filepath.Join(parent, link.Filename))
+			filename := link.Filename
+
+			err := downloaders.NormalGrab(
+				client,
+				link.DownloadLink,
+				filepath.Join(parent, filename),
+				progressCallback,
+			)
+
 			if err != nil {
-				q.logger.Info().Msgf("Error downloading %s: %v", link.DownloadLink, err)
+				q.logger.Error().Msgf("Failed to download %s: %v", filename, err)
 			} else {
-				q.logger.Info().Msgf("Downloaded %s successfully", link.DownloadLink)
+				q.logger.Info().Msgf("Downloaded %s", filename)
 			}
 		}(link)
 	}
@@ -50,7 +83,8 @@ func (q *QBit) downloadFiles(debridTorrent *debrid.Torrent, parent string) {
 	q.logger.Info().Msgf("Downloaded all files for %s", debridTorrent.Name)
 }
 
-func (q *QBit) ProcessSymlink(debridTorrent *debrid.Torrent) (string, error) {
+func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
+	debridTorrent := torrent.DebridTorrent
 	var wg sync.WaitGroup
 	files := debridTorrent.Files
 	ready := make(chan debrid.TorrentFile, len(files))
