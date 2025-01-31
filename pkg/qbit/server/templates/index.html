@@ -47,13 +47,21 @@
         </div>
     </div>
     <script>
+        let refs = {
+            torrentsList: document.getElementById('torrentsList'),
+            categoryFilter: document.getElementById('categoryFilter'),
+            stateFilter: document.getElementById('stateFilter'),
+            selectAll: document.getElementById('selectAll'),
+            batchDeleteBtn: document.getElementById('batchDeleteBtn'),
+            refreshBtn: document.getElementById('refreshBtn'),
+        };
         let state = {
             torrents: [],
             selectedTorrents: new Set(),
             categories: new Set(),
             states: new Set('downloading', 'pausedup', 'error'),
-            selectedCategory: document.getElementById('categoryFilter')?.value || '',
-            selectedState: document.getElementById('stateFilter')?.value || '',
+            selectedCategory: refs.categoryFilter?.value || '',
+            selectedState: refs.stateFilter?.value || '',
         };
 
         const torrentRowTemplate = (torrent) => `
@@ -107,27 +115,25 @@
         }
 
         function updateUI() {
-            // Filter torrents by selected category
+            // Filter torrents by selected category and state
             let filteredTorrents = state.torrents;
             if (state.selectedCategory) {
                 filteredTorrents = filteredTorrents.filter(t => t.category === state.selectedCategory);
             }
             if (state.selectedState) {
-                filteredTorrents = filteredTorrents.filter(t => t.state?.toLowerCase() === state.selectedState.toLowerCase());
+                filteredTorrents = filteredTorrents.filter(t => t.state === state.selectedState);
             }
 
             // Update the torrents list table
-            const tbody = document.getElementById('torrentsList');
-            tbody.innerHTML = filteredTorrents.map(torrent => torrentRowTemplate(torrent)).join('');
+            refs.torrentsList.innerHTML = filteredTorrents.map(torrent => torrentRowTemplate(torrent)).join('');
 
             // Update the category filter dropdown
-            const categorySelect = document.getElementById('categoryFilter');
             const currentCategories = Array.from(state.categories).sort();
             const categoryOptions = ['<option value="">All Categories</option>']
                 .concat(currentCategories.map(cat => 
                     `<option value="${cat}" ${cat === state.selectedCategory ? 'selected' : ''}>${cat}</option>`
                 ));
-            categorySelect.innerHTML = categoryOptions.join('');
+            refs.categoryFilter.innerHTML = categoryOptions.join('');
 
             // Clean up selected torrents that no longer exist
             state.selectedTorrents = new Set(
@@ -136,12 +142,10 @@
             );
 
             // Update batch delete button visibility
-            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-            batchDeleteBtn.style.display = state.selectedTorrents.size > 0 ? '' : 'none';
+            refs.batchDeleteBtn.style.display = state.selectedTorrents.size > 0 ? '' : 'none';
 
             // Update the select all checkbox state
-            const selectAllCheckbox = document.getElementById('selectAll');
-            selectAllCheckbox.checked = filteredTorrents.length > 0 && filteredTorrents.every(torrent => state.selectedTorrents.has(torrent.hash));
+            refs.selectAll.checked = filteredTorrents.length > 0 && filteredTorrents.every(torrent => state.selectedTorrents.has(torrent.hash));
         }
 
         async function loadTorrents() {
@@ -191,10 +195,10 @@
             loadTorrents();
             const refreshInterval = setInterval(loadTorrents, 5000);
 
-            document.getElementById('refreshBtn').addEventListener('click', loadTorrents);
-            document.getElementById('batchDeleteBtn').addEventListener('click', deleteSelectedTorrents);
+            refs.refreshBtn.addEventListener('click', loadTorrents);
+            refs.batchDeleteBtn.addEventListener('click', deleteSelectedTorrents);
 
-            document.getElementById('selectAll').addEventListener('change', (e) => {
+            refs.selectAll.addEventListener('change', (e) => {
                 const filteredTorrents = state.torrents.filter(t => {
                     if (state.selectedCategory && t.category !== state.selectedCategory) return false;
                     if (state.selectedState && t.state?.toLowerCase() !== state.selectedState.toLowerCase()) return false;
@@ -209,7 +213,7 @@
                 updateUI();
             });
 
-            document.getElementById('torrentsList').addEventListener('change', (e) => {
+            refs.torrentsList.addEventListener('change', (e) => {
                 if (e.target.classList.contains('torrent-select')) {
                     const hash = e.target.dataset.hash;
                     if (e.target.checked) {
@@ -221,12 +225,12 @@
                 }
             });
 
-            document.getElementById('categoryFilter').addEventListener('change', (e) => {
+            refs.categoryFilter.addEventListener('change', (e) => {
                 state.selectedCategory = e.target.value;
                 updateUI();
             });
 
-            document.getElementById('stateFilter').addEventListener('change', (e) => {
+            refs.stateFilter.addEventListener('change', (e) => {
                 state.selectedState = e.target.value;
                 updateUI();
             });
