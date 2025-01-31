@@ -10,6 +10,12 @@
                     <button class="btn btn-outline-secondary btn-sm me-2" id="refreshBtn">
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
+                    <select class="form-select form-select-sm d-inline-block w-auto me-2" id="stateFilter">
+                        <option value="">All States</option>
+                        <option value="downloading">Downloading</option>
+                        <option value="pausedup">Paused</option>
+                        <option value="error">Error</option>
+                    </select>
                     <select class="form-select form-select-sm d-inline-block w-auto" id="categoryFilter">
                         <option value="">All Categories</option>
                     </select>
@@ -45,7 +51,9 @@
             torrents: [],
             selectedTorrents: new Set(),
             categories: new Set(),
+            states: new Set('downloading', 'pausedup', 'error'),
             selectedCategory: document.getElementById('categoryFilter')?.value || '',
+            selectedState: document.getElementById('stateFilter')?.value || '',
         };
 
         const torrentRowTemplate = (torrent) => `
@@ -103,6 +111,9 @@
             let filteredTorrents = state.torrents;
             if (state.selectedCategory) {
                 filteredTorrents = filteredTorrents.filter(t => t.category === state.selectedCategory);
+            }
+            if (state.selectedState) {
+                filteredTorrents = filteredTorrents.filter(t => t.state?.toLowerCase() === state.selectedState.toLowerCase());
             }
 
             // Update the torrents list table
@@ -186,17 +197,7 @@
             document.getElementById('selectAll').addEventListener('change', (e) => {
                 const filteredTorrents = state.torrents.filter(t => {
                     if (state.selectedCategory && t.category !== state.selectedCategory) return false;
-                const checkboxes = document.querySelectorAll('.torrent-select');
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = e.target.checked;
-                    const hash = checkbox.dataset.hash;
-                    if (e.target.checked) {
-                        selectedTorrents.add(hash);
-                    } else {
-                        selectedTorrents.delete(hash);
-                    }
-                });
-                updateBatchDeleteButton();
+                    if (state.selectedState && t.state?.toLowerCase() !== state.selectedState.toLowerCase()) return false;
                     return true;
                 });
                     
@@ -222,6 +223,11 @@
 
             document.getElementById('categoryFilter').addEventListener('change', (e) => {
                 state.selectedCategory = e.target.value;
+                updateUI();
+            });
+
+            document.getElementById('stateFilter').addEventListener('change', (e) => {
+                state.selectedState = e.target.value;
                 updateUI();
             });
 
