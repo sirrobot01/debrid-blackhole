@@ -12,8 +12,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="torrentFiles" class="form-label">Torrent Files</label>
-                        <input type="file" class="form-control" id="torrentFiles" name="torrents" multiple accept=".torrent">
+                        <input type="file" class="form-control" id="torrentFiles" name="torrents" multiple accept=".torrent,.magnet">
                     </div>
 
                     <div class="mb-3">
@@ -66,7 +65,7 @@
                     // Add torrent files if present
                     const fileInput = document.getElementById('torrentFiles');
                     for (let i = 0; i < fileInput.files.length; i++) {
-                        formData.append('torrents', fileInput.files[i]);
+                        formData.append('files', fileInput.files[i]);
                     }
 
                     if (urls.length === 0 && fileInput.files.length === 0) {

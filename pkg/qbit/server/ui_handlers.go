@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"net/http"
 	"strings"
 
@@ -155,8 +154,8 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Handle torrent files
-	if files := r.MultipartForm.File["torrents"]; len(files) > 0 {
+	// Handle torrent/magnet files
+	if files := r.MultipartForm.File["files"]; len(files) > 0 {
 		for _, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
@@ -164,14 +163,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			torrentData, err := io.ReadAll(file)
-			file.Close()
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("Failed to read file %s: %v", fileHeader.Filename, err))
-				continue
-			}
-
-			magnet, err := common.GetMagnetFromBytes(torrentData)
+			magnet, err := common.GetMagnetFromFile(file, fileHeader.Filename)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("Failed to parse torrent file %s: %v", fileHeader.Filename, err))
 				continue
