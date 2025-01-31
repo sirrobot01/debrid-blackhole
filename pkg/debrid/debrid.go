@@ -10,15 +10,18 @@ import (
 )
 
 type BaseDebrid struct {
-	Name             string
-	Host             string `json:"host"`
-	APIKey           string
-	DownloadUncached bool
-	client           *common.RLHTTPClient
-	cache            *common.Cache
-	MountPath        string
-	logger           zerolog.Logger
-	CheckCached      bool
+	Name               string
+	Host               string `json:"host"`
+	APIKey             string
+	DownloadUncached   bool
+	client             *common.RLHTTPClient
+	cache              *common.Cache
+	MountPath          string
+	logger             zerolog.Logger
+	CheckCached        bool
+	minFileSize        int64
+	maxFileSize        int64
+	allowedExtensions []string
 }
 
 type Service interface {
