@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath \
-    -ldflags="-w -s -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version=${VERSION} -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel=${CHANNEL}" \
+    -ldflags="-w -s -X github.com/myhme/decypharr/pkg/version.Version=${VERSION} -X github.com/myhme/decypharr/pkg/version.Channel=${CHANNEL}" \
     -o /blackhole
 
 # Build healthcheck (optimized)
