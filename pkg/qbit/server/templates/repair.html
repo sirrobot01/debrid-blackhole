@@ -62,7 +62,7 @@
             let mediaIds = document.getElementById('mediaIds').value.split(',').map(id => id.trim());
             let arr = document.getElementById('arrSelect').value;
             if (!arr) {
-                alert('Please select an Arr instance');
+                createToast('Please select an Arr instance', 'warning');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
                 return;
@@ -81,9 +81,9 @@
                 });
 
                 if (!response.ok) throw new Error(await response.text());
-                alert('Repair process initiated successfully!');
+                createToast('Repair process initiated successfully!');
             } catch (error) {
-                alert(`Error starting repair: ${error.message}`);
+                createToast(`Error starting repair: ${error.message}`, 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;

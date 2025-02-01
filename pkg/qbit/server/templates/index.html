@@ -170,9 +170,10 @@
                     method: 'DELETE'
                 });
                 await loadTorrents();
+                createToast('Torrent deleted successfully');
             } catch (error) {
                 console.error('Error deleting torrent:', error);
-                alert('Failed to delete torrent');
+                createToast('Failed to delete torrent', 'error');
             }
         }
 
@@ -185,9 +186,10 @@
                 );
                 await Promise.all(deletePromises);
                 await loadTorrents();
+                createToast('Selected torrents deleted successfully');
             } catch (error) {
                 console.error('Error deleting torrents:', error);
-                alert('Failed to delete some torrents');
+                createToast('Failed to delete some torrents' , 'error');
             }
         }
 
