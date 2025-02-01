@@ -68,11 +68,11 @@
                         .filter(url => url.length > 0);
 
                     if (urls.length === 0) {
-                        alert('Please submit at least one torrent');
+                        createToast('Please submit at least one torrent', 'warning');
                         return;
                     }
                     if (urls.length >= 100) {
-                        alert('Please submit less than 100 torrents at a time');
+                        createToast('Please submit less than 100 torrents at a time', 'warning');
                         return;
                     }
 
@@ -92,12 +92,16 @@
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.error || 'Unknown error');
                     if (result.errors && result.errors.length > 0) {
-                        alert(`Added ${result.results.length} torrents with ${result.errors.length} errors:\n${result.errors.join('\n')}`);
+                        if (result.results.length > 0) {
+                            createToast(`Added ${result.results.length} torrents with ${result.errors.length} errors:\n${result.errors.join('\n')}`, 'warning');
+                        } else {
+                            createToast(`Failed to add torrents:\n${result.errors.join('\n')}`, 'error');
+                        }
                     } else {
-                        alert(`Successfully added ${result.results.length} torrents!`);
+                        createToast(`Successfully added ${result.results.length} torrents!`);
                     }
                 } catch (error) {
-                    alert(`Error adding downloads: ${error.message}`);
+                    createToast(`Error adding downloads: ${error.message}`, 'error');
                 } finally {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalText;

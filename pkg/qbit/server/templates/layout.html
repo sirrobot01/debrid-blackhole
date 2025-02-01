@@ -57,6 +57,9 @@
         </style>
     </head>
     <body>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <!-- Toast messages will be created dynamically here -->
+    </div>
     <nav class="navbar navbar-expand-lg navbar-light mb-4">
         <div class="container">
             <a class="navbar-brand" href="/">
@@ -115,6 +118,52 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
+        /**
+         * Create a toast message
+         * @param {string} message - The message to display
+         * @param {string} [type='success'] - The type of toast (success, warning, error)
+         */
+        const createToast = (message, type = 'success') => {
+            type = ['success', 'warning', 'error'].includes(type) ? type : 'success';
+
+            const toastTimeouts = {
+                success: 5000,
+                warning: 10000,
+                error: 15000
+            }
+
+            const toastContainer = document.querySelector('.toast-container');
+            const toastId = `toast-${Date.now()}`;
+            
+            const toastHtml = `
+            <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header ${type === 'error' ? 'bg-danger text-white' : type === 'warning' ? 'bg-warning text-dark' : 'bg-success text-white'}">
+                <strong class="me-auto">
+                    ${type === 'error' ? 'Error' : type === 'warning' ? 'Warning' : 'Success'}
+                </strong>
+                <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'}" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                ${message.replace(/\n/g, '<br>')}
+                </div>
+            </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: toastTimeouts[type]
+            });
+            
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+            });
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
             fetch('/internal/version')
                 .then(response => response.json())
