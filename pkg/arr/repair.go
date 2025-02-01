@@ -37,10 +37,10 @@ func (a *Arr) SearchMissing(id int) {
 	case Radarr:
 		payload = struct {
 			Name    string `json:"name"`
-			MovieId int    `json:"movieId"`
+			MovieId []int  `json:"movieIds"`
 		}{
 			Name:    "MoviesSearch",
-			MovieId: id,
+			MovieId: []int{id},
 		}
 	default:
 		getLogger().Info().Msgf("Unknown arr type: %s", a.Type)
