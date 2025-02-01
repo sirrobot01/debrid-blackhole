@@ -1,0 +1,26 @@
+name: Sync Fork
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # every 30 minutes
+  workflow_dispatch: # on button click
+
+jobs:
+  sync:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: tgymnich/fork-sync@v1.3
+        with:
+          owner: sirrobot01
+          repo: debrid-blackhole
+          base: beta
+          head: beta
+          merge_method: merge
+          pr_message: 'Sync changes from upstream  to downstream'
+          pr_title: Fork Sync
+          auto_approve: true
+          auto_merge: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          personal_token: ${{ secrets.REPOSITORY_ACCESS_TOKEN }}
