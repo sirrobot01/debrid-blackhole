@@ -117,37 +117,65 @@ func (u *uiHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		URLs       []string `json:"urls"`
-		Arr        string   `json:"arr"`
-		NotSymlink bool     `json:"notSymlink"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	results := make([]*ImportRequest, 0, len(req.URLs))
+	results := make([]*ImportRequest, 0)
 	errs := make([]string, 0)
 
-	_arr := u.qbit.Arrs.Get(req.Arr)
+	arrName := r.FormValue("arr")
+	notSymlink := r.FormValue("notSymlink") == "true"
+
+	_arr := u.qbit.Arrs.Get(arrName)
 	if _arr == nil {
-		_arr = arr.NewArr(req.Arr, "", "", arr.Sonarr)
+		_arr = arr.NewArr(arrName, "", "", arr.Sonarr)
 	}
 
-	for _, url := range req.URLs {
-		if url == "" {
-			continue
+	// Handle URLs
+	if urls := r.FormValue("urls"); urls != "" {
+		var urlList []string
+		for _, u := range strings.Split(urls, "\n") {
+			if trimmed := strings.TrimSpace(u); trimmed != "" {
+				urlList = append(urlList, trimmed)
+			}
 		}
 
-		importReq := NewImportRequest(url, _arr, !req.NotSymlink)
-		err := importReq.Process(u.qbit)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
-			continue
+		for _, url := range urlList {
+			importReq := NewImportRequest(url, _arr, !notSymlink)
+			err := importReq.Process(u.qbit)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
+				continue
+			}
+			results = append(results, importReq)
 		}
-		results = append(results, importReq)
+	}
+
+	// Handle torrent/magnet files
+	if files := r.MultipartForm.File["files"]; len(files) > 0 {
+		for _, fileHeader := range files {
+			file, err := fileHeader.Open()
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("Failed to open file %s: %v", fileHeader.Filename, err))
+				continue
+			}
+
+			magnet, err := common.GetMagnetFromFile(file, fileHeader.Filename)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("Failed to parse torrent file %s: %v", fileHeader.Filename, err))
+				continue
+			}
+
+			importReq := NewImportRequest(magnet.Link, _arr, !notSymlink)
+			err = importReq.Process(u.qbit)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("File %s: %v", fileHeader.Filename, err))
+				continue
+			}
+			results = append(results, importReq)
+		}
 	}
 
 	common.JSONResponse(w, struct {
