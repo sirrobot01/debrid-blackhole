@@ -113,7 +113,6 @@ func (u *uiHandler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *uiHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	common.JSONResponse(w, u.qbit.Arrs.GetAll(), http.StatusOK)
 }
 
@@ -161,7 +160,6 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	_hashes := r.URL.Query().Get("hash")
 	if _hashes == "" {
 		http.Error(w, "No hashes provided", http.StatusBadRequest)
@@ -242,12 +240,10 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 func (u *uiHandler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
 	v := version.GetInfo()
-	w.Header().Set("Content-Type", "application/json")
 	common.JSONResponse(w, v, http.StatusOK)
 }
 
 func (u *uiHandler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	common.JSONResponse(w, u.qbit.Storage.GetAll("", "", nil), http.StatusOK)
 }
 
@@ -262,7 +258,6 @@ func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) 
 }
 
 func (u *uiHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	config := common.CONFIG
 	arrCfgs := make([]common.ArrConfig, 0)
 	for _, a := range u.qbit.Arrs.GetAll() {

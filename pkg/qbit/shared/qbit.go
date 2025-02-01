@@ -35,7 +35,7 @@ func NewQBit(config *common.Config, deb *debrid.DebridService, logger zerolog.Lo
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Debrid:          deb,
-		Storage:         NewTorrentStorage("torrents.json"),
+		Storage:         NewTorrentStorage("/app/torrents.json"),
 		logger:          logger,
 		Arrs:            arrs,
 		RefreshInterval: refreshInterval,
