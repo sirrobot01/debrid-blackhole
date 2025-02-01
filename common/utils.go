@@ -2,11 +2,11 @@ package common
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base32"
 	"encoding/hex"
 	"fmt"
-	"github.com/anacrolix/torrent/metainfo"
 	"io"
 	"log"
 	"math/rand"
@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type Magnet struct {
@@ -28,23 +30,11 @@ type Magnet struct {
 
 func GetMagnetFromFile(file io.Reader, filePath string) (*Magnet, error) {
 	if filepath.Ext(filePath) == ".torrent" {
-		mi, err := metainfo.Load(file)
+		torrentData, err := io.ReadAll(file)
 		if err != nil {
 			return nil, err
 		}
-		hash := mi.HashInfoBytes()
-		infoHash := hash.HexString()
-		info, err := mi.UnmarshalInfo()
-		if err != nil {
-			return nil, err
-		}
-		magnet := &Magnet{
-			InfoHash: infoHash,
-			Name:     info.Name,
-			Size:     info.Length,
-			Link:     mi.Magnet(&hash, &info).String(),
-		}
-		return magnet, nil
+		return GetMagnetFromBytes(torrentData)
 	} else {
 		// .magnet file
 		magnetLink := ReadMagnetFile(file)
@@ -59,6 +49,28 @@ func GetMagnetFromUrl(url string) (*Magnet, error) {
 		return OpenMagnetHttpURL(url)
 	}
 	return nil, fmt.Errorf("invalid url")
+}
+
+func GetMagnetFromBytes(torrentData []byte) (*Magnet, error) {
+	// Create a scanner to read the file line by line
+	mi, err := metainfo.Load(bytes.NewReader(torrentData))
+	if err != nil {
+		return nil, err
+	}
+	hash := mi.HashInfoBytes()
+	infoHash := hash.HexString()
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return nil, err
+	}
+	log.Println("InfoHash: ", infoHash)
+	magnet := &Magnet{
+		InfoHash: infoHash,
+		Name:     info.Name,
+		Size:     info.Length,
+		Link:     mi.Magnet(&hash, &info).String(),
+	}
+	return magnet, nil
 }
 
 func OpenMagnetFile(filePath string) string {
@@ -103,27 +115,11 @@ func OpenMagnetHttpURL(magnetLink string) (*Magnet, error) {
 			return
 		}
 	}(resp) // Ensure the response is closed after the function ends
-
-	// Create a scanner to read the file line by line
-
-	mi, err := metainfo.Load(resp.Body)
+	torrentData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
-	hash := mi.HashInfoBytes()
-	infoHash := hash.HexString()
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		return nil, err
-	}
-	log.Println("InfoHash: ", infoHash)
-	magnet := &Magnet{
-		InfoHash: infoHash,
-		Name:     info.Name,
-		Size:     info.Length,
-		Link:     mi.Magnet(&hash, &info).String(),
-	}
-	return magnet, nil
+	return GetMagnetFromBytes(torrentData)
 }
 
 func GetMagnetInfo(magnetLink string) (*Magnet, error) {
