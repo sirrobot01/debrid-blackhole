@@ -1,8 +1,9 @@
 package server
 
 import (
-	"github.com/go-chi/chi/v5"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func (u *uiHandler) Routes(r chi.Router) http.Handler {
@@ -18,6 +19,7 @@ func (u *uiHandler) Routes(r chi.Router) http.Handler {
 			r.Post("/repair", u.handleRepairMedia)
 			r.Get("/torrents", u.handleGetTorrents)
 			r.Delete("/torrents/{hash}", u.handleDeleteTorrent)
+			r.Patch("/torrents/{hash}", u.handleUpdateTorrent)
 			r.Get("/config", u.handleGetConfig)
 			r.Get("/version", u.handleGetVersion)
 		})

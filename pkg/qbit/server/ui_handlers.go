@@ -261,6 +261,37 @@ func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
+func (u *uiHandler) handleUpdateTorrent(w http.ResponseWriter, r *http.Request) {
+	hash := chi.URLParam(r, "hash")
+	if hash == "" {
+		http.Error(w, "No hash provided", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Category  *string `json:"category,omitempty"`
+		IsSymlink *bool   `json:"isSymlink,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	torrent := u.qbit.Storage.Get(hash)
+	if torrent == nil {
+		http.Error(w, "Torrent not found", http.StatusNotFound)
+		return
+	}
+
+	if req.Category != nil {
+		torrent.Category = *req.Category
+	}
+	// TODO: How to update symlink status?
+	u.qbit.Storage.Update(torrent)
+	// TODO: Handle actually moving categories
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (u *uiHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	config := common.CONFIG
