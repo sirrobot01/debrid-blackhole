@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"github.com/sirrobot01/debrid-blackhole/cmd"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"log"
 )
 
@@ -13,14 +13,10 @@ func main() {
 	flag.StringVar(&configPath, "config", "config.json", "path to the config file")
 	flag.Parse()
 
-	// Load the config file
-	conf, err := common.LoadConfig(configPath)
-	common.CONFIG = conf
-	if err != nil {
-		log.Fatal(err)
-	}
+	config.SetConfigPath(configPath)
+	config.GetConfig()
 	ctx := context.Background()
-	if err := cmd.Start(ctx, conf); err != nil {
+	if err := cmd.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
 

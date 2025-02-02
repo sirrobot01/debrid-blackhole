@@ -3,7 +3,8 @@ package arr
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"net/http"
 	"strings"
 	"sync"
@@ -20,14 +21,15 @@ const (
 )
 
 var (
-	client *common.RLHTTPClient = common.NewRLHTTPClient(nil, nil)
+	client *request.RLHTTPClient = request.NewRLHTTPClient(nil, nil)
 )
 
 type Arr struct {
-	Name  string `json:"name"`
-	Host  string `json:"host"`
-	Token string `json:"token"`
-	Type  Type   `json:"type"`
+	Name         string   `json:"name"`
+	Host         string   `json:"host"`
+	Token        string   `json:"token"`
+	Type         Type     `json:"type"`
+	verifiedDirs sync.Map // map[string]struct{} -> dir -> struct{}
 }
 
 func NewArr(name, host, token string, arrType Type) *Arr {
@@ -43,7 +45,7 @@ func (a *Arr) Request(method, endpoint string, payload interface{}) (*http.Respo
 	if a.Token == "" || a.Host == "" {
 		return nil, nil
 	}
-	url, err := common.JoinURL(a.Host, endpoint)
+	url, err := request.JoinURL(a.Host, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +86,9 @@ func inferType(host, name string) Type {
 	}
 }
 
-func NewStorage(cfg []common.ArrConfig) *Storage {
+func NewStorage() *Storage {
 	arrs := make(map[string]*Arr)
-	for _, a := range cfg {
+	for _, a := range config.GetConfig().Arrs {
 		name := a.Name
 		arrs[name] = NewArr(name, a.Host, a.Token, inferType(a.Host, name))
 	}

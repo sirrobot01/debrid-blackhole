@@ -2,7 +2,8 @@ package repair
 
 import (
 	"context"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"log"
 	"os"
@@ -12,18 +13,20 @@ import (
 	"time"
 )
 
-func Start(ctx context.Context, config *common.Config, arrs *arr.Storage) error {
+func Start(ctx context.Context, arrs *arr.Storage) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	logger := common.NewLogger("Repair", config.LogLevel, os.Stdout)
+	cfg := config.GetConfig()
+	repairConfig := cfg.Repair
+	_logger := logger.NewLogger("Repair", cfg.LogLevel, os.Stdout)
 	defer stop()
 
-	duration, err := parseSchedule(config.Repair.Interval)
+	duration, err := parseSchedule(repairConfig.Interval)
 	if err != nil {
 		log.Fatalf("Failed to parse schedule: %v", err)
 	}
 
-	if config.Repair.RunOnStart {
-		logger.Info().Msgf("Running initial repair")
+	if repairConfig.RunOnStart {
+		_logger.Info().Msgf("Running initial repair")
 		if err := repair(arrs); err != nil {
 			log.Printf("Error during initial repair: %v", err)
 			return err
@@ -33,29 +36,29 @@ func Start(ctx context.Context, config *common.Config, arrs *arr.Storage) error 
 	ticker := time.NewTicker(duration)
 	defer ticker.Stop()
 
-	if strings.Contains(config.Repair.Interval, ":") {
-		logger.Info().Msgf("Starting repair worker, scheduled daily at %s", config.Repair.Interval)
+	if strings.Contains(repairConfig.Interval, ":") {
+		_logger.Info().Msgf("Starting repair worker, scheduled daily at %s", repairConfig.Interval)
 	} else {
-		logger.Info().Msgf("Starting repair worker with %v interval", duration)
+		_logger.Info().Msgf("Starting repair worker with %v interval", duration)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info().Msg("Repair worker stopped")
+			_logger.Info().Msg("Repair worker stopped")
 			return nil
 		case t := <-ticker.C:
-			logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
+			_logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
 			if err := repair(arrs); err != nil {
-				logger.Info().Msgf("Error during repair: %v", err)
+				_logger.Info().Msgf("Error during repair: %v", err)
 				return err
 			}
 
 			// If using time-of-day schedule, reset the ticker for next day
-			if strings.Contains(config.Repair.Interval, ":") {
-				nextDuration, err := parseSchedule(config.Repair.Interval)
+			if strings.Contains(repairConfig.Interval, ":") {
+				nextDuration, err := parseSchedule(repairConfig.Interval)
 				if err != nil {
-					logger.Info().Msgf("Error calculating next schedule: %v", err)
+					_logger.Info().Msgf("Error calculating next schedule: %v", err)
 					return err
 				}
 				ticker.Reset(nextDuration)
@@ -66,7 +69,12 @@ func Start(ctx context.Context, config *common.Config, arrs *arr.Storage) error 
 
 func repair(arrs *arr.Storage) error {
 	for _, a := range arrs.GetAll() {
-		go a.Repair("")
+		go func() {
+			err := a.Repair("")
+			if err != nil {
+				log.Printf("Error repairing %s: %v", a.Name, err)
+			}
+		}()
 	}
 	return nil
 }

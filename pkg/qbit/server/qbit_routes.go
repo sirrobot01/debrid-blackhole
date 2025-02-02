@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (q *qbitHandler) Routes(r chi.Router) http.Handler {
+func (q *QbitHandler) Routes(r chi.Router) http.Handler {
 	r.Route("/api/v2", func(r chi.Router) {
 		//if q.debug {
 		//	r.Use(middleware.Logger)

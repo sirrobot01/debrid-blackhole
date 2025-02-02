@@ -7,7 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
@@ -23,12 +24,13 @@ type Server struct {
 	logger zerolog.Logger
 }
 
-func NewServer(config *common.Config, deb *debrid.DebridService, arrs *arr.Storage) *Server {
-	logger := common.NewLogger("QBit", config.QBitTorrent.LogLevel, os.Stdout)
-	q := shared.NewQBit(config, deb, logger, arrs)
+func NewServer(deb *debrid.DebridService, arrs *arr.Storage) *Server {
+	cfg := config.GetConfig()
+	l := logger.NewLogger("QBit", cfg.QBitTorrent.LogLevel, os.Stdout)
+	q := shared.NewQBit(deb, l, arrs)
 	return &Server{
 		qbit:   q,
-		logger: logger,
+		logger: l,
 	}
 }
 
@@ -38,8 +40,12 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	logLevel := s.logger.GetLevel().String()
 	debug := logLevel == "debug"
-	q := qbitHandler{qbit: s.qbit, logger: s.logger, debug: debug}
-	ui := uiHandler{qbit: s.qbit, logger: common.NewLogger("UI", s.logger.GetLevel().String(), os.Stdout), debug: debug}
+	q := QbitHandler{qbit: s.qbit, logger: s.logger, debug: debug}
+	ui := UIHandler{
+		qbit:   s.qbit,
+		logger: logger.NewLogger("UI", s.logger.GetLevel().String(), os.Stdout),
+		debug:  debug,
+	}
 
 	// Register routes
 	r.Get("/logs", s.GetLogs)
@@ -71,7 +77,7 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) GetLogs(w http.ResponseWriter, r *http.Request) {
-	logFile := common.GetLogPath()
+	logFile := logger.GetLogPath()
 
 	// Open and read the file
 	file, err := os.Open(logFile)
@@ -79,7 +85,12 @@ func (s *Server) GetLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading log file", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			s.logger.Debug().Err(err).Msg("Error closing log file")
+		}
+	}(file)
 
 	// Set headers
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -91,6 +102,7 @@ func (s *Server) GetLogs(w http.ResponseWriter, r *http.Request) {
 	// Stream the file
 	_, err = io.Copy(w, file)
 	if err != nil {
+		s.logger.Debug().Err(err).Msg("Error streaming log file")
 		http.Error(w, "Error streaming log file", http.StatusInternalServerError)
 		return
 	}

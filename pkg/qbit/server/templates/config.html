@@ -30,6 +30,45 @@
                                     Open Magnet Links in DecyphArr
                                 </div>
                             </div>
+                            <div class="col-12 mt-3">
+                                <div class="form-group">
+                                    <label for="allowedExtensions">Allowed File Extensions</label>
+                                    <div class="input-group">
+                                        <textarea type="text"
+                                               class="form-control"
+                                               id="allowedExtensions"
+                                               name="allowed_file_types"
+                                               disabled
+                                               placeholder="mkv, mp4, avi, etc.">
+                                        </textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <div class="form-group">
+                                    <label for="minFileSize">Minimum File Size</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           id="minFileSize"
+                                           name="min_file_size"
+                                           disabled
+                                           placeholder="e.g., 10MB, 1GB">
+                                    <small class="form-text text-muted">Minimum file size to download (0 for no limit)</small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mt-3">
+                                <div class="form-group">
+                                    <label for="maxFileSize">Maximum File Size</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           id="maxFileSize"
+                                           name="max_file_size"
+                                           disabled
+                                           placeholder="e.g., 50GB, 100MB">
+                                    <small class="form-text text-muted">Maximum file size to download (0 for no limit)</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <!-- Debrid Configuration -->
@@ -216,6 +255,15 @@
 
                     const logLevel = document.getElementById('log-level');
                     logLevel.value = config.log_level;
+                    if (config.allowed_file_types && Array.isArray(config.allowed_file_types)) {
+                        document.querySelector('[name="allowed_file_types"]').value = config.allowed_file_types.join(', ');
+                    }
+                    if (config.min_file_size) {
+                        document.querySelector('[name="min_file_size"]').value = config.min_file_size;
+                    }
+                    if (config.max_file_size) {
+                        document.querySelector('[name="max_file_size"]').value = config.max_file_size;
+                    }
 
                 });
 

@@ -2,8 +2,8 @@ package arr
 
 import (
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
-	"io"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,8 +16,8 @@ var repairLogger *zerolog.Logger
 
 func getLogger() *zerolog.Logger {
 	if repairLogger == nil {
-		logger := common.NewLogger("repair", common.CONFIG.LogLevel, os.Stdout)
-		repairLogger = &logger
+		l := logger.NewLogger("repair", config.GetConfig().LogLevel, os.Stdout)
+		repairLogger = &l
 	}
 	return repairLogger
 }
@@ -165,21 +165,50 @@ func (a *Arr) checkMediaFilesParallel(m Content) bool {
 
 				if fileIsSymlinked(f.Path) {
 					getLogger().Debug().Msgf("File is symlinked: %s", f.Path)
-					if !fileIsCorrectSymlink(f.Path) {
-						getLogger().Debug().Msgf("File is broken: %s", f.Path)
+
+					target, err := getAbsoluteSymlinkTarget(f.Path)
+					if err != nil {
+						getLogger().Debug().Msgf("Cannot resolve symlink %s: %v", f.Path, err)
 						isBroken = true
-						if err := a.DeleteFile(f.Id); err != nil {
-							getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+					} else {
+						targetDir := filepath.Dir(target)
+
+						// Check if we've already verified this directory
+						if _, exists := a.verifiedDirs.Load(targetDir); exists {
+							getLogger().Debug().Msgf("Skipping check for %s - directory already verified", target)
+							isBroken = false
+							brokenFiles <- isBroken
+							continue
+						}
+
+						if !fileIsCorrectSymlink(f.Path) {
+							getLogger().Debug().Msgf("File is broken: %s", f.Path)
+							isBroken = true
+							if err := a.DeleteFile(f.Id); err != nil {
+								getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
+							}
+						} else {
+							// If the file is readable, mark its directory as verified
+							a.verifiedDirs.Store(targetDir, true)
 						}
 					}
 				} else {
-					getLogger().Debug().Msgf("File is not symlinked: %s", f.Path)
+					fileDir := filepath.Dir(f.Path)
+					if _, exists := a.verifiedDirs.Load(fileDir); exists {
+						getLogger().Debug().Msgf("Skipping check for %s - directory already verified", f.Path)
+						isBroken = false
+						brokenFiles <- isBroken
+						continue
+					}
+
 					if !fileIsReadable(f.Path) {
 						getLogger().Debug().Msgf("File is broken: %s", f.Path)
 						isBroken = true
 						if err := a.DeleteFile(f.Id); err != nil {
 							getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 						}
+					} else {
+						a.verifiedDirs.Store(fileDir, true)
 					}
 				}
 				brokenFiles <- isBroken
@@ -213,18 +242,38 @@ func (a *Arr) checkMediaFiles(m Content) bool {
 	isBroken := false
 	for _, f := range m.Files {
 		if fileIsSymlinked(f.Path) {
+			target, err := getAbsoluteSymlinkTarget(f.Path)
+			if err != nil {
+				isBroken = true
+				continue
+			}
+
+			targetDir := filepath.Dir(target)
+			if _, exists := a.verifiedDirs.Load(targetDir); exists {
+				continue
+			}
+
 			if !fileIsCorrectSymlink(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
 					getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
+			} else {
+				a.verifiedDirs.Store(targetDir, true)
 			}
 		} else {
+			fileDir := filepath.Dir(f.Path)
+			if _, exists := a.verifiedDirs.Load(fileDir); exists {
+				continue
+			}
+
 			if !fileIsReadable(f.Path) {
 				isBroken = true
 				if err := a.DeleteFile(f.Id); err != nil {
 					getLogger().Info().Msgf("Failed to delete file: %s %d: %v", f.Path, f.Id, err)
 				}
+			} else {
+				a.verifiedDirs.Store(fileDir, true)
 			}
 		}
 	}
@@ -332,11 +381,25 @@ func checkFileStart(filePath string) error {
 	}
 	defer f.Close()
 
-	buffer := make([]byte, 1024)
-	_, err = io.ReadAtLeast(f, buffer, 1024)
-	if err != nil && err != io.EOF {
+	buffer := make([]byte, 1)
+	_, err = f.Read(buffer)
+	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func getAbsoluteSymlinkTarget(file string) (string, error) {
+	target, err := os.Readlink(file)
+	if err != nil {
+		return "", err
+	}
+
+	if !filepath.IsAbs(target) {
+		dir := filepath.Dir(file)
+		target = filepath.Join(dir, target)
+	}
+
+	return target, nil
 }
