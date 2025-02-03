@@ -280,7 +280,7 @@
                 const { clientWidth, clientHeight } = document.documentElement;
                 const { offsetWidth, offsetHeight } = refs.torrentContextMenu;
 
-                refs.torrentContextMenu.style.maxWidth = `${clientWidth - 20}px`;
+                refs.torrentContextMenu.style.maxWidth = `${clientWidth - 72}px`;
                 refs.torrentContextMenu.style.left = `${Math.min(pageX, clientWidth - offsetWidth - 5)}px`;
                 refs.torrentContextMenu.style.top = `${Math.min(pageY, clientHeight - offsetHeight - 5)}px`;
             });
