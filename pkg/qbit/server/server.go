@@ -12,6 +12,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
+	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
 	"io"
 	"net/http"
 	"os"
@@ -24,10 +25,10 @@ type Server struct {
 	logger zerolog.Logger
 }
 
-func NewServer(deb *debrid.DebridService, arrs *arr.Storage) *Server {
+func NewServer(deb *debrid.DebridService, arrs *arr.Storage, _repair *repair.Repair) *Server {
 	cfg := config.GetConfig()
 	l := logger.NewLogger("QBit", cfg.QBitTorrent.LogLevel, os.Stdout)
-	q := shared.NewQBit(deb, l, arrs)
+	q := shared.NewQBit(deb, l, arrs, _repair)
 	return &Server{
 		qbit:   q,
 		logger: l,

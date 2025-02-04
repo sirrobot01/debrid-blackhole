@@ -3,7 +3,6 @@ package server
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
@@ -234,35 +233,20 @@ func (u *UIHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaIds := req.MediaIds
-	if len(mediaIds) == 0 {
-		mediaIds = []string{""}
-	}
-
 	if req.Async {
-		for _, tvId := range mediaIds {
-			go func() {
-				err := _arr.Repair(tvId)
-				if err != nil {
-					u.logger.Info().Msgf("Failed to repair: %v", err)
-				}
-			}()
-		}
+		go func() {
+			if err := u.qbit.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+				u.logger.Error().Err(err).Msg("Failed to repair media")
+			}
+		}()
 		request.JSONResponse(w, "Repair process started", http.StatusOK)
 		return
 	}
 
-	var errs []error
-	for _, tvId := range mediaIds {
-		if err := _arr.Repair(tvId); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		combinedErr := errors.Join(errs...)
-		http.Error(w, fmt.Sprintf("Failed to repair: %v", combinedErr), http.StatusInternalServerError)
+	if err := u.qbit.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to repair: %v", err), http.StatusInternalServerError)
 		return
+
 	}
 
 	request.JSONResponse(w, "Repair completed", http.StatusOK)

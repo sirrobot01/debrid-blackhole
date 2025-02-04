@@ -68,7 +68,9 @@
   "repair": {
     "enabled": false,
     "interval": "12h",
-    "run_on_start": false
+    "run_on_start": false,
+    "zurg_url": "http://zurg:9999",
+    "skip_deletion": false
   },
   "log_level": "info",
   "min_file_size": "",

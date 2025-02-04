@@ -50,9 +50,11 @@ type Arr struct {
 }
 
 type Repair struct {
-	Enabled    bool   `json:"enabled"`
-	Interval   string `json:"interval"`
-	RunOnStart bool   `json:"run_on_start"`
+	Enabled      bool   `json:"enabled"`
+	Interval     string `json:"interval"`
+	RunOnStart   bool   `json:"run_on_start"`
+	ZurgURL      string `json:"zurg_url"`
+	SkipDeletion bool   `json:"skip_deletion"`
 }
 
 type Config struct {

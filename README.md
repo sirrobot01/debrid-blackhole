@@ -161,6 +161,8 @@ The `repair` key is used to enable the repair worker
 - The `enabled` key is used to enable the repair worker
 - The `interval` key is the interval in either minutes, seconds, hours, days. Use any of this format, e.g 12:00, 5:00, 1h, 1d, 1m, 1s.
 - The `run_on_start` key is used to run the repair worker on start
+- The `zurg_url` is the url of the zurg server. Typically `http://localhost:9999` or `http://zurg:9999`
+- The `skip_deletion`: true if you don't want to delete the files
 
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
@@ -198,6 +200,8 @@ The proxy listens on the port `8181` by default. The username and password can b
 ### Repair Worker
 
 The repair worker is a simple worker that checks for missing files in the Arrs(Sonarr, Radarr, etc). It's particularly useful for files either deleted by the Debrid provider or files with bad symlinks.
+
+**Note**: If you're using zurg, set the `zurg_url` under repair config. This will speed up the repair process, exponentially.
 
 - Search for broken symlinks/files
 - Search for missing files

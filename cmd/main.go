@@ -17,6 +17,7 @@ func Start(ctx context.Context) error {
 
 	deb := debrid.NewDebrid()
 	arrs := arr.NewStorage()
+	_repair := repair.NewRepair(deb.Get(), arrs)
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -34,7 +35,7 @@ func Start(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := qbit.Start(ctx, deb, arrs); err != nil {
+			if err := qbit.Start(ctx, deb, arrs, _repair); err != nil {
 				errChan <- err
 			}
 		}()
@@ -44,7 +45,7 @@ func Start(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := repair.Start(ctx, arrs); err != nil {
+			if err := _repair.Start(ctx); err != nil {
 				log.Printf("Error during repair: %v", err)
 			}
 		}()
