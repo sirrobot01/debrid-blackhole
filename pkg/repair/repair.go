@@ -139,7 +139,7 @@ func (r *Repair) Start(ctx context.Context) error {
 		r.logger.Info().Msgf("Running initial repair")
 		go func() {
 			if err := r.Repair(r.arrs.GetAll(), []string{}); err != nil {
-				log.Printf("Error during initial repair: %v", err)
+				r.logger.Info().Msgf("Error during initial repair: %v", err)
 			}
 		}()
 	}
@@ -158,13 +158,15 @@ func (r *Repair) Start(ctx context.Context) error {
 			r.logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
 			if err := r.Repair(r.arrs.GetAll(), []string{}); err != nil {
 				r.logger.Info().Msgf("Error during repair: %v", err)
-				return err
+				continue
 			}
 
 			// If using time-of-day schedule, reset the ticker for next day
 			if strings.Contains(cfg.Repair.Interval, ":") {
 				ticker.Reset(r.duration)
 			}
+
+			r.logger.Info().Msgf("Next scheduled repair at %v", t.Add(r.duration).Format("15:04:05"))
 		}
 	}
 }
