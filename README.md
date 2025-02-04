@@ -102,95 +102,49 @@ Download the binary from the releases page and run it with the config file.
   - Test
   - Save
 
-#### Sample Config
+#### Basic Sample Config
 
 This is the default config file. You can create a `config.json` file in the root directory of the project or mount it in the docker-compose file.
 ```json
 {
   "debrids": [
     {
-      "name": "torbox",
-      "host": "https://api.torbox.app/v1",
-      "api_key": "torbox_api_key",
-      "folder": "/mnt/remote/torbox/torrents/",
-      "rate_limit": "250/minute",
-      "download_uncached": false,
-      "check_cached": true
-    },
-    {
       "name": "realdebrid",
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
-      "folder": "/mnt/remote/realdebrid/__all__/",
-      "rate_limit": "250/minute",
-      "download_uncached": false,
-      "check_cached": false
-    },
-    {
-      "name": "debridlink",
-      "host": "https://debrid-link.com/api/v2",
-      "api_key": "debridlink_key",
-      "folder": "/mnt/remote/debridlink/torrents/",
-      "rate_limit": "250/minute",
-      "download_uncached": false,
-      "check_cached": false
-    },
-    {
-      "name": "alldebrid",
-      "host": "http://api.alldebrid.com/v4.1",
-      "api_key": "alldebrid_key",
-      "folder": "/mnt/remote/alldebrid/magnet/",
-      "rate_limit": "600/minute",
-      "download_uncached": false,
-      "check_cached": false
+      "folder": "/mnt/remote/realdebrid/__all__/"
     }
   ],
   "proxy": {
     "enabled": true,
     "port": "8100",
-    "log_level": "info",
     "username": "username",
-    "password": "password",
-    "cached_only": true
+    "password": "password"
   },
-  "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
-    "categories": ["sonarr", "radarr"],
-    "refresh_interval": 5,
-    "log_level": "info"
+    "categories": ["sonarr", "radarr"]
   },
-  "arrs": [
-    {
-      "name": "sonarr",
-      "host": "http://host:8989",
-      "token": "arr_key"
-    },
-    {
-      "name": "radarr",
-      "host": "http://host:7878",
-      "token": "arr_key"
-    }
-  ],
   "repair": {
     "enabled": false,
     "interval": "12h",
     "run_on_start": false
-  },
-  "log_level": "info"
+  }
 }
 ```
 
-#### Config Notes
+Full config are [here](doc/config.full.json)
 
-##### Log Level
-- The `log_level` key is used to set the log level of the application. The default value is `info`
-- The log level can be set to `debug`, `info`, `warn`, `error`
-##### Max Cache Size
-- The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent
-- The default value is `1000`
-- The cache is stored in memory and is not persisted on restart
+<details>
+
+<summary>
+  Click Here for the full config notes
+</summary>
+
+- The `log_level` key is used to set the log level of the application. The default value is `info`. log level can be set to `debug`, `info`, `warn`, `error`
+- The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent. The default value is `1000`
+- The `allowed_file_types` key is an array of allowed file types that can be downloaded. By default, all movie, tv show and music file types are allowed
 
 ##### Debrid Config
 - The `debrids` key is an array of debrid providers
@@ -202,11 +156,13 @@ This is the default config file. You can create a `config.json` file in the root
 - The `download_uncached` bool key is used to download uncached torrents(disabled by default)
 - The `check_cached` bool key is used to check if the torrent is cached(disabled by default)
 
-##### Repair Config (**NEW**)
+##### Repair Config (**BETA**)
 The `repair` key is used to enable the repair worker
 - The `enabled` key is used to enable the repair worker
 - The `interval` key is the interval in either minutes, seconds, hours, days. Use any of this format, e.g 12:00, 5:00, 1h, 1d, 1m, 1s.
 - The `run_on_start` key is used to run the repair worker on start
+- The `zurg_url` is the url of the zurg server. Typically `http://localhost:9999` or `http://zurg:9999`
+- The `skip_deletion`: true if you don't want to delete the files
 
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
@@ -230,6 +186,8 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 - The `host` key is the host of the Arr
 - The `token` key is the API token of the Arr
 
+</details>
+
 
 ### Proxy
 
@@ -242,6 +200,8 @@ The proxy listens on the port `8181` by default. The username and password can b
 ### Repair Worker
 
 The repair worker is a simple worker that checks for missing files in the Arrs(Sonarr, Radarr, etc). It's particularly useful for files either deleted by the Debrid provider or files with bad symlinks.
+
+**Note**: If you're using zurg, set the `zurg_url` under repair config. This will speed up the repair process, exponentially.
 
 - Search for broken symlinks/files
 - Search for missing files

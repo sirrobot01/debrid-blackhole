@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"net/http"
 	gourl "net/url"
@@ -85,6 +88,8 @@ func getAlldebridStatus(statusCode int) string {
 func flattenFiles(files []structs.AllDebridMagnetFile, parentPath string, index *int) []TorrentFile {
 	result := make([]TorrentFile, 0)
 
+	cfg := config.GetConfig()
+
 	for _, f := range files {
 		currentPath := f.Name
 		if parentPath != "" {
@@ -100,7 +105,11 @@ func flattenFiles(files []structs.AllDebridMagnetFile, parentPath string, index 
 			if common.RegexMatch(common.SAMPLEMATCH, fileName) {
 				continue
 			}
-			if !common.RegexMatch(common.VIDEOMATCH, fileName) && !common.RegexMatch(common.MUSICMATCH, fileName) {
+			if !cfg.IsAllowedFile(fileName) {
+				continue
+			}
+
+			if !cfg.IsSizeAllowed(f.Size) {
 				continue
 			}
 
@@ -240,13 +249,12 @@ func (r *AllDebrid) GetCheckCached() bool {
 	return r.CheckCached
 }
 
-func NewAllDebrid(dc common.DebridConfig, cache *common.Cache) *AllDebrid {
-	rl := common.ParseRateLimit(dc.RateLimit)
+func NewAllDebrid(dc config.Debrid, cache *common.Cache) *AllDebrid {
+	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
+	client := request.NewRLHTTPClient(rl, headers)
 	return &AllDebrid{
 		BaseDebrid: BaseDebrid{
 			Name:             "alldebrid",
@@ -256,7 +264,7 @@ func NewAllDebrid(dc common.DebridConfig, cache *common.Cache) *AllDebrid {
 			client:           client,
 			cache:            cache,
 			MountPath:        dc.Folder,
-			logger:           logger,
+			logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
 			CheckCached:      dc.CheckCached,
 		},
 	}

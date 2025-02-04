@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
 	"net/http"
@@ -129,7 +132,11 @@ func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 	torrent.Filename = name
 	torrent.OriginalFilename = name
 	files := make([]TorrentFile, len(data.Files))
+	cfg := config.GetConfig()
 	for i, f := range data.Files {
+		if !cfg.IsSizeAllowed(f.Size) {
+			continue
+		}
 		files[i] = TorrentFile{
 			Id:   f.ID,
 			Name: f.Name,
@@ -250,14 +257,13 @@ func (r *DebridLink) GetCheckCached() bool {
 	return r.CheckCached
 }
 
-func NewDebridLink(dc common.DebridConfig, cache *common.Cache) *DebridLink {
-	rl := common.ParseRateLimit(dc.RateLimit)
+func NewDebridLink(dc config.Debrid, cache *common.Cache) *DebridLink {
+	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 		"Content-Type":  "application/json",
 	}
-	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
+	client := request.NewRLHTTPClient(rl, headers)
 	return &DebridLink{
 		BaseDebrid: BaseDebrid{
 			Name:             "debridlink",
@@ -267,7 +273,7 @@ func NewDebridLink(dc common.DebridConfig, cache *common.Cache) *DebridLink {
 			client:           client,
 			cache:            cache,
 			MountPath:        dc.Folder,
-			logger:           logger,
+			logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
 			CheckCached:      dc.CheckCached,
 		},
 	}

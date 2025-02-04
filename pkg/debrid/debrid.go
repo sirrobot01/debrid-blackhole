@@ -1,10 +1,14 @@
 package debrid
 
 import (
+	"cmp"
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"path/filepath"
 )
@@ -14,7 +18,7 @@ type BaseDebrid struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
-	client           *common.RLHTTPClient
+	client           *request.RLHTTPClient
 	cache            *common.Cache
 	MountPath        string
 	logger           zerolog.Logger
@@ -34,12 +38,14 @@ type Service interface {
 	GetLogger() zerolog.Logger
 }
 
-func NewDebrid(debs []common.DebridConfig, maxCachedSize int) *DebridService {
+func NewDebrid() *DebridService {
+	cfg := config.GetConfig()
+	maxCachedSize := cmp.Or(cfg.MaxCacheSize, 1000)
 	debrids := make([]Service, 0)
 	// Divide the cache size by the number of debrids
-	maxCacheSize := maxCachedSize / len(debs)
+	maxCacheSize := maxCachedSize / len(cfg.Debrids)
 
-	for _, dc := range debs {
+	for _, dc := range cfg.Debrids {
 		d := createDebrid(dc, common.NewCache(maxCacheSize))
 		logger := d.GetLogger()
 		logger.Info().Msg("Debrid Service started")
@@ -49,7 +55,7 @@ func NewDebrid(debs []common.DebridConfig, maxCachedSize int) *DebridService {
 	return d
 }
 
-func createDebrid(dc common.DebridConfig, cache *common.Cache) Service {
+func createDebrid(dc config.Debrid, cache *common.Cache) Service {
 	switch dc.Name {
 	case "realdebrid":
 		return NewRealDebrid(dc, cache)
@@ -75,8 +81,8 @@ func GetTorrentInfo(filePath string) (*Torrent, error) {
 }
 
 func torrentFromMagnetFile(filePath string) (*Torrent, error) {
-	magnetLink := common.OpenMagnetFile(filePath)
-	magnet, err := common.GetMagnetInfo(magnetLink)
+	magnetLink := utils.OpenMagnetFile(filePath)
+	magnet, err := utils.GetMagnetInfo(magnetLink)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +108,7 @@ func getTorrentInfo(filePath string) (*Torrent, error) {
 		return nil, err
 	}
 	infoLength := info.Length
-	magnet := &common.Magnet{
+	magnet := &utils.Magnet{
 		InfoHash: infoHash,
 		Name:     info.Name,
 		Size:     infoLength,
@@ -145,7 +151,7 @@ func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[stri
 	return infohashes, result
 }
 
-func ProcessTorrent(d *DebridService, magnet *common.Magnet, a *arr.Arr, isSymlink bool) (*Torrent, error) {
+func ProcessTorrent(d *DebridService, magnet *utils.Magnet, a *arr.Arr, isSymlink bool) (*Torrent, error) {
 	debridTorrent := &Torrent{
 		InfoHash: magnet.InfoHash,
 		Magnet:   magnet,

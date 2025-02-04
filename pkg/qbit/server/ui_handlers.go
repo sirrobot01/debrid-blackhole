@@ -3,15 +3,16 @@ package server
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"html/template"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
@@ -49,7 +50,7 @@ type RepairRequest struct {
 //go:embed templates/*
 var content embed.FS
 
-type uiHandler struct {
+type UIHandler struct {
 	qbit   *shared.QBit
 	logger zerolog.Logger
 	debug  bool
@@ -68,7 +69,7 @@ func init() {
 	))
 }
 
-func (u *uiHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Page":  "index",
 		"Title": "Torrents",
@@ -79,7 +80,7 @@ func (u *uiHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (u *uiHandler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Page":  "download",
 		"Title": "Download",
@@ -90,7 +91,7 @@ func (u *uiHandler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (u *uiHandler) RepairHandler(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) RepairHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Page":  "repair",
 		"Title": "Repair",
@@ -101,7 +102,7 @@ func (u *uiHandler) RepairHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (u *uiHandler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Page":  "config",
 		"Title": "Config",
@@ -112,11 +113,11 @@ func (u *uiHandler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (u *uiHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
-	common.JSONResponse(w, u.qbit.Arrs.GetAll(), http.StatusOK)
+func (u *UIHandler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
+	request.JSONResponse(w, u.qbit.Arrs.GetAll(), http.StatusOK)
 }
 
-func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -162,7 +163,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			magnet, err := common.GetMagnetFromFile(file, fileHeader.Filename)
+			magnet, err := utils.GetMagnetFromFile(file, fileHeader.Filename)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("Failed to parse torrent file %s: %v", fileHeader.Filename, err))
 				continue
@@ -178,7 +179,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	common.JSONResponse(w, struct {
+	request.JSONResponse(w, struct {
 		Results []*ImportRequest `json:"results"`
 		Errors  []string         `json:"errors,omitempty"`
 	}{
@@ -187,7 +188,7 @@ func (u *uiHandler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
-func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 	_hashes := r.URL.Query().Get("hash")
 	if _hashes == "" {
 		http.Error(w, "No hashes provided", http.StatusBadRequest)
@@ -216,10 +217,10 @@ func (u *uiHandler) handleCheckCached(w http.ResponseWriter, r *http.Request) {
 		_, exists := res[h]
 		result[h] = exists
 	}
-	common.JSONResponse(w, result, http.StatusOK)
+	request.JSONResponse(w, result, http.StatusOK)
 }
 
-func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 	var req RepairRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -232,50 +233,35 @@ func (u *uiHandler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaIds := req.MediaIds
-	if len(mediaIds) == 0 {
-		mediaIds = []string{""}
-	}
-
 	if req.Async {
-		for _, tvId := range mediaIds {
-			go func() {
-				err := _arr.Repair(tvId)
-				if err != nil {
-					u.logger.Info().Msgf("Failed to repair: %v", err)
-				}
-			}()
-		}
-		common.JSONResponse(w, "Repair process started", http.StatusOK)
+		go func() {
+			if err := u.qbit.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+				u.logger.Error().Err(err).Msg("Failed to repair media")
+			}
+		}()
+		request.JSONResponse(w, "Repair process started", http.StatusOK)
 		return
 	}
 
-	var errs []error
-	for _, tvId := range mediaIds {
-		if err := _arr.Repair(tvId); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		combinedErr := errors.Join(errs...)
-		http.Error(w, fmt.Sprintf("Failed to repair: %v", combinedErr), http.StatusInternalServerError)
+	if err := u.qbit.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to repair: %v", err), http.StatusInternalServerError)
 		return
+
 	}
 
-	common.JSONResponse(w, "Repair completed", http.StatusOK)
+	request.JSONResponse(w, "Repair completed", http.StatusOK)
 }
 
-func (u *uiHandler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
 	v := version.GetInfo()
-	common.JSONResponse(w, v, http.StatusOK)
+	request.JSONResponse(w, v, http.StatusOK)
 }
 
-func (u *uiHandler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
-	common.JSONResponse(w, u.qbit.Storage.GetAll("", "", nil), http.StatusOK)
+func (u *UIHandler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
+	request.JSONResponse(w, u.qbit.Storage.GetAll("", "", nil), http.StatusOK)
 }
 
-func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) {
+func (u *UIHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) {
 	hash := chi.URLParam(r, "hash")
 	if hash == "" {
 		http.Error(w, "No hash provided", http.StatusBadRequest)
@@ -285,12 +271,12 @@ func (u *uiHandler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (u *uiHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	config := common.CONFIG
-	arrCfgs := make([]common.ArrConfig, 0)
+func (u *UIHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	cfg := config.GetConfig()
+	arrCfgs := make([]config.Arr, 0)
 	for _, a := range u.qbit.Arrs.GetAll() {
-		arrCfgs = append(arrCfgs, common.ArrConfig{Host: a.Host, Name: a.Name, Token: a.Token})
+		arrCfgs = append(arrCfgs, config.Arr{Host: a.Host, Name: a.Name, Token: a.Token})
 	}
-	config.Arrs = arrCfgs
-	common.JSONResponse(w, config, http.StatusOK)
+	cfg.Arrs = arrCfgs
+	request.JSONResponse(w, cfg, http.StatusOK)
 }

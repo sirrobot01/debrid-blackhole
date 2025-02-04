@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (u *uiHandler) Routes(r chi.Router) http.Handler {
+func (u *UIHandler) Routes(r chi.Router) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Get("/", u.IndexHandler)
 		r.Get("/download", u.DownloadHandler)

@@ -2,6 +2,8 @@ package repair
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -67,4 +69,63 @@ func parseDurationInterval(interval string) (time.Duration, error) {
 	default:
 		return 0, fmt.Errorf("invalid unit in interval: %c", unit)
 	}
+}
+
+func fileIsSymlinked(file string) bool {
+	info, err := os.Lstat(file)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeSymlink != 0
+}
+
+func getSymlinkTarget(file string) string {
+	if fileIsSymlinked(file) {
+		target, err := os.Readlink(file)
+		if err != nil {
+			return ""
+		}
+		if !filepath.IsAbs(target) {
+			dir := filepath.Dir(file)
+			target = filepath.Join(dir, target)
+		}
+		return target
+	}
+	return ""
+}
+
+func fileIsReadable(filePath string) error {
+	// First check if file exists and is accessible
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Check if it's a regular file
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file")
+	}
+
+	// Try to read the first 1024 bytes
+	err = checkFileStart(filePath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func checkFileStart(filePath string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// Read first 1kb
+	buffer := make([]byte, 1024)
+	_, err = f.Read(buffer)
+	if err != nil {
+		return err
+	}
+	return nil
 }

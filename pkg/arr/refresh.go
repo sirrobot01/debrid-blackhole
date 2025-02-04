@@ -3,7 +3,7 @@ package arr
 import (
 	"cmp"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,7 +36,7 @@ func (a *Arr) MarkAsFailed(infoHash string) error {
 		}
 	}
 	if torrentId != 0 {
-		url, err := common.JoinURL(a.Host, "history/failed/", strconv.Itoa(torrentId))
+		url, err := request.JoinURL(a.Host, "history/failed/", strconv.Itoa(torrentId))
 		if err != nil {
 			return err
 		}

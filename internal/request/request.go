@@ -1,4 +1,4 @@
-package common
+package request
 
 import (
 	"crypto/tls"
@@ -8,10 +8,31 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
+
+func JoinURL(base string, paths ...string) (string, error) {
+	// Split the last path component to separate query parameters
+	lastPath := paths[len(paths)-1]
+	parts := strings.Split(lastPath, "?")
+	paths[len(paths)-1] = parts[0]
+
+	joined, err := url.JoinPath(base, paths...)
+	if err != nil {
+		return "", err
+	}
+
+	// Add back query parameters if they exist
+	if len(parts) > 1 {
+		return joined + "?" + parts[1], nil
+	}
+
+	return joined, nil
+}
 
 type RLHTTPClient struct {
 	client      *http.Client

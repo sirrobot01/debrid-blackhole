@@ -1,4 +1,4 @@
-package common
+package utils
 
 import (
 	"bufio"
@@ -7,9 +7,9 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"fmt"
+	"github.com/anacrolix/torrent/metainfo"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,8 +17,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/anacrolix/torrent/metainfo"
 )
 
 type Magnet struct {
@@ -151,15 +149,6 @@ func GetMagnetInfo(magnetLink string) (*Magnet, error) {
 	return magnet, nil
 }
 
-func RandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
 func ExtractInfoHash(magnetDesc string) string {
 	const prefix = "xt=urn:btih:"
 	start := strings.Index(magnetDesc, prefix)
@@ -243,42 +232,4 @@ func GetInfohashFromURL(url string) (string, error) {
 	hash := mi.HashInfoBytes()
 	infoHash := hash.HexString()
 	return infoHash, nil
-}
-
-func JoinURL(base string, paths ...string) (string, error) {
-	// Split the last path component to separate query parameters
-	lastPath := paths[len(paths)-1]
-	parts := strings.Split(lastPath, "?")
-	paths[len(paths)-1] = parts[0]
-
-	joined, err := url.JoinPath(base, paths...)
-	if err != nil {
-		return "", err
-	}
-
-	// Add back query parameters if they exist
-	if len(parts) > 1 {
-		return joined + "?" + parts[1], nil
-	}
-
-	return joined, nil
-}
-
-func FileReady(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err) // Returns true if the file exists
-}
-
-func Remove[S ~[]E, E comparable](s S, values ...E) S {
-	result := make(S, 0, len(s))
-outer:
-	for _, item := range s {
-		for _, v := range values {
-			if item == v {
-				continue outer
-			}
-		}
-		result = append(result, item)
-	}
-	return result
 }

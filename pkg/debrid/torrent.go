@@ -3,6 +3,7 @@ package debrid
 import (
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ type Torrent struct {
 	OriginalFilename string                 `json:"original_filename"`
 	Size             int64                  `json:"size"`
 	Bytes            int64                  `json:"bytes"` // Size of only the files that are downloaded
-	Magnet           *common.Magnet         `json:"magnet"`
+	Magnet           *utils.Magnet          `json:"magnet"`
 	Files            []TorrentFile          `json:"files"`
 	Status           string                 `json:"status"`
 	Added            string                 `json:"added"`
@@ -70,7 +71,8 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 	}
 
 	for _, path := range possiblePaths {
-		if common.FileReady(filepath.Join(rClonePath, path)) {
+		_, err := os.Stat(filepath.Join(rClonePath, path))
+		if !os.IsNotExist(err) {
 			return path, nil
 		}
 	}

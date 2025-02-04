@@ -10,7 +10,9 @@ import (
 	"github.com/elazarl/goproxy"
 	"github.com/elazarl/goproxy/ext/auth"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/valyala/fastjson"
 	"io"
@@ -78,8 +80,8 @@ type Proxy struct {
 	logger     zerolog.Logger
 }
 
-func NewProxy(config common.Config, deb *debrid.DebridService) *Proxy {
-	cfg := config.Proxy
+func NewProxy(deb *debrid.DebridService) *Proxy {
+	cfg := config.GetConfig().Proxy
 	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	return &Proxy{
 		port:       port,
@@ -88,7 +90,7 @@ func NewProxy(config common.Config, deb *debrid.DebridService) *Proxy {
 		password:   cfg.Password,
 		cachedOnly: *cfg.CachedOnly,
 		debrid:     deb.Get(),
-		logger:     common.NewLogger("Proxy", cfg.LogLevel, os.Stdout),
+		logger:     logger.NewLogger("Proxy", cfg.LogLevel, os.Stdout),
 	}
 }
 
@@ -182,7 +184,7 @@ func (item Item) getHash() string {
 	}
 
 	if strings.Contains(item.GUID, "magnet:?") {
-		magnet, err := common.GetMagnetInfo(item.GUID)
+		magnet, err := utils.GetMagnetInfo(item.GUID)
 		if err == nil && magnet != nil && magnet.InfoHash != "" {
 			return magnet.InfoHash
 		}
@@ -196,22 +198,22 @@ func (item Item) getHash() string {
 	}
 
 	if strings.Contains(magnetLink, "magnet:?") {
-		magnet, err := common.GetMagnetInfo(magnetLink)
+		magnet, err := utils.GetMagnetInfo(magnetLink)
 		if err == nil && magnet != nil && magnet.InfoHash != "" {
 			return magnet.InfoHash
 		}
 	}
 
 	//Check Description for infohash
-	hash := common.ExtractInfoHash(item.Description)
+	hash := utils.ExtractInfoHash(item.Description)
 	if hash == "" {
 		// Check Title for infohash
-		hash = common.ExtractInfoHash(item.Comments)
+		hash = utils.ExtractInfoHash(item.Comments)
 	}
 	infohash = hash
 	if infohash == "" {
 		if strings.Contains(magnetLink, "http") {
-			h, _ := common.GetInfohashFromURL(magnetLink)
+			h, _ := utils.GetInfohashFromURL(magnetLink)
 			if h != "" {
 				infohash = h
 			}
