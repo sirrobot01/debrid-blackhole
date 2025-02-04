@@ -1,0 +1,79 @@
+{
+  "debrids": [
+    {
+      "name": "torbox",
+      "host": "https://api.torbox.app/v1",
+      "api_key": "torbox_api_key",
+      "folder": "/mnt/remote/torbox/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": true
+    },
+    {
+      "name": "realdebrid",
+      "host": "https://api.real-debrid.com/rest/1.0",
+      "api_key": "realdebrid_key",
+      "folder": "/mnt/remote/realdebrid/__all__/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": false
+    },
+    {
+      "name": "debridlink",
+      "host": "https://debrid-link.com/api/v2",
+      "api_key": "debridlink_key",
+      "folder": "/mnt/remote/debridlink/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": false
+    },
+    {
+      "name": "alldebrid",
+      "host": "http://api.alldebrid.com/v4.1",
+      "api_key": "alldebrid_key",
+      "folder": "/mnt/remote/alldebrid/magnet/",
+      "rate_limit": "600/minute",
+      "download_uncached": false,
+      "check_cached": false
+    }
+  ],
+  "proxy": {
+    "enabled": true,
+    "port": "8100",
+    "log_level": "info",
+    "username": "username",
+    "password": "password",
+    "cached_only": true
+  },
+  "max_cache_size": 1000,
+  "qbittorrent": {
+    "port": "8282",
+    "download_folder": "/mnt/symlinks/",
+    "categories": ["sonarr", "radarr"],
+    "refresh_interval": 5,
+    "log_level": "info"
+  },
+  "arrs": [
+    {
+      "name": "sonarr",
+      "host": "http://host:8989",
+      "token": "arr_key"
+    },
+    {
+      "name": "radarr",
+      "host": "http://host:7878",
+      "token": "arr_key"
+    }
+  ],
+  "repair": {
+    "enabled": false,
+    "interval": "12h",
+    "run_on_start": false,
+    "zurg_url": "http://zurg:9999",
+    "skip_deletion": false
+  },
+  "log_level": "info",
+  "min_file_size": "",
+  "max_file_size": "",
+  "allowed_file_types": []
+}

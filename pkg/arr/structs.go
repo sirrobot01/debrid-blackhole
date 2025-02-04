@@ -14,16 +14,20 @@ type Movie struct {
 	Id int `json:"id"`
 }
 
-type contentFile struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Id   int    `json:"id"`
+type ContentFile struct {
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Id         int    `json:"id"`
+	FileId     int    `json:"fileId"`
+	TargetPath string `json:"targetPath"`
+	IsSymlink  bool   `json:"isSymlink"`
+	IsBroken   bool   `json:"isBroken"`
 }
 
 type Content struct {
 	Title string        `json:"title"`
 	Id    int           `json:"id"`
-	Files []contentFile `json:"files"`
+	Files []ContentFile `json:"files"`
 }
 
 type seriesFile struct {

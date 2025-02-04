@@ -2,10 +2,10 @@ package server
 
 import (
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirrobot01/debrid-blackhole/common"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit/shared"
@@ -66,7 +66,7 @@ func (i *ImportRequest) Complete() {
 func (i *ImportRequest) Process(q *shared.QBit) (err error) {
 	// Use this for now.
 	// This sends the torrent to the arr
-	magnet, err := common.GetMagnetFromUrl(i.URI)
+	magnet, err := utils.GetMagnetFromUrl(i.URI)
 	if err != nil {
 		return fmt.Errorf("error parsing magnet link: %w", err)
 	}

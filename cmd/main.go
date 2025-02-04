@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"cmp"
 	"context"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
@@ -13,39 +12,40 @@ import (
 	"sync"
 )
 
-func Start(ctx context.Context, config *common.Config) error {
-	maxCacheSize := cmp.Or(config.MaxCacheSize, 1000)
+func Start(ctx context.Context) error {
+	cfg := config.GetConfig()
 
-	deb := debrid.NewDebrid(config.Debrids, maxCacheSize)
-	arrs := arr.NewStorage(config.Arrs)
+	deb := debrid.NewDebrid()
+	arrs := arr.NewStorage()
+	_repair := repair.NewRepair(deb.Get(), arrs)
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
-	if config.Proxy.Enabled {
+	if cfg.Proxy.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := proxy.NewProxy(*config, deb).Start(ctx); err != nil {
+			if err := proxy.NewProxy(deb).Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()
 	}
-	if config.QBitTorrent.Port != "" {
+	if cfg.QBitTorrent.Port != "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := qbit.Start(ctx, config, deb, arrs); err != nil {
+			if err := qbit.Start(ctx, deb, arrs, _repair); err != nil {
 				errChan <- err
 			}
 		}()
 	}
 
-	if config.Repair.Enabled {
+	if cfg.Repair.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := repair.Start(ctx, config, arrs); err != nil {
+			if err := _repair.Start(ctx); err != nil {
 				log.Printf("Error during repair: %v", err)
 			}
 		}()

@@ -3,9 +3,10 @@ package shared
 import (
 	"cmp"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
 	"os"
 )
 
@@ -16,6 +17,7 @@ type QBit struct {
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	Debrid          *debrid.DebridService
+	Repair          *repair.Repair
 	Storage         *TorrentStorage
 	debug           bool
 	logger          zerolog.Logger
@@ -24,8 +26,8 @@ type QBit struct {
 	RefreshInterval int
 }
 
-func NewQBit(config *common.Config, deb *debrid.DebridService, logger zerolog.Logger, arrs *arr.Storage) *QBit {
-	cfg := config.QBitTorrent
+func NewQBit(deb *debrid.DebridService, logger zerolog.Logger, arrs *arr.Storage, _repair *repair.Repair) *QBit {
+	cfg := config.GetConfig().QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8282")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
 	return &QBit{
@@ -35,7 +37,8 @@ func NewQBit(config *common.Config, deb *debrid.DebridService, logger zerolog.Lo
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Debrid:          deb,
-		Storage:         NewTorrentStorage("/app/torrents.json"),
+		Storage:         NewTorrentStorage(cmp.Or(os.Getenv("TORRENT_FILE"), "/app/torrents.json")),
+		Repair:          _repair,
 		logger:          logger,
 		Arrs:            arrs,
 		RefreshInterval: refreshInterval,

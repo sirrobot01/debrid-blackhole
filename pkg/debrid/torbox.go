@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
 	"log"
 	"mime/multipart"
@@ -166,13 +169,18 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	torrent.Filename = name
 	torrent.OriginalFilename = name
 	files := make([]TorrentFile, 0)
+	cfg := config.GetConfig()
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
 		if common.RegexMatch(common.SAMPLEMATCH, fileName) {
 			// Skip sample files
 			continue
 		}
-		if !common.RegexMatch(common.VIDEOMATCH, fileName) && !common.RegexMatch(common.MUSICMATCH, fileName) {
+		if !cfg.IsAllowedFile(fileName) {
+			continue
+		}
+
+		if !cfg.IsSizeAllowed(f.Size) {
 			continue
 		}
 		file := TorrentFile{
@@ -283,13 +291,12 @@ func (r *Torbox) GetCheckCached() bool {
 	return r.CheckCached
 }
 
-func NewTorbox(dc common.DebridConfig, cache *common.Cache) *Torbox {
-	rl := common.ParseRateLimit(dc.RateLimit)
+func NewTorbox(dc config.Debrid, cache *common.Cache) *Torbox {
+	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	client := common.NewRLHTTPClient(rl, headers)
-	logger := common.NewLogger(dc.Name, common.CONFIG.LogLevel, os.Stdout)
+	client := request.NewRLHTTPClient(rl, headers)
 	return &Torbox{
 		BaseDebrid: BaseDebrid{
 			Name:             "torbox",
@@ -299,7 +306,7 @@ func NewTorbox(dc common.DebridConfig, cache *common.Cache) *Torbox {
 			client:           client,
 			cache:            cache,
 			MountPath:        dc.Folder,
-			logger:           logger,
+			logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
 			CheckCached:      dc.CheckCached,
 		},
 	}

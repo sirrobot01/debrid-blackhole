@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"io"
@@ -20,7 +20,7 @@ import (
 // All torrent related helpers goes here
 
 func (q *QBit) AddMagnet(ctx context.Context, url, category string) error {
-	magnet, err := common.GetMagnetFromUrl(url)
+	magnet, err := utils.GetMagnetFromUrl(url)
 	if err != nil {
 		return fmt.Errorf("error parsing magnet link: %w", err)
 	}
@@ -35,7 +35,7 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 	file, _ := fileHeader.Open()
 	defer file.Close()
 	var reader io.Reader = file
-	magnet, err := common.GetMagnetFromFile(reader, fileHeader.Filename)
+	magnet, err := utils.GetMagnetFromFile(reader, fileHeader.Filename)
 	if err != nil {
 		return fmt.Errorf("error reading file: %s \n %w", fileHeader.Filename, err)
 	}
@@ -46,7 +46,7 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 	return nil
 }
 
-func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category string) error {
+func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category string) error {
 	torrent := q.CreateTorrentFromMagnet(magnet, category, "auto")
 	a, ok := ctx.Value("arr").(*arr.Arr)
 	if !ok {
@@ -69,7 +69,7 @@ func (q *QBit) Process(ctx context.Context, magnet *common.Magnet, category stri
 	return nil
 }
 
-func (q *QBit) CreateTorrentFromMagnet(magnet *common.Magnet, category, source string) *Torrent {
+func (q *QBit) CreateTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
 	torrent := &Torrent{
 		ID:        uuid.NewString(),
 		Hash:      strings.ToLower(magnet.InfoHash),
@@ -296,8 +296,8 @@ func (q *QBit) SetTorrentTags(t *Torrent, tags []string) bool {
 
 func (q *QBit) RemoveTorrentTags(t *Torrent, tags []string) bool {
 	torrentTags := strings.Split(t.Tags, ",")
-	newTorrentTags := common.Remove(torrentTags, tags...)
-	q.Tags = common.Remove(q.Tags, tags...)
+	newTorrentTags := utils.RemoveItem(torrentTags, tags...)
+	q.Tags = utils.RemoveItem(q.Tags, tags...)
 	t.Tags = strings.Join(newTorrentTags, ",")
 	q.Storage.Update(t)
 	return true
@@ -316,6 +316,6 @@ func (q *QBit) AddTags(tags []string) bool {
 }
 
 func (q *QBit) RemoveTags(tags []string) bool {
-	q.Tags = common.Remove(q.Tags, tags...)
+	q.Tags = utils.RemoveItem(q.Tags, tags...)
 	return true
 }
