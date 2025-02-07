@@ -156,9 +156,9 @@ func (r *Repair) Start(ctx context.Context) error {
 			return nil
 		case t := <-ticker.C:
 			r.logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
-			if err := r.Repair(r.arrs.GetAll(), []string{}); err != nil {
+			err := r.Repair(r.arrs.GetAll(), []string{})
+			if err != nil {
 				r.logger.Info().Msgf("Error during repair: %v", err)
-				continue
 			}
 
 			// If using time-of-day schedule, reset the ticker for next day

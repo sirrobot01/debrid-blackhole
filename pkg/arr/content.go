@@ -3,7 +3,6 @@ package arr
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 )
@@ -15,9 +14,7 @@ func (a *Arr) GetMedia(tvId string) ([]Content, error) {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		// This is Radarr
-		log.Println("Radarr detected")
-		a.Type = Radarr
+		// This is likely Radarr
 		return GetMovies(a, tvId)
 	}
 	a.Type = Sonarr
@@ -87,6 +84,11 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusNotFound {
+		// This is likely Lidarr or Readarr
+		return nil, fmt.Errorf("failed to get movies: %s", resp.Status)
+	}
+	a.Type = Radarr
 	defer resp.Body.Close()
 	var movies []Movie
 	if err = json.NewDecoder(resp.Body).Decode(&movies); err != nil {
