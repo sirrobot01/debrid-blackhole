@@ -147,13 +147,13 @@ func (q *QBit) UpdateTorrentMin(t *Torrent, debridTorrent *debrid.Torrent) *Torr
 	progress = progress / 100.0
 	sizeCompleted := int64(float64(totalSize) * progress)
 
-	var speed int
+	var speed int64
 	if debridTorrent.Speed != 0 {
 		speed = debridTorrent.Speed
 	}
 	var eta int
 	if speed != 0 {
-		eta = int(totalSize-sizeCompleted) / speed
+		eta = int((totalSize - sizeCompleted) / speed)
 	}
 	t.ID = debridTorrent.Id
 	t.Name = debridTorrent.Name

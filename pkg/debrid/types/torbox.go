@@ -1,4 +1,4 @@
-package structs
+package types
 
 import "time"
 
@@ -36,7 +36,7 @@ type torboxInfo struct {
 	Peers           int         `json:"peers"`
 	Ratio           float64     `json:"ratio"`
 	Progress        float64     `json:"progress"`
-	DownloadSpeed   int         `json:"download_speed"`
+	DownloadSpeed   int64       `json:"download_speed"`
 	UploadSpeed     int         `json:"upload_speed"`
 	Eta             int         `json:"eta"`
 	TorrentFile     bool        `json:"torrent_file"`

@@ -9,7 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -76,7 +76,7 @@ func (r *Torbox) IsAvailable(infohashes []string) map[string]bool {
 			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
-		var res structs.TorBoxAvailableResponse
+		var res types.TorBoxAvailableResponse
 		err = json.Unmarshal(resp, &res)
 		if err != nil {
 			r.logger.Info().Msgf("Error marshalling availability: %v", err)
@@ -111,7 +111,7 @@ func (r *Torbox) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data structs.TorBoxAddMagnetResponse
+	var data types.TorBoxAddMagnetResponse
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func (r *Torbox) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
-	var res structs.TorboxInfoResponse
+	var res types.TorboxInfoResponse
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		return torrent, err
@@ -266,7 +266,7 @@ func (r *Torbox) GetDownloadLinks(torrent *Torrent) error {
 		if err != nil {
 			return err
 		}
-		var data structs.TorBoxDownloadLinksResponse
+		var data types.TorBoxDownloadLinksResponse
 		if err = json.Unmarshal(resp, &data); err != nil {
 			return err
 		}

@@ -42,7 +42,7 @@ type Torrent struct {
 	Status           string                 `json:"status"`
 	Added            string                 `json:"added"`
 	Progress         float64                `json:"progress"`
-	Speed            int                    `json:"speed"`
+	Speed            int64                  `json:"speed"`
 	Seeders          int                    `json:"seeders"`
 	Links            []string               `json:"links"`
 	DownloadLinks    []TorrentDownloadLinks `json:"download_links"`

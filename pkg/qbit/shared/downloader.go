@@ -38,7 +38,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 	debridTorrent.Progress = 0       // Reset progress
 	debridTorrent.Mu.Unlock()
 	client := downloaders.GetGrabClient()
-	progressCallback := func(downloaded int64) {
+	progressCallback := func(downloaded int64, speed int64) {
 		debridTorrent.Mu.Lock()
 		defer debridTorrent.Mu.Unlock()
 		torrent.Mu.Lock()
@@ -46,6 +46,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 
 		// Update total downloaded bytes
 		debridTorrent.SizeDownloaded += downloaded
+		debridTorrent.Speed = speed
 
 		// Calculate overall progress
 		if totalSize > 0 {

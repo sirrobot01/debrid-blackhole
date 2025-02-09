@@ -9,9 +9,11 @@ require (
 	github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
+	github.com/rs/zerolog v1.33.0
 	github.com/valyala/fasthttp v1.55.0
 	github.com/valyala/fastjson v1.6.4
-	golang.org/x/time v0.6.0
+	golang.org/x/time v0.8.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
@@ -19,15 +21,17 @@ require (
 	github.com/anacrolix/missinggo/v2 v2.7.3 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.19 // indirect
-	github.com/rs/zerolog v1.33.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )

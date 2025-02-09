@@ -9,7 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"net/http"
 	gourl "net/url"
 	"os"
@@ -35,7 +35,7 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
-func GetTorrentFiles(data structs.RealDebridTorrentInfo) []TorrentFile {
+func GetTorrentFiles(data types.RealDebridTorrentInfo) []TorrentFile {
 	files := make([]TorrentFile, 0)
 	cfg := config.GetConfig()
 	for _, f := range data.Files {
@@ -100,7 +100,7 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
-		var data structs.RealDebridAvailabilityResponse
+		var data types.RealDebridAvailabilityResponse
 		err = json.Unmarshal(resp, &data)
 		if err != nil {
 			r.logger.Info().Msgf("Error marshalling availability: %v", err)
@@ -122,7 +122,7 @@ func (r *RealDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	payload := gourl.Values{
 		"magnet": {torrent.Magnet.Link},
 	}
-	var data structs.RealDebridAddMagnetSchema
+	var data types.RealDebridAddMagnetSchema
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
 	resp, err := r.client.MakeRequest(req)
 	if err != nil {
@@ -143,7 +143,7 @@ func (r *RealDebrid) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
-	var data structs.RealDebridTorrentInfo
+	var data types.RealDebridTorrentInfo
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
 		return torrent, err
@@ -175,7 +175,7 @@ func (r *RealDebrid) CheckStatus(torrent *Torrent, isSymlink bool) (*Torrent, er
 			r.logger.Info().Msgf("ERROR Checking file: %v", err)
 			return torrent, err
 		}
-		var data structs.RealDebridTorrentInfo
+		var data types.RealDebridTorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
 		name := common.RemoveInvalidChars(data.OriginalFilename)
@@ -262,7 +262,7 @@ func (r *RealDebrid) GetDownloadLinks(torrent *Torrent) error {
 		if err != nil {
 			return err
 		}
-		var data structs.RealDebridUnrestrictResponse
+		var data types.RealDebridUnrestrictResponse
 		if err = json.Unmarshal(resp, &data); err != nil {
 			return err
 		}

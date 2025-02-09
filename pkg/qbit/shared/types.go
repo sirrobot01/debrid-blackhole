@@ -186,7 +186,7 @@ type Torrent struct {
 	CompletionOn      int     `json:"completion_on,omitempty"`
 	ContentPath       string  `json:"content_path"`
 	DlLimit           int     `json:"dl_limit"`
-	Dlspeed           int     `json:"dlspeed"`
+	Dlspeed           int64   `json:"dlspeed"`
 	Downloaded        int64   `json:"downloaded"`
 	DownloadedSession int64   `json:"downloaded_session"`
 	Eta               int     `json:"eta"`
@@ -220,7 +220,7 @@ type Torrent struct {
 	UpLimit           int64   `json:"up_limit,omitempty"`
 	Uploaded          int64   `json:"uploaded,omitempty"`
 	UploadedSession   int64   `json:"uploaded_session,omitempty"`
-	Upspeed           int     `json:"upspeed,omitempty"`
+	Upspeed           int64   `json:"upspeed,omitempty"`
 	Source            string  `json:"source,omitempty"`
 
 	Mu sync.Mutex `json:"-"`
@@ -237,7 +237,7 @@ type TorrentProperties struct {
 	CreatedBy              string `json:"created_by,omitempty"`
 	CreationDate           int64  `json:"creation_date,omitempty"`
 	DlLimit                int    `json:"dl_limit,omitempty"`
-	DlSpeed                int    `json:"dl_speed,omitempty"`
+	DlSpeed                int64  `json:"dl_speed,omitempty"`
 	DlSpeedAvg             int    `json:"dl_speed_avg,omitempty"`
 	Eta                    int    `json:"eta,omitempty"`
 	LastSeen               int64  `json:"last_seen,omitempty"`
@@ -262,7 +262,7 @@ type TorrentProperties struct {
 	TotalUploadedSession   int64  `json:"total_uploaded_session,omitempty"`
 	TotalWasted            int64  `json:"total_wasted,omitempty"`
 	UpLimit                int    `json:"up_limit,omitempty"`
-	UpSpeed                int    `json:"up_speed,omitempty"`
+	UpSpeed                int64  `json:"up_speed,omitempty"`
 	UpSpeedAvg             int    `json:"up_speed_avg,omitempty"`
 }
 

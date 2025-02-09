@@ -1,4 +1,4 @@
-package structs
+package types
 
 type errorResponse struct {
 	Code    string `json:"code"`
@@ -21,8 +21,8 @@ type magnetInfo struct {
 	UploadDate     int                   `json:"uploadDate"`
 	Downloaded     int64                 `json:"downloaded"`
 	Uploaded       int64                 `json:"uploaded"`
-	DownloadSpeed  int                   `json:"downloadSpeed"`
-	UploadSpeed    int                   `json:"uploadSpeed"`
+	DownloadSpeed  int64                 `json:"downloadSpeed"`
+	UploadSpeed    int64                 `json:"uploadSpeed"`
 	Seeders        int                   `json:"seeders"`
 	CompletionDate int                   `json:"completionDate"`
 	Type           string                `json:"type"`

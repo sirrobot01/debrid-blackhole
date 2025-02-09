@@ -1,4 +1,4 @@
-package structs
+package types
 
 import (
 	"encoding/json"
@@ -89,7 +89,7 @@ type RealDebridTorrentInfo struct {
 	} `json:"files"`
 	Links   []string `json:"links"`
 	Ended   string   `json:"ended,omitempty"`
-	Speed   int      `json:"speed,omitempty"`
+	Speed   int64    `json:"speed,omitempty"`
 	Seeders int      `json:"seeders,omitempty"`
 }
 

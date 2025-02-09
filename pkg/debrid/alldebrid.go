@@ -8,7 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"net/http"
 	gourl "net/url"
 	"os"
@@ -57,7 +57,7 @@ func (r *AllDebrid) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data structs.AllDebridUploadMagnetResponse
+	var data types.AllDebridUploadMagnetResponse
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func getAlldebridStatus(statusCode int) string {
 	}
 }
 
-func flattenFiles(files []structs.AllDebridMagnetFile, parentPath string, index *int) []TorrentFile {
+func flattenFiles(files []types.AllDebridMagnetFile, parentPath string, index *int) []TorrentFile {
 	result := make([]TorrentFile, 0)
 
 	cfg := config.GetConfig()
@@ -135,7 +135,7 @@ func (r *AllDebrid) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
-	var res structs.AllDebridTorrentInfoResponse
+	var res types.AllDebridTorrentInfoResponse
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		r.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)
@@ -228,7 +228,7 @@ func (r *AllDebrid) GetDownloadLinks(torrent *Torrent) error {
 		if err != nil {
 			return err
 		}
-		var data structs.AllDebridDownloadLink
+		var data types.AllDebridDownloadLink
 		if err = json.Unmarshal(resp, &data); err != nil {
 			return err
 		}

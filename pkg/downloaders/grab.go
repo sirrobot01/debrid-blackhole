@@ -20,7 +20,7 @@ func GetGrabClient() *grab.Client {
 	}
 }
 
-func NormalGrab(client *grab.Client, url, filename string, progressCallback func(int64)) error {
+func NormalGrab(client *grab.Client, url, filename string, progressCallback func(int64, int64)) error {
 	req, err := grab.NewRequest(filename, url)
 	if err != nil {
 		return err
@@ -36,9 +36,10 @@ Loop:
 		select {
 		case <-t.C:
 			current := resp.BytesComplete()
+			speed := int64(resp.BytesPerSecond())
 			if current != lastReported {
 				if progressCallback != nil {
-					progressCallback(current - lastReported)
+					progressCallback(current-lastReported, speed)
 				}
 				lastReported = current
 			}
@@ -49,7 +50,7 @@ Loop:
 
 	// Report final bytes
 	if progressCallback != nil {
-		progressCallback(resp.BytesComplete() - lastReported)
+		progressCallback(resp.BytesComplete()-lastReported, 0)
 	}
 
 	return resp.Err()
