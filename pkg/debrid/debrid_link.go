@@ -9,7 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/structs"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"log"
 	"net/http"
 	"os"
@@ -70,7 +70,7 @@ func (r *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 			r.logger.Info().Msgf("Error checking availability: %v", err)
 			return result
 		}
-		var data structs.DebridLinkAvailableResponse
+		var data types.DebridLinkAvailableResponse
 		err = json.Unmarshal(resp, &data)
 		if err != nil {
 			r.logger.Info().Msgf("Error marshalling availability: %v", err)
@@ -99,7 +99,7 @@ func (r *DebridLink) GetTorrent(id string) (*Torrent, error) {
 	if err != nil {
 		return torrent, err
 	}
-	var res structs.DebridLinkTorrentInfo
+	var res types.DebridLinkTorrentInfo
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		return torrent, err
@@ -158,7 +158,7 @@ func (r *DebridLink) SubmitMagnet(torrent *Torrent) (*Torrent, error) {
 	if err != nil {
 		return nil, err
 	}
-	var res structs.DebridLinkSubmitTorrentInfo
+	var res types.DebridLinkSubmitTorrentInfo
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		return nil, err

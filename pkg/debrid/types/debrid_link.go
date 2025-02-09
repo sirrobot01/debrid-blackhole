@@ -1,4 +1,4 @@
-package structs
+package types
 
 type DebridLinkAPIResponse[T any] struct {
 	Success bool `json:"success"`
@@ -36,8 +36,8 @@ type debridLinkTorrentInfo struct {
 	} `json:"trackers"`
 	Created         int64   `json:"created"`
 	DownloadPercent float64 `json:"downloadPercent"`
-	DownloadSpeed   int     `json:"downloadSpeed"`
-	UploadSpeed     int     `json:"uploadSpeed"`
+	DownloadSpeed   int64   `json:"downloadSpeed"`
+	UploadSpeed     int64   `json:"uploadSpeed"`
 }
 
 type DebridLinkTorrentInfo DebridLinkAPIResponse[[]debridLinkTorrentInfo]
