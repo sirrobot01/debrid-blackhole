@@ -7,6 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+)
+
+var (
+	once   sync.Once
+	logger zerolog.Logger
 )
 
 func GetLogPath() string {
@@ -76,5 +82,12 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 	case "error":
 		logger = logger.Level(zerolog.ErrorLevel)
 	}
+	return logger
+}
+
+func GetLogger(level string) zerolog.Logger {
+	once.Do(func() {
+		logger = NewLogger("Decypharr", level, os.Stdout)
+	})
 	return logger
 }

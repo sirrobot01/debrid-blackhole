@@ -3,17 +3,26 @@ package cmd
 import (
 	"context"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
 	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
+	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"log"
 	"sync"
 )
 
 func Start(ctx context.Context) error {
 	cfg := config.GetConfig()
+
+	_log := logger.GetLogger(cfg.LogLevel)
+
+	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())
+	_log.Debug().Msgf("Default Log Level: %s", cfg.LogLevel)
+
+	_log.Info().Msgf("Version: %s", version.GetInfo().String())
 
 	deb := debrid.NewDebrid()
 	arrs := arr.NewStorage()

@@ -1,6 +1,8 @@
 module github.com/sirrobot01/debrid-blackhole
 
-go 1.22
+go 1.23
+
+toolchain go1.23.2
 
 require (
 	github.com/anacrolix/torrent v1.55.0
@@ -12,6 +14,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/valyala/fasthttp v1.55.0
 	github.com/valyala/fastjson v1.6.4
+	golang.org/x/crypto v0.33.0
 	golang.org/x/time v0.8.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -23,6 +26,8 @@ require (
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -32,6 +37,6 @@ require (
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 )

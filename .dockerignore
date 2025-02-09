@@ -7,3 +7,5 @@ docker-compose.yml
 *.magnet
 **.torrent
 torrents.json
+**/dist/
+*.json

@@ -61,7 +61,7 @@ services:
     user: "1000:1000"
     volumes:
       - /mnt/:/mnt
-      - ~/plex/configs/blackhole/config.json:/app/config.json # Config file, see below
+      - ~/plex/configs/blackhole/:/data # Path to the config file. config.json
     environment:
       - PUID=1000
       - PGID=1000
@@ -78,7 +78,7 @@ services:
 Download the binary from the releases page and run it with the config file.
 
 ```bash
-./blackhole --config /path/to/config.json
+./blackhole --config /path/to/
 ```
 
 ### Usage
@@ -104,7 +104,7 @@ Download the binary from the releases page and run it with the config file.
 
 #### Basic Sample Config
 
-This is the default config file. You can create a `config.json` file in the root directory of the project or mount it in the docker-compose file.
+This is the default config file. You can create a `config.json` file in the root directory of the project or mount it to /data in the docker-compose file.
 ```json
 {
   "debrids": [
@@ -145,6 +145,7 @@ Full config are [here](doc/config.full.json)
 - The `log_level` key is used to set the log level of the application. The default value is `info`. log level can be set to `debug`, `info`, `warn`, `error`
 - The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent. The default value is `1000`
 - The `allowed_file_types` key is an array of allowed file types that can be downloaded. By default, all movie, tv show and music file types are allowed
+- `use_auth` is used to enable basic authentication for the UI. 
 
 ##### Debrid Config
 - The `debrids` key is an array of debrid providers

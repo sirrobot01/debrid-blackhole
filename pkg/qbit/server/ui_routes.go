@@ -6,7 +6,13 @@ import (
 )
 
 func (u *UIHandler) Routes(r chi.Router) http.Handler {
+	r.Get("/login", u.LoginHandler)
+	r.Post("/login", u.LoginHandler)
+	r.Get("/setup", u.SetupHandler)
+	r.Post("/setup", u.SetupHandler)
+
 	r.Group(func(r chi.Router) {
+		r.Use(u.authMiddleware)
 		r.Get("/", u.IndexHandler)
 		r.Get("/download", u.DownloadHandler)
 		r.Get("/repair", u.RepairHandler)

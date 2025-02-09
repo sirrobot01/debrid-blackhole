@@ -37,7 +37,7 @@ func NewQBit(deb *debrid.DebridService, logger zerolog.Logger, arrs *arr.Storage
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Debrid:          deb,
-		Storage:         NewTorrentStorage(cmp.Or(os.Getenv("TORRENT_FILE"), "/app/torrents.json")),
+		Storage:         NewTorrentStorage(cmp.Or(os.Getenv("TORRENT_FILE"), "/data/torrents.json")),
 		Repair:          _repair,
 		logger:          logger,
 		Arrs:            arrs,

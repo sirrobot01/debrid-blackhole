@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -57,6 +58,11 @@ type Repair struct {
 	SkipDeletion bool   `json:"skip_deletion"`
 }
 
+type Auth struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type Config struct {
 	LogLevel     string      `json:"log_level"`
 	Debrid       Debrid      `json:"debrid"`
@@ -69,6 +75,16 @@ type Config struct {
 	AllowedExt   []string    `json:"allowed_file_types"`
 	MinFileSize  string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
 	MaxFileSize  string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
+	Path         string      `json:"-"`             // Path to save the config file
+	UseAuth      bool        `json:"use_auth"`
+	Auth         *Auth       `json:"-"`
+}
+
+func (c *Config) JsonFile() string {
+	return filepath.Join(c.Path, "config.json")
+}
+func (c *Config) AuthFile() string {
+	return filepath.Join(c.Path, "auth.json")
 }
 
 func (c *Config) loadConfig() error {
@@ -76,7 +92,8 @@ func (c *Config) loadConfig() error {
 	if configPath == "" {
 		return fmt.Errorf("config path not set")
 	}
-	file, err := os.ReadFile(configPath)
+	c.Path = configPath
+	file, err := os.ReadFile(c.JsonFile())
 	if err != nil {
 		return err
 	}
@@ -92,6 +109,9 @@ func (c *Config) loadConfig() error {
 	if len(c.AllowedExt) == 0 {
 		c.AllowedExt = getDefaultExtensions()
 	}
+
+	// Load the auth file
+	c.Auth = c.GetAuth()
 
 	// Validate the config
 	//if err := validateConfig(c); err != nil {
@@ -178,6 +198,12 @@ func validateConfig(config *Config) error {
 }
 
 func SetConfigPath(path string) {
+	// Backward compatibility
+	// Check if the path is not a dir
+	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
+		// Get the directory of the file
+		path = filepath.Dir(path)
+	}
 	configPath = path
 }
 
@@ -226,4 +252,36 @@ func (c *Config) IsSizeAllowed(size int64) bool {
 		return false
 	}
 	return true
+}
+
+func (c *Config) GetAuth() *Auth {
+	if !c.UseAuth {
+		return nil
+	}
+	if c.Auth == nil {
+		c.Auth = &Auth{}
+		if _, err := os.Stat(c.AuthFile()); err == nil {
+			file, err := os.ReadFile(c.AuthFile())
+			if err == nil {
+				_ = json.Unmarshal(file, c.Auth)
+			}
+		}
+	}
+	return c.Auth
+}
+
+func (c *Config) SaveAuth(auth *Auth) error {
+	c.Auth = auth
+	data, err := json.Marshal(auth)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(c.AuthFile(), data, 0644)
+}
+
+func (c *Config) NeedsSetup() bool {
+	if c.UseAuth {
+		return c.GetAuth().Username == ""
+	}
+	return false
 }

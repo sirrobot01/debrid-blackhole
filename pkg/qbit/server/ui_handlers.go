@@ -4,9 +4,11 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/sessions"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
+	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -56,7 +58,10 @@ type UIHandler struct {
 	debug  bool
 }
 
-var templates *template.Template
+var (
+	store     = sessions.NewCookieStore([]byte("your-secret-key")) // Change this to a secure key
+	templates *template.Template
+)
 
 func init() {
 	templates = template.Must(template.ParseFS(
@@ -66,7 +71,112 @@ func init() {
 		"templates/download.html",
 		"templates/repair.html",
 		"templates/config.html",
+		"templates/login.html",
+		"templates/setup.html",
 	))
+
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7,
+		HttpOnly: false,
+	}
+}
+
+func (u *UIHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		data := map[string]interface{}{
+			"Page":  "login",
+			"Title": "Login",
+		}
+		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	var credentials struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if u.verifyAuth(credentials.Username, credentials.Password) {
+		session, _ := store.Get(r, "auth-session")
+		session.Values["authenticated"] = true
+		session.Values["username"] = credentials.Username
+		session.Save(r, w)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+}
+
+func (u *UIHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "auth-session")
+	session.Values["authenticated"] = false
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (u *UIHandler) SetupHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := config.GetConfig()
+	authCfg := cfg.GetAuth()
+
+	if !cfg.NeedsSetup() {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if r.Method == "GET" {
+		data := map[string]interface{}{
+			"Page":  "setup",
+			"Title": "Setup",
+		}
+		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Handle POST (setup attempt)
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	confirmPassword := r.FormValue("confirmPassword")
+
+	if password != confirmPassword {
+		http.Error(w, "Passwords do not match", http.StatusBadRequest)
+		return
+	}
+
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the credentials
+	authCfg.Username = username
+	authCfg.Password = string(hashedPassword)
+
+	if err := cfg.SaveAuth(authCfg); err != nil {
+		http.Error(w, "Error saving credentials", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a session
+	session, _ := store.Get(r, "auth-session")
+	session.Values["authenticated"] = true
+	session.Values["username"] = username
+	session.Save(r, w)
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (u *UIHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
