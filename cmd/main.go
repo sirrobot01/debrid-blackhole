@@ -4,57 +4,68 @@ import (
 	"context"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
 	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
-	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
+	"github.com/sirrobot01/debrid-blackhole/pkg/server"
+	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
+	"github.com/sirrobot01/debrid-blackhole/pkg/web"
 	"log"
 	"sync"
 )
 
 func Start(ctx context.Context) error {
 	cfg := config.GetConfig()
+	var wg sync.WaitGroup
+	errChan := make(chan error)
 
 	_log := logger.GetLogger(cfg.LogLevel)
 
+	_log.Info().Msgf("Version: %s", version.GetInfo().String())
 	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())
 	_log.Debug().Msgf("Default Log Level: %s", cfg.LogLevel)
 
-	_log.Info().Msgf("Version: %s", version.GetInfo().String())
+	svc := service.New()
+	_qbit := qbit.New()
+	_proxy := proxy.NewProxy()
+	srv := server.New()
+	webRoutes := web.New(_qbit).Routes()
+	qbitRoutes := _qbit.Routes()
 
-	deb := debrid.NewDebrid()
-	arrs := arr.NewStorage()
-	_repair := repair.NewRepair(deb.Get(), arrs)
-
-	var wg sync.WaitGroup
-	errChan := make(chan error, 2)
+	// Register routes
+	srv.Mount("/", webRoutes)
+	srv.Mount("/api/v2", qbitRoutes)
 
 	if cfg.Proxy.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := proxy.NewProxy(deb).Start(ctx); err != nil {
-				errChan <- err
-			}
-		}()
-	}
-	if cfg.QBitTorrent.Port != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := qbit.Start(ctx, deb, arrs, _repair); err != nil {
+			if err := _proxy.Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()
 	}
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := srv.Start(ctx); err != nil {
+			errChan <- err
+		}
+
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_qbit.StartWorker(ctx)
+	}()
+
 	if cfg.Repair.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := _repair.Start(ctx); err != nil {
+			if err := svc.Repair.Start(ctx); err != nil {
 				log.Printf("Error during repair: %v", err)
 			}
 		}()

@@ -93,19 +93,25 @@ func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, _ := io.ReadAll(res.Body)
-	statusOk := strconv.Itoa(res.StatusCode)[0] == '2'
-	if !statusOk {
-		// Add status code error to the body
-		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)
-		return nil, fmt.Errorf(string(b))
-	}
+
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
 			log.Println(err)
 		}
 	}(res.Body)
+
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	statusOk := res.StatusCode == http.StatusOK || res.StatusCode == http.StatusCreated
+	if !statusOk {
+		// Add status code error to the body
+		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)
+		return nil, fmt.Errorf(string(b))
+	}
+
 	return b, nil
 }
 

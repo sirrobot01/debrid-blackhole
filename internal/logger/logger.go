@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"path/filepath"
@@ -16,11 +17,8 @@ var (
 )
 
 func GetLogPath() string {
-	logsDir := os.Getenv("LOG_PATH")
-	if logsDir == "" {
-		// Create the logs directory if it doesn't exist
-		logsDir = "logs"
-	}
+	cfg := config.GetConfig()
+	logsDir := filepath.Join(cfg.Path, "logs")
 
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		panic(fmt.Sprintf("Failed to create logs directory: %v", err))
@@ -33,7 +31,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 
 	rotatingLogFile := &lumberjack.Logger{
 		Filename:   GetLogPath(),
-		MaxSize:    10,
+		MaxSize:    2,
 		MaxBackups: 2,
 		MaxAge:     28,
 		Compress:   true,
@@ -87,7 +85,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 
 func GetLogger(level string) zerolog.Logger {
 	once.Do(func() {
-		logger = NewLogger("Decypharr", level, os.Stdout)
+		logger = NewLogger("decypharr", level, os.Stdout)
 	})
 	return logger
 }

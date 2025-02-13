@@ -1,10 +1,10 @@
 # Stage 1: Build binaries
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine as builder
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION
-ARG CHANNEL
+ARG VERSION=0.0.0
+ARG CHANNEL=dev
 
 WORKDIR /app
 
@@ -47,8 +47,8 @@ LABEL org.opencontainers.image.authors = "sirrobot01"
 LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/debrid-blackhole/blob/main/README.md"
 
 # Copy binaries
-COPY --from=builder --chown=nonroot:nonroot /blackhole /blackhole
-COPY --from=builder --chown=nonroot:nonroot /healthcheck /healthcheck
+COPY --from=builder --chown=nonroot:nonroot /blackhole /usr/bin/blackhole
+COPY --from=builder --chown=nonroot:nonroot /healthcheck /usr/bin/healthcheck
 
 # Copy pre-made directory structure
 COPY --from=dirsetup --chown=nonroot:nonroot /data /data
@@ -59,6 +59,6 @@ EXPOSE 8181 8282
 VOLUME ["/data", "/app"]
 USER nonroot:nonroot
 
-HEALTHCHECK CMD ["/healthcheck"]
+HEALTHCHECK CMD ["/usr/bin/healthcheck"]
 
-CMD ["/blackhole", "--config", "/data"]
+CMD ["/usr/bin/blackhole", "--config", "/data/config.json"]
