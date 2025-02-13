@@ -31,7 +31,7 @@ type Proxy struct {
 	LogLevel   string `json:"log_level"`
 	Username   string `json:"username"`
 	Password   string `json:"password"`
-	CachedOnly *bool  `json:"cached_only"`
+	CachedOnly bool   `json:"cached_only"`
 }
 
 type QBitTorrent struct {

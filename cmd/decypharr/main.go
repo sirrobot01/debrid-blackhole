@@ -27,7 +27,6 @@ func Start(ctx context.Context) error {
 
 	svc := service.New()
 	_qbit := qbit.New()
-	_proxy := proxy.NewProxy()
 	srv := server.New()
 	webRoutes := web.New(_qbit).Routes()
 	qbitRoutes := _qbit.Routes()
@@ -40,7 +39,7 @@ func Start(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := _proxy.Start(ctx); err != nil {
+			if err := proxy.NewProxy().Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()

@@ -87,7 +87,7 @@ func NewProxy() *Proxy {
 		enabled:    cfg.Enabled,
 		username:   cfg.Username,
 		password:   cfg.Password,
-		cachedOnly: *cfg.CachedOnly,
+		cachedOnly: cfg.CachedOnly,
 		logger:     logger.NewLogger("proxy", cfg.LogLevel, os.Stdout),
 	}
 }
