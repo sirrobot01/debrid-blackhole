@@ -173,7 +173,6 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	}
 	t = q.UpdateTorrentMin(t, debridTorrent)
 	t.ContentPath = t.TorrentPath + string(os.PathSeparator)
-	t.SavePath = t.ContentPath
 
 	if t.IsReady() {
 		t.State = "pausedUP"
