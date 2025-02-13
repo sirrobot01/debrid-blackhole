@@ -100,6 +100,11 @@ func (ui *Handler) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		if !cfg.UseAuth {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Skip auth check for setup page
 		if r.URL.Path == "/setup" {
 			next.ServeHTTP(w, r)

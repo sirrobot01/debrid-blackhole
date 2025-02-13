@@ -2,15 +2,11 @@ package qbit
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
 )
 
 func (q *QBit) Routes() http.Handler {
 	r := chi.NewRouter()
-	if q.logger.GetLevel().String() == "debug" {
-		r.Use(middleware.Logger)
-	}
 	r.Use(q.CategoryContext)
 	r.Post("/auth/login", q.handleLogin)
 

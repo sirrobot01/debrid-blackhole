@@ -1,10 +1,10 @@
 # Stage 1: Build binaries
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine as builder
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION
-ARG CHANNEL
+ARG VERSION=0.0.0
+ARG CHANNEL=dev
 
 WORKDIR /app
 
@@ -31,10 +31,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Stage 2: Create directory structure
 FROM alpine:3.19 as dirsetup
-RUN mkdir -p /data/logs && \
-    chmod 777 /data/logs && \
-    touch /data/logs/decypharr.log && \
-    chmod 666 /data/logs/decypharr.log
+RUN mkdir -p /app/logs && \
+    chmod 777 /app/logs && \
+    touch /app/logs/decypharr.log && \
+    chmod 666 /app/logs/decypharr.log
 
 # Stage 3: Final image
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -47,18 +47,19 @@ LABEL org.opencontainers.image.authors = "sirrobot01"
 LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/debrid-blackhole/blob/main/README.md"
 
 # Copy binaries
-COPY --from=builder --chown=nonroot:nonroot /blackhole /blackhole
-COPY --from=builder --chown=nonroot:nonroot /healthcheck /healthcheck
+COPY --from=builder --chown=nonroot:nonroot /blackhole /usr/bin/blackhole
+COPY --from=builder --chown=nonroot:nonroot /healthcheck /usr/bin/healthcheck
 
 # Copy pre-made directory structure
-COPY --from=dirsetup --chown=nonroot:nonroot /data /data
+COPY --from=dirsetup --chown=nonroot:nonroot /app /app
+
 
 # Metadata
-ENV LOG_PATH=/data/logs
+ENV LOG_PATH=/app/logs
 EXPOSE 8181 8282
-VOLUME ["/data", "/app"]
+VOLUME ["/app"]
 USER nonroot:nonroot
 
-HEALTHCHECK CMD ["/healthcheck"]
+HEALTHCHECK CMD ["/usr/bin/healthcheck"]
 
-CMD ["/blackhole", "--config", "/data"]
+CMD ["/usr/bin/blackhole", "--config", "/app"]

@@ -8,7 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,8 +24,8 @@ import (
 
 type Repair struct {
 	Jobs       []Job `json:"jobs"`
-	deb        debrid.Service
 	arrs       *arr.Storage
+	deb        engine.Service
 	duration   time.Duration
 	runOnStart bool
 	ZurgURL    string
@@ -33,16 +33,16 @@ type Repair struct {
 	logger     zerolog.Logger
 }
 
-func NewRepair(deb debrid.Service, arrs *arr.Storage) *Repair {
+func New(deb *engine.Engine, arrs *arr.Storage) *Repair {
 	cfg := config.GetConfig()
 	duration, err := parseSchedule(cfg.Repair.Interval)
 	if err != nil {
 		duration = time.Hour * 24
 	}
 	r := &Repair{
-		deb:        deb,
-		logger:     logger.NewLogger("Repair", cfg.LogLevel, os.Stdout),
 		arrs:       arrs,
+		deb:        deb.Get(),
+		logger:     logger.NewLogger("repair", cfg.LogLevel, os.Stdout),
 		duration:   duration,
 		runOnStart: cfg.Repair.RunOnStart,
 		ZurgURL:    cfg.Repair.ZurgURL,

@@ -113,9 +113,9 @@ func (c *Config) loadConfig() error {
 	// Load the auth file
 	c.Auth = c.GetAuth()
 
-	// Validate the config
+	//Validate the config
 	//if err := validateConfig(c); err != nil {
-	//	return nil, err
+	//	return err
 	//}
 
 	return nil
@@ -197,21 +197,20 @@ func validateConfig(config *Config) error {
 	return nil
 }
 
-func SetConfigPath(path string) {
-	// Backward compatibility
-	// Check if the path is not a dir
-	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
-		// Get the directory of the file
-		path = filepath.Dir(path)
-	}
+func SetConfigPath(path string) error {
 	configPath = path
+	return nil
 }
 
 func GetConfig() *Config {
 	once.Do(func() {
 		instance = &Config{} // Initialize instance first
 		if err := instance.loadConfig(); err != nil {
-			panic(err)
+			_, err := fmt.Fprintf(os.Stderr, "configuration Error: %v\n", err)
+			if err != nil {
+				return
+			}
+			os.Exit(1)
 		}
 	})
 	return instance

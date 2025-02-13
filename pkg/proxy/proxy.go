@@ -13,7 +13,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"github.com/valyala/fastjson"
 	"io"
 	"net/http"
@@ -76,11 +76,10 @@ type Proxy struct {
 	username   string
 	password   string
 	cachedOnly bool
-	debrid     debrid.Service
 	logger     zerolog.Logger
 }
 
-func NewProxy(deb *debrid.DebridService) *Proxy {
+func NewProxy() *Proxy {
 	cfg := config.GetConfig().Proxy
 	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	return &Proxy{
@@ -89,8 +88,7 @@ func NewProxy(deb *debrid.DebridService) *Proxy {
 		username:   cfg.Username,
 		password:   cfg.Password,
 		cachedOnly: *cfg.CachedOnly,
-		debrid:     deb.Get(),
-		logger:     logger.NewLogger("Proxy", cfg.LogLevel, os.Stdout),
+		logger:     logger.NewLogger("proxy", cfg.LogLevel, os.Stdout),
 	}
 }
 
@@ -228,6 +226,8 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 		return resp
 	}
 
+	svc := service.GetService()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.logger.Info().Msgf("Error reading response body: %v", err)
@@ -262,7 +262,7 @@ func (p *Proxy) ProcessXMLResponse(resp *http.Response) *http.Response {
 			hashes = append(hashes, hash)
 		}
 	}
-	availableHashesMap := p.debrid.IsAvailable(hashes)
+	availableHashesMap := svc.Debrid.Get().IsAvailable(hashes)
 	newItems := make([]Item, 0, len(rss.Channel.Items))
 
 	if len(hashes) > 0 {

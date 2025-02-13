@@ -12,7 +12,6 @@ type Service interface {
 	GetDownloadLink(tr *torrent.Torrent, file *torrent.File) *torrent.DownloadLinks
 	DeleteTorrent(tr *torrent.Torrent)
 	IsAvailable(infohashes []string) map[string]bool
-	GetMountPath() string
 	GetCheckCached() bool
 	GetTorrent(id string) (*torrent.Torrent, error)
 	GetTorrents() ([]*torrent.Torrent, error)

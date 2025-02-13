@@ -2,16 +2,11 @@ package web
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
 )
 
 func (ui *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
-
-	if ui.logger.GetLevel().String() == "debug" {
-		r.Use(middleware.Logger)
-	}
 
 	r.Get("/login", ui.LoginHandler)
 	r.Post("/login", ui.LoginHandler)

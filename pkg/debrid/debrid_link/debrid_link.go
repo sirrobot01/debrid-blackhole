@@ -11,7 +11,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -27,10 +26,6 @@ type DebridLink struct {
 	MountPath        string
 	logger           zerolog.Logger
 	CheckCached      bool
-}
-
-func (dl *DebridLink) GetMountPath() string {
-	return dl.MountPath
 }
 
 func (dl *DebridLink) GetName() string {
@@ -176,7 +171,6 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	}
 	data := *res.Value
 	status := "downloading"
-	log.Printf("Torrent: %s added with id: %s", t.Name, data.ID)
 	name := common.RemoveInvalidChars(data.Name)
 	t.Id = data.ID
 	t.Name = name
