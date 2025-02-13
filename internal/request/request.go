@@ -105,7 +105,7 @@ func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	statusOk := res.StatusCode == http.StatusOK || res.StatusCode == http.StatusCreated
+	statusOk := res.StatusCode >= 200 && res.StatusCode < 300
 	if !statusOk {
 		// Add status code error to the body
 		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)

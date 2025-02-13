@@ -52,14 +52,13 @@ Loop:
 func (q *QBit) ProcessManualFile(torrent *Torrent) (string, error) {
 	debridTorrent := torrent.DebridTorrent
 	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.DownloadLinks))
-	torrentPath := common.RemoveExtension(debridTorrent.OriginalFilename)
-	parent := common.RemoveInvalidChars(filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentPath))
-	err := os.MkdirAll(parent, os.ModePerm)
+	torrentPath := common.RemoveInvalidChars(filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, common.RemoveExtension(debridTorrent.OriginalFilename)))
+	err := os.MkdirAll(torrentPath, os.ModePerm)
 	if err != nil {
 		// add previous error to the error and return
-		return "", fmt.Errorf("failed to create directory: %s: %v", parent, err)
+		return "", fmt.Errorf("failed to create directory: %s: %v", torrentPath, err)
 	}
-	q.downloadFiles(torrent, parent)
+	q.downloadFiles(torrent, torrentPath)
 	return torrentPath, nil
 }
 
@@ -140,25 +139,26 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	if len(files) == 0 {
 		return "", fmt.Errorf("no video files found")
 	}
-	q.logger.Info().Msgf("Checking %d files...", len(files))
+	q.logger.Info().Msgf("Checking symlinks for %d files...", len(files))
 	rCloneBase := debridTorrent.MountPath
 	torrentPath, err := q.getTorrentPath(rCloneBase, debridTorrent) // /MyTVShow/
+	// This returns filename.ext for alldebrid instead of the parent folder filename/
+	torrentFolder := torrentPath
 	if err != nil {
 		return "", fmt.Errorf("failed to get torrent path: %v", err)
 	}
-	// Fix for alldebrid
-	newTorrentPath := torrentPath
-	if newTorrentPath == "" {
-		// Alldebrid at times doesn't return the parent folder for single file torrents
-		newTorrentPath = common.RemoveExtension(debridTorrent.Name) // MyTVShow
+	// Check if the torrent path is a file
+	torrentRclonePath := filepath.Join(rCloneBase, torrentPath) // leave it as is
+	if debridTorrent.Debrid == "alldebrid" && len(files) == 1 {
+		// Alldebrid hotfix for single file torrents
+		torrentFolder = common.RemoveExtension(torrentFolder)
+		torrentRclonePath = rCloneBase // /mnt/rclone/magnets/  // Remove the filename since it's in the root folder
 	}
-	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, newTorrentPath) // /mnt/symlinks/{category}/MyTVShow/
+	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
 	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("failed to create directory: %s: %v", torrentSymlinkPath, err)
 	}
-	torrentRclonePath := filepath.Join(rCloneBase, torrentPath) // leave it as is
-	q.logger.Debug().Msgf("Debrid torrent path: %s\nSymlink Path: %s", torrentRclonePath, torrentSymlinkPath)
 	for _, file := range files {
 		wg.Add(1)
 		go checkFileLoop(&wg, torrentRclonePath, file, ready)
@@ -173,12 +173,11 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 		q.logger.Info().Msgf("File is ready: %s", f.Path)
 		q.createSymLink(torrentSymlinkPath, torrentRclonePath, f)
 	}
-	return torrentPath, nil
+	return torrentSymlinkPath, nil
 }
 
 func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) (string, error) {
 	for {
-		q.logger.Debug().Msgf("Checking for torrent path: %s", rclonePath)
 		torrentPath, err := debridTorrent.GetMountFolder(rclonePath)
 		if err == nil {
 			q.logger.Debug().Msgf("Found torrent path: %s", torrentPath)

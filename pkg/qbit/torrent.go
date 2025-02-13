@@ -90,14 +90,14 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 	}
 	var (
-		torrentPath string
-		err         error
+		torrentSymlinkPath string
+		err                error
 	)
 	debridTorrent.Arr = arr
 	if isSymlink {
-		torrentPath, err = q.ProcessSymlink(torrent)
+		torrentSymlinkPath, err = q.ProcessSymlink(torrent) // /mnt/symlinks/{category}/MyTVShow/
 	} else {
-		torrentPath, err = q.ProcessManualFile(torrent)
+		torrentSymlinkPath, err = q.ProcessManualFile(torrent)
 	}
 	if err != nil {
 		q.MarkAsFailed(torrent)
@@ -105,7 +105,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		q.logger.Info().Msgf("Error: %v", err)
 		return
 	}
-	torrent.TorrentPath = filepath.Base(torrentPath)
+	torrent.TorrentPath = torrentSymlinkPath
 	q.UpdateTorrent(torrent, debridTorrent)
 	_ = arr.Refresh()
 }
@@ -161,7 +161,6 @@ func (q *QBit) UpdateTorrentMin(t *Torrent, debridTorrent *debrid.Torrent) *Torr
 
 func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent {
 	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
-	rcLoneMount := _db.GetMountPath()
 	if debridTorrent == nil && t.ID != "" {
 		debridTorrent, _ = _db.GetTorrent(t.ID)
 	}
@@ -172,15 +171,9 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	if debridTorrent.Status != "downloaded" {
 		debridTorrent, _ = _db.GetTorrent(t.ID)
 	}
-
-	if t.TorrentPath == "" {
-		tPath, _ := debridTorrent.GetMountFolder(rcLoneMount)
-		t.TorrentPath = filepath.Base(tPath)
-	}
-	savePath := filepath.Join(q.DownloadFolder, t.Category) + string(os.PathSeparator)
-	torrentPath := filepath.Join(savePath, t.TorrentPath) + string(os.PathSeparator)
 	t = q.UpdateTorrentMin(t, debridTorrent)
-	t.ContentPath = torrentPath
+	t.ContentPath = t.TorrentPath + string(os.PathSeparator)
+	t.SavePath = t.ContentPath
 
 	if t.IsReady() {
 		t.State = "pausedUP"

@@ -31,10 +31,6 @@ type RealDebrid struct {
 	CheckCached      bool
 }
 
-func (r *RealDebrid) GetMountPath() string {
-	return r.MountPath
-}
-
 func (r *RealDebrid) GetName() string {
 	return r.Name
 }
@@ -156,9 +152,9 @@ func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) 
 		return nil, err
 	}
 	err = json.Unmarshal(resp, &data)
-	r.logger.Info().Msgf("Torrent: %s added with id: %s", t.Name, data.Id)
 	t.Id = data.Id
-
+	t.Debrid = r.Name
+	t.MountPath = r.MountPath
 	return t, nil
 }
 
@@ -218,6 +214,8 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 		t.Seeders = data.Seeders
 		t.Links = data.Links
 		t.Status = status
+		t.Debrid = r.Name
+		t.MountPath = r.MountPath
 		downloadingStatus := []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
 		if status == "waiting_files_selection" {
 			files := GetTorrentFiles(data, true) // Validate files to be selected

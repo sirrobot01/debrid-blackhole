@@ -11,7 +11,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 
-	"log"
 	"mime/multipart"
 	"net/http"
 	gourl "net/url"
@@ -33,10 +32,6 @@ type Torbox struct {
 	MountPath        string
 	logger           zerolog.Logger
 	CheckCached      bool
-}
-
-func (tb *Torbox) GetMountPath() string {
-	return tb.MountPath
 }
 
 func (tb *Torbox) GetName() string {
@@ -130,8 +125,9 @@ func (tb *Torbox) SubmitMagnet(torrent *torrent.Torrent) (*torrent.Torrent, erro
 	}
 	dt := *data.Data
 	torrentId := strconv.Itoa(dt.Id)
-	log.Printf("Torrent: %s added with id: %s", torrent.Name, torrentId)
 	torrent.Id = torrentId
+	torrent.MountPath = tb.MountPath
+	torrent.Debrid = tb.Name
 
 	return torrent, nil
 }

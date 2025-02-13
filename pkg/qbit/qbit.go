@@ -6,6 +6,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"os"
+	"path/filepath"
 )
 
 type QBit struct {
@@ -22,7 +23,8 @@ type QBit struct {
 }
 
 func New() *QBit {
-	cfg := config.GetConfig().QBitTorrent
+	_cfg := config.GetConfig()
+	cfg := _cfg.QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8282")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
 	return &QBit{
@@ -31,7 +33,7 @@ func New() *QBit {
 		Port:            port,
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
-		Storage:         NewTorrentStorage(cmp.Or(os.Getenv("TORRENT_FILE"), "/data/qbit_torrents.json")),
+		Storage:         NewTorrentStorage(filepath.Join(_cfg.Path, "torrents.json")),
 		logger:          logger.NewLogger("qbit", cfg.LogLevel, os.Stdout),
 		RefreshInterval: refreshInterval,
 	}

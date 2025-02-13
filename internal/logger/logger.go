@@ -20,8 +20,10 @@ func GetLogPath() string {
 	cfg := config.GetConfig()
 	logsDir := filepath.Join(cfg.Path, "logs")
 
-	if err := os.MkdirAll(logsDir, 0755); err != nil {
-		panic(fmt.Sprintf("Failed to create logs directory: %v", err))
+	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(logsDir, 0755); err != nil {
+			panic(fmt.Sprintf("Failed to create logs directory: %v", err))
+		}
 	}
 
 	return filepath.Join(logsDir, "decypharr.log")

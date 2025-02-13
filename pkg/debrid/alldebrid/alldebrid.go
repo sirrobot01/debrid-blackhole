@@ -29,10 +29,6 @@ type AllDebrid struct {
 	CheckCached      bool
 }
 
-func (ad *AllDebrid) GetMountPath() string {
-	return ad.MountPath
-}
-
 func (ad *AllDebrid) GetName() string {
 	return ad.Name
 }
@@ -77,7 +73,6 @@ func (ad *AllDebrid) SubmitMagnet(torrent *torrent.Torrent) (*torrent.Torrent, e
 	}
 	magnet := magnets[0]
 	torrentId := strconv.Itoa(magnet.ID)
-	ad.logger.Info().Msgf("Torrent: %s added with id: %s", torrent.Name, torrentId)
 	torrent.Id = torrentId
 
 	return torrent, nil
@@ -170,12 +165,6 @@ func (ad *AllDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
 		t.Seeders = data.Seeders
 		index := -1
 		files := flattenFiles(data.Files, "", &index)
-		parentFolder := data.Filename
-		if data.NbLinks == 1 {
-			// All debrid doesn't return the parent folder for single file torrents
-			parentFolder = ""
-		}
-		t.OriginalFilename = parentFolder
 		t.Files = files
 	}
 	return t, nil

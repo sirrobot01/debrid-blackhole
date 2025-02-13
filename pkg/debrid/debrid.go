@@ -81,7 +81,7 @@ func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlin
 			errs = append(errs, err)
 			continue
 		}
-		logger.Info().Msgf("Torrent: %s submitted to %s", dbt.Name, db.GetName())
+		logger.Info().Msgf("Torrent: %s(id=%s) submitted to %s", dbt.Name, dbt.Id, db.GetName())
 		d.LastUsed = index
 		return db.CheckStatus(dbt, isSymlink)
 	}
