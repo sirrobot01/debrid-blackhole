@@ -133,9 +133,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 
 func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	debridTorrent := torrent.DebridTorrent
-	var wg sync.WaitGroup
 	files := debridTorrent.Files
-	ready := make(chan debrid.File, len(files))
 	if len(files) == 0 {
 		return "", fmt.Errorf("no video files found")
 	}
@@ -159,19 +157,24 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create directory: %s: %v", torrentSymlinkPath, err)
 	}
+
+	pending := make(map[string]debrid.File)
 	for _, file := range files {
-		wg.Add(1)
-		go checkFileLoop(&wg, torrentRclonePath, file, ready)
+		pending[file.Path] = file
 	}
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 
-	go func() {
-		wg.Wait()
-		close(ready)
-	}()
-
-	for f := range ready {
-		q.logger.Info().Msgf("File is ready: %s", f.Path)
-		q.createSymLink(torrentSymlinkPath, torrentRclonePath, f)
+	for len(pending) > 0 {
+		<-ticker.C
+		for path, file := range pending {
+			fullFilePath := filepath.Join(torrentRclonePath, file.Path)
+			if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
+				q.logger.Info().Msgf("File is ready: %s", file.Path)
+				q.createSymLink(torrentSymlinkPath, torrentRclonePath, file)
+				delete(pending, path)
+			}
+		}
 	}
 	return torrentSymlinkPath, nil
 }
@@ -183,7 +186,7 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 			q.logger.Debug().Msgf("Found torrent path: %s", torrentPath)
 			return torrentPath, err
 		}
-		time.Sleep(time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -195,6 +198,7 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.F
 	torrentFilePath := filepath.Join(torrentMountPath, file.Path) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
 	err := os.Symlink(torrentFilePath, fullPath)
 	if err != nil {
-		q.logger.Info().Msgf("Failed to create symlink: %s: %v", fullPath, err)
+		// It's okay if the symlink already exists
+		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fullPath, err)
 	}
 }
