@@ -69,7 +69,7 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 	possiblePaths := []string{
 		t.OriginalFilename,
 		t.Filename,
-		common.RemoveExtension(t.OriginalFilename),
+		utils.RemoveExtension(t.OriginalFilename),
 	}
 
 	for _, path := range possiblePaths {

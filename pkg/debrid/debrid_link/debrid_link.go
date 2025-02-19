@@ -9,6 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 
 	"net/http"
@@ -124,7 +125,7 @@ func (dl *DebridLink) GetTorrent(id string) (*torrent.Torrent, error) {
 	if data.Status == 100 {
 		status = "downloaded"
 	}
-	name := common.RemoveInvalidChars(data.Name)
+	name := utils.RemoveInvalidChars(data.Name)
 	t.Id = data.ID
 	t.Name = name
 	t.Bytes = data.TotalSize
@@ -171,7 +172,7 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	}
 	data := *res.Value
 	status := "downloading"
-	name := common.RemoveInvalidChars(data.Name)
+	name := utils.RemoveInvalidChars(data.Name)
 	t.Id = data.ID
 	t.Name = name
 	t.Bytes = data.TotalSize

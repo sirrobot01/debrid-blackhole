@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/cavaliergopher/grab/v3"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 	"net/http"
 	"os"
@@ -52,7 +52,8 @@ Loop:
 func (q *QBit) ProcessManualFile(torrent *Torrent) (string, error) {
 	debridTorrent := torrent.DebridTorrent
 	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.DownloadLinks))
-	torrentPath := common.RemoveInvalidChars(filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, common.RemoveExtension(debridTorrent.OriginalFilename)))
+	torrentPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, utils.RemoveExtension(debridTorrent.OriginalFilename))
+	torrentPath = utils.RemoveInvalidChars(torrentPath)
 	err := os.MkdirAll(torrentPath, os.ModePerm)
 	if err != nil {
 		// add previous error to the error and return
@@ -147,9 +148,9 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	}
 	// Check if the torrent path is a file
 	torrentRclonePath := filepath.Join(rCloneBase, torrentPath) // leave it as is
-	if debridTorrent.Debrid == "alldebrid" && len(files) == 1 {
+	if debridTorrent.Debrid == "alldebrid" && utils.IsMediaFile(torrentPath) {
 		// Alldebrid hotfix for single file torrents
-		torrentFolder = common.RemoveExtension(torrentFolder)
+		torrentFolder = utils.RemoveExtension(torrentFolder)
 		torrentRclonePath = rCloneBase // /mnt/rclone/magnets/  // Remove the filename since it's in the root folder
 	}
 	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/

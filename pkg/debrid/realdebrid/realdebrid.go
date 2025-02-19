@@ -171,7 +171,7 @@ func (r *RealDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
 	if err != nil {
 		return t, err
 	}
-	name := common.RemoveInvalidChars(data.OriginalFilename)
+	name := utils.RemoveInvalidChars(data.OriginalFilename)
 	t.Id = id
 	t.Name = name
 	t.Bytes = data.Bytes
@@ -203,7 +203,7 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 		var data TorrentInfo
 		err = json.Unmarshal(resp, &data)
 		status := data.Status
-		name := common.RemoveInvalidChars(data.OriginalFilename)
+		name := utils.RemoveInvalidChars(data.OriginalFilename)
 		t.Name = name // Important because some magnet changes the name
 		t.Folder = name
 		t.Filename = data.Filename

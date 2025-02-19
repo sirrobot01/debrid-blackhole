@@ -118,6 +118,7 @@ func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 func NewRLHTTPClient(rl *rate.Limiter, headers map[string]string) *RLHTTPClient {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           http.ProxyFromEnvironment,
 	}
 	c := &RLHTTPClient{
 		client: &http.Client{

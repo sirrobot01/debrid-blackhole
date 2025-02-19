@@ -8,6 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 
 	"net/http"
@@ -106,7 +107,9 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) []torrent.F
 		} else {
 			// This is a file
 			fileName := filepath.Base(f.Name)
-			if common.RegexMatch(common.SAMPLEMATCH, fileName) {
+
+			// Skip sample files
+			if utils.IsSampleFile(fileName) {
 				continue
 			}
 			if !cfg.IsAllowedFile(fileName) {

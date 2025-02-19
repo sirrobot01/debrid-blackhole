@@ -9,6 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 
 	"mime/multipart"
@@ -180,7 +181,7 @@ func (tb *Torbox) GetTorrent(id string) (*torrent.Torrent, error) {
 	cfg := config.GetConfig()
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
-		if common.RegexMatch(common.SAMPLEMATCH, fileName) {
+		if utils.IsSampleFile(fileName) {
 			// Skip sample files
 			continue
 		}

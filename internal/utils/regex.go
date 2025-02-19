@@ -47,3 +47,12 @@ func RemoveExtension(value string) string {
 		return value
 	}
 }
+
+func IsMediaFile(path string) bool {
+	mediaPattern := VIDEOMATCH + "|" + MUSICMATCH
+	return RegexMatch(mediaPattern, path)
+}
+
+func IsSampleFile(path string) bool {
+	return RegexMatch(SAMPLEMATCH, path)
+}
