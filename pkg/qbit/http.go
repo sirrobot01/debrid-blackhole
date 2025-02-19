@@ -56,14 +56,17 @@ func (q *QBit) authContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, token, err := decodeAuthHeader(r.Header.Get("Authorization"))
 		category := r.Context().Value("category").(string)
-		a := &arr.Arr{
-			Name: category,
+		svc := service.GetService()
+		// Check if arr exists
+		a := svc.Arr.Get(category)
+		if a == nil {
+			a = arr.New(category, "", "", false)
 		}
 		if err == nil {
 			a.Host = strings.TrimSpace(host)
 			a.Token = strings.TrimSpace(token)
 		}
-		svc := service.GetService()
+
 		svc.Arr.AddOrUpdate(a)
 		ctx := context.WithValue(r.Context(), "arr", a)
 		next.ServeHTTP(w, r.WithContext(ctx))

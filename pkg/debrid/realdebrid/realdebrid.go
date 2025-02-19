@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
@@ -25,7 +25,7 @@ type RealDebrid struct {
 	APIKey           string
 	DownloadUncached bool
 	client           *request.RLHTTPClient
-	cache            *common.Cache
+	cache            *cache.Cache
 	MountPath        string
 	logger           zerolog.Logger
 	CheckCached      bool
@@ -380,7 +380,7 @@ func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 
 }
 
-func New(dc config.Debrid, cache *common.Cache) *RealDebrid {
+func New(dc config.Debrid, cache *cache.Cache) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),

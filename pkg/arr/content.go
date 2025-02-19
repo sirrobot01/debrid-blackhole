@@ -112,14 +112,8 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	return contents, nil
 }
 
-func (a *Arr) SearchMissing(files []ContentFile) error {
+func (a *Arr) search(ids []int) error {
 	var payload interface{}
-
-	ids := make([]int, 0)
-	for _, f := range files {
-		ids = append(ids, f.Id)
-	}
-
 	switch a.Type {
 	case Sonarr:
 		payload = struct {
@@ -143,12 +137,25 @@ func (a *Arr) SearchMissing(files []ContentFile) error {
 
 	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 	if err != nil {
-		return fmt.Errorf("failed to search missing: %v", err)
+		return fmt.Errorf("failed to automatic search: %v", err)
 	}
 	if statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'; !statusOk {
-		return fmt.Errorf("failed to search missing. Status Code: %s", resp.Status)
+		return fmt.Errorf("failed to automatic search. Status Code: %s", resp.Status)
 	}
 	return nil
+}
+
+func (a *Arr) SearchMissing(files []ContentFile) error {
+
+	ids := make([]int, 0)
+	for _, f := range files {
+		ids = append(ids, f.Id)
+	}
+
+	if len(ids) == 0 {
+		return nil
+	}
+	return a.search(ids)
 }
 
 func (a *Arr) DeleteFiles(files []ContentFile) error {

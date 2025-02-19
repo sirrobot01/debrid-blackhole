@@ -1,8 +1,8 @@
-### DecyphArr(with Debrid Proxy Support)
+### DecyphArr(Qbittorent, but with Debrid Proxy Support)
 
 ![ui](doc/main.png)
 
-This is a Golang implementation of Torrent QbitTorrent with a **Multiple Debrid service support**.
+This is an implementation of QbitTorrent with a **Multiple Debrid service support**. Written in Go.
 
 ### Table of Contents
 
@@ -37,7 +37,7 @@ This is a Golang implementation of Torrent QbitTorrent with a **Multiple Debrid 
 - Multi-Debrid Providers support
 - Repair Worker for missing files (**NEW**)
 
-The proxy is useful in filtering out un-cached Real Debrid torrents
+The proxy is useful for filtering out un-cached Debrid torrents
 
 ### Supported Debrid Providers
 - [Real Debrid](https://real-debrid.com)
@@ -99,8 +99,8 @@ Download the binary from the releases page and run it with the config file.
   - Category: e.g `sonarr`, `radarr`
   - Use SSL -> `No`
   - Sequential Download -> `No`|`Yes` (If you want to download the torrents locally instead of symlink)
-  - Test
-  - Save
+  - Click Test
+  - Click Save
 
 #### Basic Sample Config
 
@@ -187,6 +187,7 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 - The `name` key is the name of the Arr/ Category
 - The `host` key is the host of the Arr
 - The `token` key is the API token of the Arr
+- THe `cleanup` key is used to cleanup your arr queues. This is usually for removing dangling queues(downloads that all the files have been import, sometimes, some incomplete season packs)
 
 </details>
 

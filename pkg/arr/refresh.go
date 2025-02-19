@@ -22,7 +22,7 @@ func (a *Arr) Refresh() error {
 	return fmt.Errorf("failed to refresh monitored downloads for %s", cmp.Or(a.Name, a.Host))
 }
 
-func (a *Arr) MarkAsFailed(infoHash string) error {
+func (a *Arr) Blacklist(infoHash string) error {
 	downloadId := strings.ToUpper(infoHash)
 	history := a.GetHistory(downloadId, "grabbed")
 	if history == nil {

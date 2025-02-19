@@ -128,3 +128,11 @@
   - Add support for tags(creating, deleting, listing)
   - Add support for categories(creating, deleting, listing)
   - Fix issues with arr sending torrents using a different content type.
+
+#### 0.4.1
+
+- Adds optional UI authentication
+- Downloaded Torrents persist on restart
+- Fixes
+    - Fix Alldebrid struggling to find the correct file
+- Minor bug fixes or speed-gains

@@ -45,9 +45,10 @@ type QBitTorrent struct {
 }
 
 type Arr struct {
-	Name  string `json:"name"`
-	Host  string `json:"host"`
-	Token string `json:"token"`
+	Name    string `json:"name"`
+	Host    string `json:"host"`
+	Token   string `json:"token"`
+	Cleanup bool   `json:"cleanup"`
 }
 
 type Repair struct {

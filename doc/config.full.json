@@ -57,12 +57,14 @@
     {
       "name": "sonarr",
       "host": "http://host:8989",
-      "token": "arr_key"
+      "token": "arr_key",
+      "cleanup": false
     },
     {
       "name": "radarr",
       "host": "http://host:7878",
-      "token": "arr_key"
+      "token": "arr_key",
+      "cleanup": false
     }
   ],
   "repair": {
@@ -76,5 +78,5 @@
   "min_file_size": "",
   "max_file_size": "",
   "allowed_file_types": [],
-  "use_auth": false
+  "use_auth": false,
 }

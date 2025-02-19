@@ -4,12 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"html/template"
 	"net/http"
-	"os"
 	"sync"
 )
 
@@ -18,15 +14,15 @@ type WebDav struct {
 }
 
 func New() *WebDav {
-	svc := service.GetService()
-	cfg := config.GetConfig()
+	//svc := service.GetService()
+	//cfg := config.GetConfig()
 	w := &WebDav{
 		Handlers: make([]*Handler, 0),
 	}
-	for name, c := range svc.DebridCache.GetCaches() {
-		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name), cfg.LogLevel, os.Stdout))
-		w.Handlers = append(w.Handlers, h)
-	}
+	//for name, c := range svc.DebridCache.GetCaches() {
+	//	h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name), cfg.LogLevel, os.Stdout))
+	//	w.Handlers = append(w.Handlers, h)
+	//}
 	return w
 }
 

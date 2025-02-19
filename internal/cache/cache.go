@@ -1,4 +1,4 @@
-package common
+package cache
 
 import (
 	"sync"
@@ -11,7 +11,7 @@ type Cache struct {
 	mu       sync.RWMutex
 }
 
-func NewCache(maxItems int) *Cache {
+func New(maxItems int) *Cache {
 	if maxItems <= 0 {
 		maxItems = 1000
 	}

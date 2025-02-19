@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
@@ -23,7 +23,7 @@ type DebridLink struct {
 	APIKey           string
 	DownloadUncached bool
 	client           *request.RLHTTPClient
-	cache            *common.Cache
+	cache            *cache.Cache
 	MountPath        string
 	logger           zerolog.Logger
 	CheckCached      bool
@@ -268,7 +268,7 @@ func (dl *DebridLink) GetCheckCached() bool {
 	return dl.CheckCached
 }
 
-func New(dc config.Debrid, cache *common.Cache) *DebridLink {
+func New(dc config.Debrid, cache *cache.Cache) *DebridLink {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),

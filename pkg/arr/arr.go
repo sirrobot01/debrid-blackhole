@@ -25,19 +25,20 @@ var (
 )
 
 type Arr struct {
-	Name         string   `json:"name"`
-	Host         string   `json:"host"`
-	Token        string   `json:"token"`
-	Type         Type     `json:"type"`
-	verifiedDirs sync.Map // map[string]struct{} -> dir -> struct{}
+	Name    string `json:"name"`
+	Host    string `json:"host"`
+	Token   string `json:"token"`
+	Type    Type   `json:"type"`
+	Cleanup bool   `json:"cleanup"`
 }
 
-func NewArr(name, host, token string, arrType Type) *Arr {
+func New(name, host, token string, cleanup bool) *Arr {
 	return &Arr{
-		Name:  name,
-		Host:  host,
-		Token: token,
-		Type:  arrType,
+		Name:    name,
+		Host:    host,
+		Token:   token,
+		Type:    InferType(host, name),
+		Cleanup: cleanup,
 	}
 }
 
@@ -71,7 +72,7 @@ type Storage struct {
 	mu   sync.RWMutex
 }
 
-func inferType(host, name string) Type {
+func InferType(host, name string) Type {
 	switch {
 	case strings.Contains(host, "sonarr") || strings.Contains(name, "sonarr"):
 		return Sonarr
@@ -90,7 +91,7 @@ func NewStorage() *Storage {
 	arrs := make(map[string]*Arr)
 	for _, a := range config.GetConfig().Arrs {
 		name := a.Name
-		arrs[name] = NewArr(name, a.Host, a.Token, inferType(a.Host, name))
+		arrs[name] = New(name, a.Host, a.Token, a.Cleanup)
 	}
 	return &Storage{
 		Arrs: arrs,

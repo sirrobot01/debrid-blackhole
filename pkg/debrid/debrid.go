@@ -3,7 +3,7 @@ package debrid
 import (
 	"cmp"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
@@ -23,7 +23,7 @@ func New() *engine.Engine {
 	maxCacheSize := maxCachedSize / len(cfg.Debrids)
 
 	for _, dc := range cfg.Debrids {
-		d := createDebrid(dc, common.NewCache(maxCacheSize))
+		d := createDebrid(dc, cache.New(maxCacheSize))
 		logger := d.GetLogger()
 		logger.Info().Msg("Debrid Service started")
 		debrids = append(debrids, d)
@@ -32,7 +32,7 @@ func New() *engine.Engine {
 	return d
 }
 
-func createDebrid(dc config.Debrid, cache *common.Cache) engine.Service {
+func createDebrid(dc config.Debrid, cache *cache.Cache) engine.Service {
 	switch dc.Name {
 	case "realdebrid":
 		return realdebrid.New(dc, cache)

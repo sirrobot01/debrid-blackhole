@@ -2,7 +2,7 @@ package torrent
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/common"
+	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
@@ -107,7 +107,7 @@ func (t *Torrent) GetFile(id string) *File {
 	return nil
 }
 
-func GetLocalCache(infohashes []string, cache *common.Cache) ([]string, map[string]bool) {
+func GetLocalCache(infohashes []string, cache *cache.Cache) ([]string, map[string]bool) {
 	result := make(map[string]bool)
 	hashes := make([]string, 0)
 

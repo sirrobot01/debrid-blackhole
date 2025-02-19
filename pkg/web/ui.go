@@ -309,7 +309,7 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 
 	_arr := svc.Arr.Get(arrName)
 	if _arr == nil {
-		_arr = arr.NewArr(arrName, "", "", arr.Sonarr)
+		_arr = arr.New(arrName, "", "", false)
 	}
 
 	// Handle URLs

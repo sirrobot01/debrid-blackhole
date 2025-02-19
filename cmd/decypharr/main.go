@@ -10,6 +10,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"github.com/sirrobot01/debrid-blackhole/pkg/web"
+	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
 	"log"
 	"sync"
 )
@@ -57,7 +58,9 @@ func Start(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_qbit.StartWorker(ctx)
+		if err := worker.Start(ctx); err != nil {
+			errChan <- err
+		}
 	}()
 
 	if cfg.Repair.Enabled {
