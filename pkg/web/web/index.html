@@ -86,7 +86,7 @@
             <td>${torrent.debrid || 'None'}</td>
             <td><span class="badge ${getStateColor(torrent.state)}">${torrent.state}</span></td>
             <td>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', ${torrent.category})">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', '${torrent.category}')">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
