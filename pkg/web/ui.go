@@ -411,11 +411,23 @@ func (ui *Handler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
 
 func (ui *Handler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) {
 	hash := chi.URLParam(r, "hash")
+	category := r.URL.Query().Get("category")
 	if hash == "" {
 		http.Error(w, "No hash provided", http.StatusBadRequest)
 		return
 	}
-	ui.qbit.Storage.Delete(hash)
+	ui.qbit.Storage.Delete(hash, category)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ui *Handler) handleDeleteTorrents(w http.ResponseWriter, r *http.Request) {
+	hashesStr := r.URL.Query().Get("hashes")
+	if hashesStr == "" {
+		http.Error(w, "No hashes provided", http.StatusBadRequest)
+		return
+	}
+	hashes := strings.Split(hashesStr, ",")
+	ui.qbit.Storage.DeleteMultiple(hashes)
 	w.WriteHeader(http.StatusOK)
 }
 

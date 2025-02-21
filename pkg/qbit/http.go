@@ -213,8 +213,9 @@ func (q *QBit) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No hashes provided", http.StatusBadRequest)
 		return
 	}
+	category := ctx.Value("category").(string)
 	for _, hash := range hashes {
-		q.Storage.Delete(hash)
+		q.Storage.Delete(hash, category)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -223,8 +224,9 @@ func (q *QBit) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
 func (q *QBit) handleTorrentsPause(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
+	category := ctx.Value("category").(string)
 	for _, hash := range hashes {
-		torrent := q.Storage.Get(hash)
+		torrent := q.Storage.Get(hash, category)
 		if torrent == nil {
 			continue
 		}
@@ -237,8 +239,9 @@ func (q *QBit) handleTorrentsPause(w http.ResponseWriter, r *http.Request) {
 func (q *QBit) handleTorrentsResume(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
+	category := ctx.Value("category").(string)
 	for _, hash := range hashes {
-		torrent := q.Storage.Get(hash)
+		torrent := q.Storage.Get(hash, category)
 		if torrent == nil {
 			continue
 		}
@@ -251,8 +254,9 @@ func (q *QBit) handleTorrentsResume(w http.ResponseWriter, r *http.Request) {
 func (q *QBit) handleTorrentRecheck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	hashes, _ := ctx.Value("hashes").([]string)
+	category := ctx.Value("category").(string)
 	for _, hash := range hashes {
-		torrent := q.Storage.Get(hash)
+		torrent := q.Storage.Get(hash, category)
 		if torrent == nil {
 			continue
 		}
@@ -293,15 +297,18 @@ func (q *QBit) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (q *QBit) handleTorrentProperties(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	hash := r.URL.Query().Get("hash")
-	torrent := q.Storage.Get(hash)
+	torrent := q.Storage.Get(hash, ctx.Value("category").(string))
+
 	properties := q.GetTorrentProperties(torrent)
 	request.JSONResponse(w, properties, http.StatusOK)
 }
 
 func (q *QBit) handleTorrentFiles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	hash := r.URL.Query().Get("hash")
-	torrent := q.Storage.Get(hash)
+	torrent := q.Storage.Get(hash, ctx.Value("category").(string))
 	if torrent == nil {
 		return
 	}

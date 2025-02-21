@@ -172,7 +172,7 @@ type TorrentCategory struct {
 }
 
 type Torrent struct {
-	ID            string           `json:"-"`
+	ID            string           `json:"id"`
 	DebridTorrent *torrent.Torrent `json:"-"`
 	Debrid        string           `json:"debrid"`
 	TorrentPath   string           `json:"-"`

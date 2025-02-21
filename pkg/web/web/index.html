@@ -86,7 +86,7 @@
             <td>${torrent.debrid || 'None'}</td>
             <td><span class="badge ${getStateColor(torrent.state)}">${torrent.state}</span></td>
             <td>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}')">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', ${torrent.category})">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
@@ -162,11 +162,11 @@
             }
         }
 
-        async function deleteTorrent(hash) {
+        async function deleteTorrent(hash, category) {
             if (!confirm('Are you sure you want to delete this torrent?')) return;
 
             try {
-                await fetch(`/internal/torrents/${hash}`, {
+                await fetch(`/internal/torrents/${category}/${hash}`, {
                     method: 'DELETE'
                 });
                 await loadTorrents();
@@ -181,10 +181,11 @@
             if (!confirm(`Are you sure you want to delete ${state.selectedTorrents.size} selected torrents?`)) return;
 
             try {
-                const deletePromises = Array.from(state.selectedTorrents).map(hash =>
-                    fetch(`/internal/torrents/${hash}`, { method: 'DELETE' })
-                );
-                await Promise.all(deletePromises);
+                // COmma separated list of hashes
+                const hashes = Array.from(state.selectedTorrents).join(',');
+                await fetch(`/internal/torrents/?hashes=${encodeURIComponent(hashes)}`, {
+                    method: 'DELETE'
+                });
                 await loadTorrents();
                 createToast('Selected torrents deleted successfully');
             } catch (error) {

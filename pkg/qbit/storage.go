@@ -2,23 +2,32 @@ package qbit
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 )
 
+func keyPair(hash, category string) string {
+	if category == "" {
+		category = "uncategorized"
+	}
+	return fmt.Sprintf("%s|%s", hash, category)
+}
+
+type Torrents = map[string]*Torrent
+
 type TorrentStorage struct {
-	torrents map[string]*Torrent
+	torrents Torrents
 	mu       sync.RWMutex
-	order    []string
 	filename string // Added to store the filename for persistence
 }
 
-func loadTorrentsFromJSON(filename string) (map[string]*Torrent, error) {
+func loadTorrentsFromJSON(filename string) (Torrents, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	torrents := make(map[string]*Torrent)
+	torrents := make(Torrents)
 	if err := json.Unmarshal(data, &torrents); err != nil {
 		return nil, err
 	}
@@ -29,16 +38,11 @@ func NewTorrentStorage(filename string) *TorrentStorage {
 	// Open the JSON file and read the data
 	torrents, err := loadTorrentsFromJSON(filename)
 	if err != nil {
-		torrents = make(map[string]*Torrent)
-	}
-	order := make([]string, 0, len(torrents))
-	for id := range torrents {
-		order = append(order, id)
+		torrents = make(Torrents)
 	}
 	// Create a new TorrentStorage
 	return &TorrentStorage{
 		torrents: torrents,
-		order:    order,
 		filename: filename,
 	}
 }
@@ -46,44 +50,37 @@ func NewTorrentStorage(filename string) *TorrentStorage {
 func (ts *TorrentStorage) Add(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	ts.torrents[torrent.Hash] = torrent
-	ts.order = append(ts.order, torrent.Hash)
+	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
 	_ = ts.saveToFile()
 }
 
 func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if _, exists := ts.torrents[torrent.Hash]; !exists {
-		ts.order = append(ts.order, torrent.Hash)
-	}
-	ts.torrents[torrent.Hash] = torrent
+	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
 	_ = ts.saveToFile()
 }
 
-func (ts *TorrentStorage) GetByID(id string) *Torrent {
+func (ts *TorrentStorage) Get(hash, category string) *Torrent {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	for _, torrent := range ts.torrents {
-		if torrent.ID == id {
-			return torrent
+	torrent, exists := ts.torrents[keyPair(hash, category)]
+	if !exists && category == "" {
+		// Try to find the torrent without knowing the category
+		for _, t := range ts.torrents {
+			if t.Hash == hash {
+				return t
+			}
 		}
 	}
-	return nil
-}
-
-func (ts *TorrentStorage) Get(hash string) *Torrent {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	return ts.torrents[hash]
+	return torrent
 }
 
 func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string) []*Torrent {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	torrents := make([]*Torrent, 0)
-	for _, id := range ts.order {
-		torrent := ts.torrents[id]
+	for _, torrent := range ts.torrents {
 		if category != "" && torrent.Category != category {
 			continue
 		}
@@ -92,14 +89,17 @@ func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string
 		}
 		torrents = append(torrents, torrent)
 	}
+
 	if len(hashes) > 0 {
-		filtered := make([]*Torrent, 0, len(torrents))
+		filtered := make([]*Torrent, 0)
 		for _, hash := range hashes {
-			if torrent := ts.torrents[hash]; torrent != nil {
-				filtered = append(filtered, torrent)
+			for _, torrent := range torrents {
+				if torrent.Hash == hash {
+					filtered = append(filtered, torrent)
+				}
 			}
 		}
-		torrents = filtered
+		return filtered
 	}
 	return torrents
 }
@@ -107,29 +107,44 @@ func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string
 func (ts *TorrentStorage) Update(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	ts.torrents[torrent.Hash] = torrent
+	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
 	_ = ts.saveToFile()
 }
 
-func (ts *TorrentStorage) Delete(hash string) {
+func (ts *TorrentStorage) Delete(hash, category string) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	torrent, exists := ts.torrents[hash]
-	if !exists {
-		return
-	}
-	delete(ts.torrents, hash)
-	for i, id := range ts.order {
-		if id == hash {
-			ts.order = append(ts.order[:i], ts.order[i+1:]...)
-			break
+	key := keyPair(hash, category)
+	torrent, exists := ts.torrents[key]
+	if !exists && category == "" {
+		// Remove the torrent without knowing the category
+		for k, t := range ts.torrents {
+			if t.Hash == hash {
+				key = k
+				torrent = t
+				break
+			}
 		}
 	}
+	delete(ts.torrents, key)
 	// Delete the torrent folder
 	if torrent.ContentPath != "" {
 		err := os.RemoveAll(torrent.ContentPath)
 		if err != nil {
 			return
+		}
+	}
+	_ = ts.saveToFile()
+}
+
+func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	for _, hash := range hashes {
+		for key, torrent := range ts.torrents {
+			if torrent.Hash == hash {
+				delete(ts.torrents, key)
+			}
 		}
 	}
 	_ = ts.saveToFile()
