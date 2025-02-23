@@ -78,5 +78,5 @@
   "min_file_size": "",
   "max_file_size": "",
   "allowed_file_types": [],
-  "use_auth": false,
+  "use_auth": false
 }

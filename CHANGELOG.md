@@ -136,3 +136,4 @@
 - Fixes
     - Fix Alldebrid struggling to find the correct file
 - Minor bug fixes or speed-gains
+- A new cleanup worker to clean up ARR queues
