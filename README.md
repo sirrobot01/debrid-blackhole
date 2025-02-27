@@ -1,4 +1,4 @@
-### DecyphArr(Qbittorent, but with Debrid Proxy Support)
+### DecyphArr(Qbittorent, but with Debrid Support)
 
 ![ui](doc/main.png)
 
@@ -35,7 +35,7 @@ This is an implementation of QbitTorrent with a **Multiple Debrid service suppor
 - Torbox Support
 - Debrid Link Support
 - Multi-Debrid Providers support
-- Repair Worker for missing files (**NEW**)
+- Repair Worker for missing files (**BETA**)
 
 The proxy is useful for filtering out un-cached Debrid torrents
 
