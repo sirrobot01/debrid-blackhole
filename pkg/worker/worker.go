@@ -53,7 +53,6 @@ func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
 	_logger.Debug().Msg("Refresh Worker started")
 	refreshCtx := context.WithValue(ctx, "worker", "refresh")
 	refreshTicker := time.NewTicker(time.Duration(cfg.QBitTorrent.RefreshInterval) * time.Second)
-	var refreshMutex sync.Mutex
 
 	for {
 		select {
@@ -61,14 +60,7 @@ func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
 			_logger.Debug().Msg("Refresh Worker stopped")
 			return
 		case <-refreshTicker.C:
-			if refreshMutex.TryLock() {
-				go func() {
-					defer refreshMutex.Unlock()
-					refreshArrs()
-				}()
-			} else {
-				_logger.Debug().Msg("Previous refresh still running, skipping this cycle")
-			}
+			refreshArrs()
 		}
 	}
 }
@@ -111,9 +103,11 @@ func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 
 func refreshArrs() {
 	arrs := service.GetService().Arr
-	for _, arr := range arrs.GetAll() {
-		err := arr.Refresh()
+	for _, a := range arrs.GetAll() {
+		err := a.Refresh()
 		if err != nil {
+			_logger := getLogger()
+			_logger.Debug().Err(err).Msgf("Error refreshing %s", a.Name)
 			return
 		}
 	}

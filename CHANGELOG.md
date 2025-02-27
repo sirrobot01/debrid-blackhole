@@ -137,3 +137,11 @@
     - Fix Alldebrid struggling to find the correct file
 - Minor bug fixes or speed-gains
 - A new cleanup worker to clean up ARR queues
+
+
+#### 0.4.2
+
+- Hotfixes
+    - Fix saving torrents error
+    - Fix bugs with the UI
+- Speed improvements

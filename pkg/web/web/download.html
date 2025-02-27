@@ -114,10 +114,9 @@
                         }
                     } else {
                         createToast(`Successfully added ${result.results.length} torrents!`);
+                        document.getElementById('magnetURI').value = '';
+                        document.getElementById('torrentFiles').value = '';
                     }
-
-                    document.getElementById('magnetURI').value = '';
-                    document.getElementById('torrentFiles').value = '';
                 } catch (error) {
                     createToast(`Error adding downloads: ${error.message}`, 'error');
                 } finally {

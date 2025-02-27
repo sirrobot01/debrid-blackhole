@@ -51,14 +51,24 @@ func (ts *TorrentStorage) Add(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
-	_ = ts.saveToFile()
+	go func() {
+		err := ts.saveToFile()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 }
 
 func (ts *TorrentStorage) AddOrUpdate(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
-	_ = ts.saveToFile()
+	go func() {
+		err := ts.saveToFile()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 }
 
 func (ts *TorrentStorage) Get(hash, category string) *Torrent {
@@ -108,7 +118,12 @@ func (ts *TorrentStorage) Update(torrent *Torrent) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.torrents[keyPair(torrent.Hash, torrent.Category)] = torrent
-	_ = ts.saveToFile()
+	go func() {
+		err := ts.saveToFile()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 }
 
 func (ts *TorrentStorage) Delete(hash, category string) {
@@ -126,6 +141,9 @@ func (ts *TorrentStorage) Delete(hash, category string) {
 			}
 		}
 	}
+	if torrent == nil {
+		return
+	}
 	delete(ts.torrents, key)
 	// Delete the torrent folder
 	if torrent.ContentPath != "" {
@@ -134,7 +152,12 @@ func (ts *TorrentStorage) Delete(hash, category string) {
 			return
 		}
 	}
-	_ = ts.saveToFile()
+	go func() {
+		err := ts.saveToFile()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 }
 
 func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
@@ -147,7 +170,12 @@ func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
 			}
 		}
 	}
-	_ = ts.saveToFile()
+	go func() {
+		err := ts.saveToFile()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 }
 
 func (ts *TorrentStorage) Save() error {

@@ -107,7 +107,9 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	}
 	torrent.TorrentPath = torrentSymlinkPath
 	q.UpdateTorrent(torrent, debridTorrent)
-	_ = arr.Refresh()
+	if err := arr.Refresh(); err != nil {
+		q.logger.Error().Msgf("Error refreshing arr: %v", err)
+	}
 }
 
 func (q *QBit) MarkAsFailed(t *Torrent) *Torrent {
@@ -180,7 +182,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 		return t
 	}
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {

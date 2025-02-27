@@ -178,13 +178,13 @@ func (r *Repair) RepairArr(a *arr.Arr, tmdbId string) error {
 	r.logger.Info().Msgf("Starting repair for %s", a.Name)
 	media, err := a.GetMedia(tmdbId)
 	if err != nil {
-		r.logger.Info().Msgf("Failed to get %s media: %v", a.Type, err)
+		r.logger.Info().Msgf("Failed to get %s media: %v", a.Name, err)
 		return err
 	}
-	r.logger.Info().Msgf("Found %d %s media", len(media), a.Type)
+	r.logger.Info().Msgf("Found %d %s media", len(media), a.Name)
 
 	if len(media) == 0 {
-		r.logger.Info().Msgf("No %s media found", a.Type)
+		r.logger.Info().Msgf("No %s media found", a.Name)
 		return nil
 	}
 	// Check first media to confirm mounts are accessible
