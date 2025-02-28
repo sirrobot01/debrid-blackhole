@@ -126,19 +126,27 @@
                     <div class="section mb-5">
                         <h5 class="border-bottom pb-2">Repair Configuration</h5>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Interval</label>
                                 <input type="text" disabled class="form-control" name="repair.interval" placeholder="e.g., 24h">
                             </div>
-                            <div class="col-12">
-                                <div class="form-check mb-2">
-                                    <input type="checkbox" disabled class="form-check-input" name="repair.enabled" id="repairEnabled">
-                                    <label class="form-check-label" for="repairEnabled">Enable Repair</label>
-                                </div>
-                                <div class="form-check">
-                                    <input type="checkbox" disabled class="form-check-input" name="repair.run_on_start" id="repairOnStart">
-                                    <label class="form-check-label" for="repairOnStart">Run on Start</label>
-                                </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Zurg URL</label>
+                                <input type="text" disabled class="form-control" name="repair.zurg_url" placeholder="http://zurg:9999">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check me-3 d-inline-block">
+                                <input type="checkbox" disabled class="form-check-input" name="repair.enabled" id="repairEnabled">
+                                <label class="form-check-label" for="repairEnabled">Enable Repair</label>
+                            </div>
+                            <div class="form-check me-3 d-inline-block">
+                                <input type="checkbox" disabled class="form-check-input" name="repair.run_on_start" id="repairOnStart">
+                                <label class="form-check-label" for="repairOnStart">Run on Start</label>
+                            </div>
+                            <div class="form-check d-inline-block">
+                                <input type="checkbox" disabled class="form-check-input" name="repair.skip_deletion" id="skipDeletion">
+                                <label class="form-check-label" for="skipDeletion">Run on Start</label>
                             </div>
                         </div>
                     </div>
@@ -199,6 +207,14 @@
                 <div class="col-md-4 mb-3">
                     <label class="form-label">API Token</label>
                     <input type="password" disabled class="form-control" name="arr[${index}].token" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-2 mb-3">
+                    <div class="form-check">
+                        <label class="form-check-label" for="repairOnStart">Cleanup Queue</label>
+                        <input type="checkbox" disabled class="form-check-input" name="arr[${index}].cleanup">
+                    </div>
                 </div>
             </div>
         </div>

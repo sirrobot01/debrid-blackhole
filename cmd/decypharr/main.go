@@ -24,7 +24,7 @@ func Start(ctx context.Context) error {
 
 	_log.Info().Msgf("Version: %s", version.GetInfo().String())
 	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())
-	_log.Debug().Msgf("Default Log Level: %s", cfg.LogLevel)
+	_log.Info().Msgf("Default Log Level: %s", cfg.LogLevel)
 
 	svc := service.New()
 	_qbit := qbit.New()

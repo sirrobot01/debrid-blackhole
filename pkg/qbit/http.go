@@ -63,8 +63,14 @@ func (q *QBit) authContext(next http.Handler) http.Handler {
 			a = arr.New(category, "", "", false)
 		}
 		if err == nil {
-			a.Host = strings.TrimSpace(host)
-			a.Token = strings.TrimSpace(token)
+			host = strings.TrimSpace(host)
+			if host != "" {
+				a.Host = host
+			}
+			token = strings.TrimSpace(token)
+			if token != "" {
+				a.Token = token
+			}
 		}
 
 		svc.Arr.AddOrUpdate(a)
