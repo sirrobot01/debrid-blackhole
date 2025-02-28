@@ -63,8 +63,8 @@ jobs:
           tags: |
             cy01/blackhole:latest
             cy01/blackhole:${{ env.tag_name }}
-            ghcr.io/${{ github.repository_owner }}/blackhole:latest
-            ghcr.io/${{ github.repository_owner }}/blackhole:${{ env.tag_name }}
+            ghcr.io/${{ github.repository_owner }}/decypharr:latest
+            ghcr.io/${{ github.repository_owner }}/decypharr:${{ env.tag_name }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |

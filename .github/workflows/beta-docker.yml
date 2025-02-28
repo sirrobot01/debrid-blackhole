@@ -72,7 +72,7 @@ jobs:
           push: true
           tags: |
             cy01/blackhole:beta
-            ghcr.io/${{ github.repository_owner }}/blackhole:beta
+            ghcr.io/${{ github.repository_owner }}/decypharr:beta
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |
