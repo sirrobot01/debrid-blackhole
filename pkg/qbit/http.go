@@ -100,6 +100,16 @@ func HashesCtx(next http.Handler) http.Handler {
 }
 
 func (q *QBit) handleLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_arr := ctx.Value("arr").(*arr.Arr)
+	if _arr == nil {
+		// No arr
+		_, _ = w.Write([]byte("Ok."))
+		return
+	}
+	if err := _arr.Validate(); err != nil {
+		q.logger.Info().Msgf("Error validating arr: %v", err)
+	}
 	_, _ = w.Write([]byte("Ok."))
 }
 

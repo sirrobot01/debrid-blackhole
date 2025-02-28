@@ -3,6 +3,7 @@ package arr
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"net/http"
@@ -65,6 +66,20 @@ func (a *Arr) Request(method, endpoint string, payload interface{}) (*http.Respo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", a.Token)
 	return client.Do(req)
+}
+
+func (a *Arr) Validate() error {
+	if a.Token == "" || a.Host == "" {
+		return nil
+	}
+	resp, err := a.Request("GET", "/api/v3/health", nil)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("arr test failed: %s", resp.Status)
+	}
+	return nil
 }
 
 type Storage struct {
