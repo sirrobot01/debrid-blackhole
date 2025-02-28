@@ -81,7 +81,9 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 			q.logger.Error().Msgf("Error checking status: %v", err)
 			go debridClient.DeleteTorrent(debridTorrent)
 			q.MarkAsFailed(torrent)
-			_ = arr.Refresh()
+			if err := arr.Refresh(); err != nil {
+				q.logger.Error().Msgf("Error refreshing arr: %v", err)
+			}
 			return
 		}
 

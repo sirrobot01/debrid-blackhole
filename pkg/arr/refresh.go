@@ -10,7 +10,11 @@ import (
 )
 
 func (a *Arr) Refresh() error {
-	payload := map[string]string{"name": "RefreshMonitoredDownloads"}
+	payload := struct {
+		Name string `json:"name"`
+	}{
+		Name: "RefreshMonitoredDownloads",
+	}
 
 	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 	if err == nil && resp != nil {
@@ -19,7 +23,8 @@ func (a *Arr) Refresh() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("failed to refresh monitored downloads for %s", cmp.Or(a.Name, a.Host))
+
+	return fmt.Errorf("failed to refresh: %v(status: %s)", err, resp.Status)
 }
 
 func (a *Arr) Blacklist(infoHash string) error {

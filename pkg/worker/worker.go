@@ -30,13 +30,6 @@ func Start(ctx context.Context) error {
 	// Start Arr Refresh Worker
 
 	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		arrRefreshWorker(ctx, cfg)
-	}()
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -46,23 +39,23 @@ func Start(ctx context.Context) error {
 	return nil
 }
 
-func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
-	// Start Arr Refresh Worker
-	_logger := getLogger()
-	_logger.Debug().Msg("Refresh Worker started")
-	refreshCtx := context.WithValue(ctx, "worker", "refresh")
-	refreshTicker := time.NewTicker(time.Duration(cfg.QBitTorrent.RefreshInterval) * time.Second)
-
-	for {
-		select {
-		case <-refreshCtx.Done():
-			_logger.Debug().Msg("Refresh Worker stopped")
-			return
-		case <-refreshTicker.C:
-			refreshArrs()
-		}
-	}
-}
+//func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
+//	// Start Arr Refresh Worker
+//	_logger := getLogger()
+//	_logger.Debug().Msg("Refresh Worker started")
+//	refreshCtx := context.WithValue(ctx, "worker", "refresh")
+//	refreshTicker := time.NewTicker(time.Duration(cfg.QBitTorrent.RefreshInterval) * time.Second)
+//
+//	for {
+//		select {
+//		case <-refreshCtx.Done():
+//			_logger.Debug().Msg("Refresh Worker stopped")
+//			return
+//		case <-refreshTicker.C:
+//			refreshArrs()
+//		}
+//	}
+//}
 
 func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 	// Start Clean up Queues Worker
