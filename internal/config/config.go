@@ -115,9 +115,9 @@ func (c *Config) loadConfig() error {
 	c.Auth = c.GetAuth()
 
 	//Validate the config
-	//if err := validateConfig(c); err != nil {
-	//	return err
-	//}
+	if err := validateConfig(c); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -143,13 +143,13 @@ func validateDebrids(debrids []Debrid) error {
 		}
 
 		// Check folder existence concurrently
-		wg.Add(1)
-		go func(folder string) {
-			defer wg.Done()
-			if _, err := os.Stat(folder); os.IsNotExist(err) {
-				errChan <- fmt.Errorf("debrid folder does not exist: %s", folder)
-			}
-		}(debrid.Folder)
+		//wg.Add(1)
+		//go func(folder string) {
+		//	defer wg.Done()
+		//	if _, err := os.Stat(folder); os.IsNotExist(err) {
+		//		errChan <- fmt.Errorf("debrid folder does not exist: %s", folder)
+		//	}
+		//}(debrid.Folder)
 	}
 
 	// Wait for all checks to complete

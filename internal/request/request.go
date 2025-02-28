@@ -3,6 +3,7 @@ package request
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/time/rate"
 	"io"
@@ -109,7 +110,7 @@ func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
 	if !statusOk {
 		// Add status code error to the body
 		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)
-		return nil, fmt.Errorf(string(b))
+		return nil, errors.New(string(b))
 	}
 
 	return b, nil
@@ -160,5 +161,8 @@ func ParseRateLimit(rateStr string) *rate.Limiter {
 func JSONResponse(w http.ResponseWriter, data interface{}, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(data)
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		return
+	}
 }

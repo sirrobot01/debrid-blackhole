@@ -169,14 +169,10 @@ func (q *QBit) UpdateTorrentMin(t *Torrent, debridTorrent *debrid.Torrent) *Torr
 }
 
 func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent {
-	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
-	if debridTorrent == nil && t.ID != "" {
-		debridTorrent, _ = _db.GetTorrent(t.ID)
-	}
 	if debridTorrent == nil {
-		q.logger.Info().Msgf("Torrent with ID %s not found in %s", t.ID, _db.GetName())
 		return t
 	}
+	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
 	if debridTorrent.Status != "downloaded" {
 		debridTorrent, _ = _db.GetTorrent(t.ID)
 	}

@@ -2,8 +2,10 @@ package arr
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	gourl "net/url"
+	"strconv"
 	"strings"
 )
 
@@ -77,24 +79,43 @@ func (a *Arr) GetQueue() []QueueSchema {
 	query.Add("page", "1")
 	query.Add("pageSize", "200")
 	results := make([]QueueSchema, 0)
+
 	for {
 		url := "api/v3/queue" + "?" + query.Encode()
 		resp, err := a.Request(http.MethodGet, url, nil)
 		if err != nil {
 			break
 		}
-		defer resp.Body.Close()
-		var data QueueResponseScheme
-		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			break
-		}
-		if len(results) < data.TotalRecords {
+
+		func() {
+			defer func(Body io.ReadCloser) {
+				err := Body.Close()
+				if err != nil {
+					return
+				}
+			}(resp.Body)
+
+			var data QueueResponseScheme
+			if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+				return
+			}
+
 			results = append(results, data.Records...)
-			query.Set("page", string(rune(data.Page+1)))
-		} else {
+
+			if len(results) >= data.TotalRecords {
+				// We've fetched all records
+				err = io.EOF // Signal to exit the loop
+				return
+			}
+
+			query.Set("page", strconv.Itoa(data.Page+1))
+		}()
+
+		if err != nil {
 			break
 		}
 	}
+
 	return results
 }
 
@@ -133,13 +154,11 @@ func (a *Arr) CleanupQueue() error {
 	}
 
 	queueIds := make([]int, 0)
-	episodesIds := make([]int, 0)
 
 	for _, c := range cleanups {
 		// Delete the messed up episodes from queue
 		for _, m := range c {
 			queueIds = append(queueIds, m.id)
-			episodesIds = append(episodesIds, m.episodeId)
 		}
 	}
 

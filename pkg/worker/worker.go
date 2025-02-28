@@ -82,16 +82,16 @@ func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 	}
 }
 
-func refreshArrs() {
-	for _, a := range service.GetService().Arr.GetAll() {
-		err := a.Refresh()
-		if err != nil {
-			_logger := getLogger()
-			_logger.Debug().Err(err).Msg("Error refreshing arr")
-			return
-		}
-	}
-}
+//func refreshArrs() {
+//	for _, a := range service.GetService().Arr.GetAll() {
+//		err := a.Refresh()
+//		if err != nil {
+//			_logger := getLogger()
+//			_logger.Debug().Err(err).Msg("Error refreshing arr")
+//			return
+//		}
+//	}
+//}
 
 func cleanUpQueues() {
 	// Clean up queues

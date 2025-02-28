@@ -16,7 +16,6 @@ type QBit struct {
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	Storage         *TorrentStorage
-	debug           bool
 	logger          zerolog.Logger
 	Tags            []string
 	RefreshInterval int

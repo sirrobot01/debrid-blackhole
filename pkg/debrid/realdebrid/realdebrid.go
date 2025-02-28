@@ -151,7 +151,9 @@ func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) 
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(resp, &data)
+	if err = json.Unmarshal(resp, &data); err != nil {
+		return nil, err
+	}
 	t.Id = data.Id
 	t.Debrid = r.Name
 	t.MountPath = r.MountPath
@@ -201,7 +203,9 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 			return t, err
 		}
 		var data TorrentInfo
-		err = json.Unmarshal(resp, &data)
+		if err = json.Unmarshal(resp, &data); err != nil {
+			return t, err
+		}
 		status := data.Status
 		name := utils.RemoveInvalidChars(data.OriginalFilename)
 		t.Name = name // Important because some magnet changes the name

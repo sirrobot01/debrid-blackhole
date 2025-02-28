@@ -110,7 +110,7 @@ func (dl *DebridLink) GetTorrent(id string) (*torrent.Torrent, error) {
 	if err != nil {
 		return t, err
 	}
-	if res.Success == false {
+	if !res.Success {
 		return t, fmt.Errorf("error getting torrent")
 	}
 	if res.Value == nil {
@@ -168,7 +168,7 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	if err != nil {
 		return nil, err
 	}
-	if res.Success == false || res.Value == nil {
+	if !res.Success || res.Value == nil {
 		return nil, fmt.Errorf("error adding torrent")
 	}
 	data := *res.Value

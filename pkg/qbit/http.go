@@ -46,8 +46,7 @@ func (q *QBit) CategoryContext(next http.Handler) http.Handler {
 				category = r.FormValue("category")
 			}
 		}
-		ctx := r.Context()
-		ctx = context.WithValue(r.Context(), "category", strings.TrimSpace(category))
+		ctx := context.WithValue(r.Context(), "category", strings.TrimSpace(category))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
