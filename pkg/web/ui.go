@@ -436,7 +436,7 @@ func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	arrCfgs := make([]config.Arr, 0)
 	svc := service.GetService()
 	for _, a := range svc.Arr.GetAll() {
-		arrCfgs = append(arrCfgs, config.Arr{Host: a.Host, Name: a.Name, Token: a.Token})
+		arrCfgs = append(arrCfgs, config.Arr{Host: a.Host, Name: a.Name, Token: a.Token, Cleanup: a.Cleanup})
 	}
 	cfg.Arrs = arrCfgs
 	request.JSONResponse(w, cfg, http.StatusOK)

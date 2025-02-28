@@ -5,7 +5,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"os"
 	"sync"
@@ -68,17 +67,6 @@ func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
 func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 	// Start Clean up Queues Worker
 	_logger := getLogger()
-	_arrs := service.GetService().Arr
-	filtered := make([]*arr.Arr, 0)
-	for _, a := range _arrs.GetAll() {
-		if a.Cleanup {
-			filtered = append(filtered, a)
-		}
-	}
-	if len(filtered) == 0 {
-		_logger.Debug().Msg("No ARR instances configured for cleanup")
-		return
-	}
 	_logger.Debug().Msg("Clean up Queues Worker started")
 	cleanupCtx := context.WithValue(ctx, "worker", "cleanup")
 	cleanupTicker := time.NewTicker(time.Duration(10) * time.Second)
@@ -94,7 +82,7 @@ func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 			if cleanupMutex.TryLock() {
 				go func() {
 					defer cleanupMutex.Unlock()
-					cleanUpQueues(filtered)
+					cleanUpQueues()
 				}()
 			}
 		}
@@ -102,21 +90,23 @@ func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 }
 
 func refreshArrs() {
-	arrs := service.GetService().Arr
-	for _, a := range arrs.GetAll() {
+	for _, a := range service.GetService().Arr.GetAll() {
 		err := a.Refresh()
 		if err != nil {
 			_logger := getLogger()
-			_logger.Debug().Err(err).Msgf("Error refreshing %s", a.Name)
+			_logger.Debug().Err(err).Msg("Error refreshing arr")
 			return
 		}
 	}
 }
 
-func cleanUpQueues(arrs []*arr.Arr) {
+func cleanUpQueues() {
 	// Clean up queues
 	_logger := getLogger()
-	for _, a := range arrs {
+	for _, a := range service.GetService().Arr.GetAll() {
+		if !a.Cleanup {
+			continue
+		}
 		_logger.Debug().Msgf("Cleaning up queue for %s", a.Name)
 		if err := a.CleanupQueue(); err != nil {
 			_logger.Debug().Err(err).Msg("Error cleaning up queue")

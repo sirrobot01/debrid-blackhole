@@ -218,7 +218,6 @@ func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*to
 			break
 		} else if status == "downloading" {
 			if !dl.DownloadUncached {
-				go dl.DeleteTorrent(torrent)
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

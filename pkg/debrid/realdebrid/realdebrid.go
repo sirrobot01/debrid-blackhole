@@ -249,7 +249,6 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 			break
 		} else if slices.Contains(downloadingStatus, status) {
 			if !r.DownloadUncached {
-				go r.DeleteTorrent(t)
 				return t, fmt.Errorf("torrent: %s not cached", t.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

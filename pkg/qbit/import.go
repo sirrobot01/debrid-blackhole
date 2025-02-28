@@ -74,7 +74,6 @@ func (i *ImportRequest) Process(q *QBit) (err error) {
 	torrent := CreateTorrentFromMagnet(magnet, i.Arr.Name, "manual")
 	debridTorrent, err := debrid.ProcessTorrent(svc.Debrid, magnet, i.Arr, i.IsSymlink)
 	if err != nil || debridTorrent == nil {
-		fmt.Println("Error deleting torrent: ", err)
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
 			go dbClient.DeleteTorrent(debridTorrent)
