@@ -75,9 +75,7 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *arr.Arr, isSymlink bool) {
 	debridClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
 	for debridTorrent.Status != "downloaded" {
-		progress := debridTorrent.Progress
-		q.logger.Debug().Msgf("%s -> (%s) Download Progress: %.2f%%", debridTorrent.Debrid, debridTorrent.Name, progress)
-		time.Sleep(10 * time.Second)
+		q.logger.Debug().Msgf("%s <- (%s) Download Progress: %.2f%%", debridTorrent.Debrid, debridTorrent.Name, debridTorrent.Progress)
 		dbT, err := debridClient.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Error().Msgf("Error checking status: %v", err)
@@ -86,8 +84,17 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 			_ = arr.Refresh()
 			return
 		}
+
 		debridTorrent = dbT
 		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
+
+		// Exit the loop for downloading statuses to prevent memory buildup
+		if slices.Contains(debridClient.GetDownloadingStatus(), debridTorrent.Status) {
+			q.logger.Debug().Msgf("Torrent is in %s state, exiting polling loop", debridTorrent.Status)
+			break
+		}
+
+		time.Sleep(time.Duration(q.RefreshInterval) * time.Second)
 	}
 	var (
 		torrentSymlinkPath string

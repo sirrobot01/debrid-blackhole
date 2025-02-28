@@ -216,7 +216,6 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 		t.Status = status
 		t.Debrid = r.Name
 		t.MountPath = r.MountPath
-		downloadingStatus := []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
 		if status == "waiting_files_selection" {
 			files := GetTorrentFiles(data, true) // Validate files to be selected
 			t.Files = files
@@ -247,7 +246,7 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 				}
 			}
 			break
-		} else if slices.Contains(downloadingStatus, status) {
+		} else if slices.Contains(r.GetDownloadingStatus(), status) {
 			if !r.DownloadUncached {
 				return t, fmt.Errorf("torrent: %s not cached", t.Name)
 			}
@@ -377,6 +376,10 @@ func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 	}
 	return torrents, nil
 
+}
+
+func (r *RealDebrid) GetDownloadingStatus() []string {
+	return []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *RealDebrid {

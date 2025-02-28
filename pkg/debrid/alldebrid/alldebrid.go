@@ -10,6 +10,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"slices"
 
 	"net/http"
 	gourl "net/url"
@@ -192,7 +193,7 @@ func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*tor
 				}
 			}
 			break
-		} else if status == "downloading" {
+		} else if slices.Contains(ad.GetDownloadingStatus(), status) {
 			if !ad.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
@@ -275,6 +276,10 @@ func (ad *AllDebrid) GetCheckCached() bool {
 
 func (ad *AllDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (ad *AllDebrid) GetDownloadingStatus() []string {
+	return []string{"downloading"}
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *AllDebrid {

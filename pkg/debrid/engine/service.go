@@ -17,4 +17,5 @@ type Service interface {
 	GetTorrents() ([]*torrent.Torrent, error)
 	GetName() string
 	GetLogger() zerolog.Logger
+	GetDownloadingStatus() []string
 }

@@ -232,7 +232,7 @@ func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torren
 				}
 			}
 			break
-		} else if status == "downloading" {
+		} else if slices.Contains(tb.GetDownloadingStatus(), status) {
 			if !tb.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
@@ -320,6 +320,10 @@ func (tb *Torbox) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torre
 		Filename:     file.Name,
 		DownloadLink: link,
 	}
+}
+
+func (tb *Torbox) GetDownloadingStatus() []string {
+	return []string{"downloading"}
 }
 
 func (tb *Torbox) GetCheckCached() bool {
