@@ -91,11 +91,9 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 
 		// Exit the loop for downloading statuses to prevent memory buildup
-		if slices.Contains(debridClient.GetDownloadingStatus(), debridTorrent.Status) {
-			q.logger.Debug().Msgf("Torrent is in %s state, exiting polling loop", debridTorrent.Status)
+		if !slices.Contains(debridClient.GetDownloadingStatus(), debridTorrent.Status) {
 			break
 		}
-
 		time.Sleep(time.Duration(q.RefreshInterval) * time.Second)
 	}
 	var (
