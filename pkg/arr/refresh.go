@@ -24,7 +24,7 @@ func (a *Arr) Refresh() error {
 		}
 	}
 
-	return fmt.Errorf("failed to refresh: %v(status: %s)", err, resp.Status)
+	return fmt.Errorf("failed to refresh: %v", err)
 }
 
 func (a *Arr) Blacklist(infoHash string) error {

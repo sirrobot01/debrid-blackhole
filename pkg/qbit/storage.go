@@ -141,10 +141,10 @@ func (ts *TorrentStorage) Delete(hash, category string) {
 			}
 		}
 	}
+	delete(ts.torrents, key)
 	if torrent == nil {
 		return
 	}
-	delete(ts.torrents, key)
 	// Delete the torrent folder
 	if torrent.ContentPath != "" {
 		err := os.RemoveAll(torrent.ContentPath)
