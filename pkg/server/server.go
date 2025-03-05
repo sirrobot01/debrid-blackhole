@@ -37,6 +37,10 @@ func New() *Server {
 func (s *Server) Start(ctx context.Context) error {
 	cfg := config.GetConfig()
 	// Register routes
+	// Register webhooks
+	s.router.Post("/webhooks/tautulli", s.handleTautulli)
+
+	// Register logs
 	s.router.Get("/logs", s.getLogs)
 	port := fmt.Sprintf(":%s", cfg.QBitTorrent.Port)
 	s.logger.Info().Msgf("Starting server on %s", port)

@@ -8,7 +8,6 @@ type Movie struct {
 		MovieId      int    `json:"movieId"`
 		RelativePath string `json:"relativePath"`
 		Path         string `json:"path"`
-		Size         int    `json:"size"`
 		Id           int    `json:"id"`
 	} `json:"movieFile"`
 	Id int `json:"id"`

@@ -20,7 +20,7 @@ func Start(ctx context.Context) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error)
 
-	_log := logger.GetLogger(cfg.LogLevel)
+	_log := logger.GetDefaultLogger()
 
 	_log.Info().Msgf("Version: %s", version.GetInfo().String())
 	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())

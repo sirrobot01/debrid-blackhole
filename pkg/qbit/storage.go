@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 )
 
@@ -109,7 +110,46 @@ func (ts *TorrentStorage) GetAll(category string, filter string, hashes []string
 				}
 			}
 		}
-		return filtered
+		torrents = filtered
+	}
+	return torrents
+}
+
+func (ts *TorrentStorage) GetAllSorted(category string, filter string, hashes []string, sortBy string, ascending bool) []*Torrent {
+	torrents := ts.GetAll(category, filter, hashes)
+	if sortBy != "" {
+		sort.Slice(torrents, func(i, j int) bool {
+			// If ascending is false, swap i and j to get descending order
+			if !ascending {
+				i, j = j, i
+			}
+
+			switch sortBy {
+			case "name":
+				return torrents[i].Name < torrents[j].Name
+			case "size":
+				return torrents[i].Size < torrents[j].Size
+			case "added_on":
+				return torrents[i].AddedOn < torrents[j].AddedOn
+			case "completed":
+				return torrents[i].Completed < torrents[j].Completed
+			case "progress":
+				return torrents[i].Progress < torrents[j].Progress
+			case "state":
+				return torrents[i].State < torrents[j].State
+			case "category":
+				return torrents[i].Category < torrents[j].Category
+			case "dlspeed":
+				return torrents[i].Dlspeed < torrents[j].Dlspeed
+			case "upspeed":
+				return torrents[i].Upspeed < torrents[j].Upspeed
+			case "ratio":
+				return torrents[i].Ratio < torrents[j].Ratio
+			default:
+				// Default sort by added_on
+				return torrents[i].AddedOn < torrents[j].AddedOn
+			}
+		})
 	}
 	return torrents
 }

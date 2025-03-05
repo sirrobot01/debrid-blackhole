@@ -145,3 +145,17 @@
     - Fix saving torrents error
     - Fix bugs with the UI
 - Speed improvements
+
+
+#### 0.5.0
+
+- A more refined repair worker(with more control)
+- UI Improvements
+  - Pagination for torrents
+  - Dark mode
+  - Ordered torrents table
+- Fix Arr API flaky behavior
+- Discord Notifications
+- Minor bug fixes
+- Add Tautulli support
+  - playback_failed event triggers a repair

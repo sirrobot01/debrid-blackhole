@@ -1,6 +1,7 @@
 package qbit
 
 import (
+	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 	"sync"
 )
@@ -228,6 +229,17 @@ type Torrent struct {
 
 func (t *Torrent) IsReady() bool {
 	return t.AmountLeft <= 0 && t.TorrentPath != ""
+}
+
+func (t *Torrent) discordContext() string {
+	format := `
+		**Name:** %s
+		**Arr:** %s
+		**Hash:** %s
+		**MagnetURI:** %s
+		**Debrid:** %s
+	`
+	return fmt.Sprintf(format, t.Name, t.Category, t.Hash, t.MagnetUri, t.Debrid)
 }
 
 type TorrentProperties struct {

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	db "github.com/sirrobot01/debrid-blackhole/pkg/debrid"
@@ -114,6 +115,11 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	}
 	torrent.TorrentPath = torrentSymlinkPath
 	q.UpdateTorrent(torrent, debridTorrent)
+	go func() {
+		if err := request.SendDiscordMessage("download_complete", "success", torrent.discordContext()); err != nil {
+			q.logger.Error().Msgf("Error sending discord message: %v", err)
+		}
+	}()
 	if err := arr.Refresh(); err != nil {
 		q.logger.Error().Msgf("Error refreshing arr: %v", err)
 	}
@@ -122,6 +128,11 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 func (q *QBit) MarkAsFailed(t *Torrent) *Torrent {
 	t.State = "error"
 	q.Storage.AddOrUpdate(t)
+	go func() {
+		if err := request.SendDiscordMessage("download_failed", "error", t.discordContext()); err != nil {
+			q.logger.Error().Msgf("Error sending discord message: %v", err)
+		}
+	}()
 	return t
 }
 

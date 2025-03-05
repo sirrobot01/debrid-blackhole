@@ -52,11 +52,11 @@ type Arr struct {
 }
 
 type Repair struct {
-	Enabled      bool   `json:"enabled"`
-	Interval     string `json:"interval"`
-	RunOnStart   bool   `json:"run_on_start"`
-	ZurgURL      string `json:"zurg_url"`
-	SkipDeletion bool   `json:"skip_deletion"`
+	Enabled     bool   `json:"enabled"`
+	Interval    string `json:"interval"`
+	RunOnStart  bool   `json:"run_on_start"`
+	ZurgURL     string `json:"zurg_url"`
+	AutoProcess bool   `json:"auto_process"`
 }
 
 type Auth struct {
@@ -65,20 +65,21 @@ type Auth struct {
 }
 
 type Config struct {
-	LogLevel     string      `json:"log_level"`
-	Debrid       Debrid      `json:"debrid"`
-	Debrids      []Debrid    `json:"debrids"`
-	Proxy        Proxy       `json:"proxy"`
-	MaxCacheSize int         `json:"max_cache_size"`
-	QBitTorrent  QBitTorrent `json:"qbittorrent"`
-	Arrs         []Arr       `json:"arrs"`
-	Repair       Repair      `json:"repair"`
-	AllowedExt   []string    `json:"allowed_file_types"`
-	MinFileSize  string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
-	MaxFileSize  string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
-	Path         string      `json:"-"`             // Path to save the config file
-	UseAuth      bool        `json:"use_auth"`
-	Auth         *Auth       `json:"-"`
+	LogLevel       string      `json:"log_level"`
+	Debrid         Debrid      `json:"debrid"`
+	Debrids        []Debrid    `json:"debrids"`
+	Proxy          Proxy       `json:"proxy"`
+	MaxCacheSize   int         `json:"max_cache_size"`
+	QBitTorrent    QBitTorrent `json:"qbittorrent"`
+	Arrs           []Arr       `json:"arrs"`
+	Repair         Repair      `json:"repair"`
+	AllowedExt     []string    `json:"allowed_file_types"`
+	MinFileSize    string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
+	MaxFileSize    string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
+	Path           string      `json:"-"`             // Path to save the config file
+	UseAuth        bool        `json:"use_auth"`
+	Auth           *Auth       `json:"-"`
+	DiscordWebhook string      `json:"discord_webhook_url"`
 }
 
 func (c *Config) JsonFile() string {
@@ -207,10 +208,7 @@ func GetConfig() *Config {
 	once.Do(func() {
 		instance = &Config{} // Initialize instance first
 		if err := instance.loadConfig(); err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "configuration Error: %v\n", err)
-			if err != nil {
-				return
-			}
+			fmt.Fprintf(os.Stderr, "configuration Error: %v\n", err)
 			os.Exit(1)
 		}
 	})

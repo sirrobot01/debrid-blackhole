@@ -46,9 +46,10 @@ type ContentResponse struct {
 }
 
 type RepairRequest struct {
-	ArrName  string   `json:"arr"`
-	MediaIds []string `json:"mediaIds"`
-	Async    bool     `json:"async"`
+	ArrName     string   `json:"arr"`
+	MediaIds    []string `json:"mediaIds"`
+	Async       bool     `json:"async"`
+	AutoProcess bool     `json:"autoProcess"`
 }
 
 //go:embed web/*
@@ -383,7 +384,7 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 	if req.Async {
 		go func() {
-			if err := svc.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+			if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess); err != nil {
 				ui.logger.Error().Err(err).Msg("Failed to repair media")
 			}
 		}()
@@ -391,7 +392,7 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := svc.Repair.Repair([]*arr.Arr{_arr}, req.MediaIds); err != nil {
+	if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to repair: %v", err), http.StatusInternalServerError)
 		return
 
@@ -440,4 +441,42 @@ func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.Arrs = arrCfgs
 	request.JSONResponse(w, cfg, http.StatusOK)
+}
+
+func (ui *Handler) handleGetRepairJobs(w http.ResponseWriter, r *http.Request) {
+	svc := service.GetService()
+	request.JSONResponse(w, svc.Repair.GetJobs(), http.StatusOK)
+}
+
+func (ui *Handler) handleProcessRepairJob(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "No job ID provided", http.StatusBadRequest)
+		return
+	}
+	svc := service.GetService()
+	if err := svc.Repair.ProcessJob(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (ui *Handler) handleDeleteRepairJob(w http.ResponseWriter, r *http.Request) {
+	// Read ids from body
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.IDs) == 0 {
+		http.Error(w, "No job IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	svc := service.GetService()
+	svc.Repair.DeleteJobs(req.IDs)
+	w.WriteHeader(http.StatusOK)
 }

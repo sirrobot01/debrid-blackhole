@@ -27,14 +27,27 @@
                                     <!-- Empty label to keep the button aligned -->
                                 </label>
                                 <div class="btn btn-primary w-100" onclick="registerMagnetLinkHandler()" id="registerMagnetLink">
-                                    Open Magnet Links in DecyphArr
+                                    Open Magnet Links in Decypharr
                                 </div>
                             </div>
-                            <div class="col-12 mt-3">
+                            <div class="col-md-6 mt-3">
+                                <div class="form-group">
+                                    <label for="discordWebhookUrl">Discord Webhook URL</label>
+                                    <div class="input-group">
+                                        <textarea type="text"
+                                               class="form-control"
+                                               id="discordWebhookUrl"
+                                               name="discord_webhook_url"
+                                               disabled
+                                               placeholder="https://discord..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3">
                                 <div class="form-group">
                                     <label for="allowedExtensions">Allowed File Extensions</label>
                                     <div class="input-group">
-                                        <textarea type="text"
+                                        <textarea
                                                class="form-control"
                                                id="allowedExtensions"
                                                name="allowed_file_types"
@@ -145,8 +158,8 @@
                                 <label class="form-check-label" for="repairOnStart">Run on Start</label>
                             </div>
                             <div class="form-check d-inline-block">
-                                <input type="checkbox" disabled class="form-check-input" name="repair.skip_deletion" id="skipDeletion">
-                                <label class="form-check-label" for="skipDeletion">Run on Start</label>
+                                <input type="checkbox" disabled class="form-check-input" name="repair.auto_process" id="autoProcess">
+                                <label class="form-check-label" for="autoProcess">Auto Process(Scheduled jobs will be processed automatically)</label>
                             </div>
                         </div>
                     </div>
@@ -279,6 +292,9 @@
                     }
                     if (config.max_file_size) {
                         document.querySelector('[name="max_file_size"]').value = config.max_file_size;
+                    }
+                    if (config.discord_webhook_url) {
+                        document.querySelector('[name="discord_webhook_url"]').value = config.discord_webhook_url;
                     }
 
                 });

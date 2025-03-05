@@ -7,25 +7,38 @@ import (
 	"strconv"
 )
 
-func (a *Arr) GetMedia(tvId string) ([]Content, error) {
+type episode struct {
+	Id            int `json:"id"`
+	EpisodeFileID int `json:"episodeFileId"`
+}
+
+func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
 	// Get series
-	resp, err := a.Request(http.MethodGet, fmt.Sprintf("api/v3/series?tvdbId=%s", tvId), nil)
+	if a.Type == Radarr {
+		return GetMovies(a, mediaId)
+	}
+	// This is likely Sonarr
+	resp, err := a.Request(http.MethodGet, fmt.Sprintf("api/v3/series?tvdbId=%s", mediaId), nil)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
 		// This is likely Radarr
-		return GetMovies(a, tvId)
+		return GetMovies(a, mediaId)
 	}
 	a.Type = Sonarr
-	defer resp.Body.Close()
+
 	type series struct {
 		Title string `json:"title"`
 		Id    int    `json:"id"`
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get series: %s", resp.Status)
+	}
 	var data []series
 	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode series: %v", err)
 	}
 	// Get series files
 	contents := make([]Content, 0)
@@ -42,11 +55,6 @@ func (a *Arr) GetMedia(tvId string) ([]Content, error) {
 		ct := Content{
 			Title: d.Title,
 			Id:    d.Id,
-		}
-
-		type episode struct {
-			Id            int `json:"id"`
-			EpisodeFileID int `json:"episodeFileId"`
 		}
 		resp, err = a.Request(http.MethodGet, fmt.Sprintf("api/v3/episode?seriesId=%d", d.Id), nil)
 		if err != nil {
@@ -67,11 +75,19 @@ func (a *Arr) GetMedia(tvId string) ([]Content, error) {
 			if !ok {
 				eId = 0
 			}
+			if file.Id == 0 || file.Path == "" {
+				// Skip files without path
+				continue
+			}
 			files = append(files, ContentFile{
 				FileId: file.Id,
 				Path:   file.Path,
 				Id:     eId,
 			})
+		}
+		if len(files) == 0 {
+			// Skip series without files
+			continue
 		}
 		ct.Files = files
 		contents = append(contents, ct)
@@ -92,7 +108,7 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	defer resp.Body.Close()
 	var movies []Movie
 	if err = json.NewDecoder(resp.Body).Decode(&movies); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode movies: %v", err)
 	}
 	contents := make([]Content, 0)
 	for _, movie := range movies {
@@ -101,6 +117,10 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 			Id:    movie.Id,
 		}
 		files := make([]ContentFile, 0)
+		if movie.MovieFile.Id == 0 || movie.MovieFile.Path == "" {
+			// Skip movies without files
+			continue
+		}
 		files = append(files, ContentFile{
 			FileId: movie.MovieFile.Id,
 			Id:     movie.Id,

@@ -2,13 +2,16 @@ package arr
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Type is a type of arr
@@ -21,51 +24,84 @@ const (
 	Readarr Type = "readarr"
 )
 
-var (
-	client *request.RLHTTPClient = request.NewRLHTTPClient(nil, nil)
-)
-
 type Arr struct {
 	Name    string `json:"name"`
 	Host    string `json:"host"`
 	Token   string `json:"token"`
 	Type    Type   `json:"type"`
 	Cleanup bool   `json:"cleanup"`
+	client  *http.Client
 }
 
 func New(name, host, token string, cleanup bool) *Arr {
 	return &Arr{
 		Name:    name,
 		Host:    host,
-		Token:   token,
+		Token:   strings.TrimSpace(token),
 		Type:    InferType(host, name),
 		Cleanup: cleanup,
+		client: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				Proxy:           http.ProxyFromEnvironment,
+			},
+		},
 	}
 }
 
 func (a *Arr) Request(method, endpoint string, payload interface{}) (*http.Response, error) {
 	if a.Token == "" || a.Host == "" {
-		return nil, nil
+		return nil, fmt.Errorf("arr not configured")
 	}
 	url, err := request.JoinURL(a.Host, endpoint)
 	if err != nil {
 		return nil, err
 	}
-	var jsonPayload []byte
-
+	var body io.Reader
 	if payload != nil {
-		jsonPayload, err = json.Marshal(payload)
+		b, err := json.Marshal(payload)
 		if err != nil {
 			return nil, err
 		}
+		body = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequest(method, url, body)
+
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", a.Token)
-	return client.Do(req)
+	if a.client == nil {
+		a.client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				Proxy:           http.ProxyFromEnvironment,
+			},
+		}
+	}
+
+	var resp *http.Response
+
+	for attempts := 0; attempts < 5; attempts++ {
+		resp, err = a.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		// If we got a 401, wait briefly and retry
+		if resp.StatusCode == http.StatusUnauthorized {
+			resp.Body.Close() // Don't leak response bodies
+			if attempts < 4 { // Don't sleep on the last attempt
+				time.Sleep(time.Duration(attempts+1) * 100 * time.Millisecond)
+				continue
+			}
+		}
+
+		return resp, nil
+	}
+
+	return resp, err
 }
 
 func (a *Arr) Validate() error {

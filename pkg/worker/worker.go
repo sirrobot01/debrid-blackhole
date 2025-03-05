@@ -100,7 +100,7 @@ func cleanUpQueues() {
 		if !a.Cleanup {
 			continue
 		}
-		_logger.Debug().Msgf("Cleaning up queue for %s", a.Name)
+		_logger.Trace().Msgf("Cleaning up queue for %s", a.Name)
 		if err := a.CleanupQueue(); err != nil {
 			_logger.Debug().Err(err).Msg("Error cleaning up queue")
 		}

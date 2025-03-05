@@ -3,6 +3,7 @@ package torrent
 import (
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/cache"
+	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
@@ -66,6 +67,7 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 }
 
 func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
+	_log := logger.GetDefaultLogger()
 	possiblePaths := []string{
 		t.OriginalFilename,
 		t.Filename,
@@ -73,7 +75,9 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 	}
 
 	for _, path := range possiblePaths {
-		_, err := os.Stat(filepath.Join(rClonePath, path))
+		_p := filepath.Join(rClonePath, path)
+		_log.Trace().Msgf("Checking path: %s", _p)
+		_, err := os.Stat(_p)
 		if !os.IsNotExist(err) {
 			return path, nil
 		}

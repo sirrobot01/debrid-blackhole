@@ -2,20 +2,23 @@ package repair
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
-	"log"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,57 +26,130 @@ import (
 )
 
 type Repair struct {
-	Jobs       []Job `json:"jobs"`
-	arrs       *arr.Storage
-	deb        engine.Service
-	duration   time.Duration
-	runOnStart bool
-	ZurgURL    string
-	IsZurg     bool
-	logger     zerolog.Logger
+	Jobs        map[string]*Job
+	arrs        *arr.Storage
+	deb         engine.Service
+	duration    time.Duration
+	runOnStart  bool
+	ZurgURL     string
+	IsZurg      bool
+	autoProcess bool
+	logger      zerolog.Logger
+	filename    string
 }
 
-func New(deb *engine.Engine, arrs *arr.Storage) *Repair {
+func New(arrs *arr.Storage) *Repair {
 	cfg := config.GetConfig()
 	duration, err := parseSchedule(cfg.Repair.Interval)
 	if err != nil {
 		duration = time.Hour * 24
 	}
 	r := &Repair{
-		arrs:       arrs,
-		deb:        deb.Get(),
-		logger:     logger.NewLogger("repair", cfg.LogLevel, os.Stdout),
-		duration:   duration,
-		runOnStart: cfg.Repair.RunOnStart,
-		ZurgURL:    cfg.Repair.ZurgURL,
+		arrs:        arrs,
+		logger:      logger.NewLogger("repair", cfg.LogLevel, os.Stdout),
+		duration:    duration,
+		runOnStart:  cfg.Repair.RunOnStart,
+		ZurgURL:     cfg.Repair.ZurgURL,
+		autoProcess: cfg.Repair.AutoProcess,
+		filename:    filepath.Join(cfg.Path, "repair.json"),
 	}
 	if r.ZurgURL != "" {
 		r.IsZurg = true
 	}
+	// Load jobs from file
+	r.loadFromFile()
+
 	return r
 }
 
+type JobStatus string
+
+const (
+	JobStarted   JobStatus = "started"
+	JobPending   JobStatus = "pending"
+	JobFailed    JobStatus = "failed"
+	JobCompleted JobStatus = "completed"
+)
+
 type Job struct {
-	ID          string     `json:"id"`
-	Arrs        []*arr.Arr `json:"arrs"`
-	MediaIDs    []string   `json:"media_ids"`
-	StartedAt   time.Time  `json:"created_at"`
-	CompletedAt time.Time  `json:"finished_at"`
-	FailedAt    time.Time  `json:"failed_at"`
+	ID          string                       `json:"id"`
+	Arrs        []*arr.Arr                   `json:"arrs"`
+	MediaIDs    []string                     `json:"media_ids"`
+	OneOff      bool                         `json:"one_off"`
+	StartedAt   time.Time                    `json:"created_at"`
+	BrokenItems map[string][]arr.ContentFile `json:"broken_items"`
+	Status      JobStatus                    `json:"status"`
+	CompletedAt time.Time                    `json:"finished_at"`
+	FailedAt    time.Time                    `json:"failed_at"`
+	AutoProcess bool                         `json:"auto_process"`
 
 	Error string `json:"error"`
 }
 
-func (r *Repair) NewJob(arrs []*arr.Arr, mediaIDs []string) *Job {
+func (j *Job) discordContext() string {
+	format := `
+		**ID**: %s
+		**Arrs**: %s
+		**Media IDs**: %s
+		**Status**: %s
+		**Started At**: %s
+		**Completed At**: %s 
+`
+	arrs := make([]string, 0)
+	for _, a := range j.Arrs {
+		arrs = append(arrs, a.Name)
+	}
+
+	dateFmt := "2006-01-02 15:04:05"
+
+	return fmt.Sprintf(format, j.ID, strings.Join(arrs, ","), strings.Join(j.MediaIDs, ", "), j.Status, j.StartedAt.Format(dateFmt), j.CompletedAt.Format(dateFmt))
+}
+
+func (r *Repair) getArrs(arrNames []string) []*arr.Arr {
+	arrs := make([]*arr.Arr, 0)
+	if len(arrNames) == 0 {
+		arrs = r.arrs.GetAll()
+	} else {
+		for _, name := range arrNames {
+			a := r.arrs.Get(name)
+			if a == nil || a.Host == "" || a.Token == "" {
+				continue
+			}
+			arrs = append(arrs, a)
+		}
+	}
+	return arrs
+}
+
+func jobKey(arrNames []string, mediaIDs []string) string {
+	return fmt.Sprintf("%s-%s", strings.Join(arrNames, ","), strings.Join(mediaIDs, ","))
+}
+
+func (r *Repair) reset(j *Job) {
+	// Update job for rerun
+	j.Status = JobStarted
+	j.StartedAt = time.Now()
+	j.CompletedAt = time.Time{}
+	j.FailedAt = time.Time{}
+	j.BrokenItems = nil
+	j.Error = ""
+	if j.Arrs == nil {
+		j.Arrs = r.getArrs([]string{}) // Get new arrs
+	}
+}
+
+func (r *Repair) newJob(arrsNames []string, mediaIDs []string) *Job {
+	arrs := r.getArrs(arrsNames)
 	return &Job{
 		ID:        uuid.New().String(),
 		Arrs:      arrs,
 		MediaIDs:  mediaIDs,
 		StartedAt: time.Now(),
+		Status:    JobStarted,
 	}
 }
 
-func (r *Repair) PreRunChecks() error {
+func (r *Repair) preRunChecks() error {
 	// Check if zurg url is reachable
 	if !r.IsZurg {
 		return nil
@@ -90,43 +166,119 @@ func (r *Repair) PreRunChecks() error {
 	return nil
 }
 
-func (r *Repair) Repair(arrs []*arr.Arr, mediaIds []string) error {
+func (r *Repair) AddJob(arrsNames []string, mediaIDs []string, autoProcess bool) error {
+	key := jobKey(arrsNames, mediaIDs)
+	job, ok := r.Jobs[key]
+	if !ok {
+		job = r.newJob(arrsNames, mediaIDs)
+	}
+	job.AutoProcess = autoProcess
+	r.reset(job)
+	r.Jobs[key] = job
+	go r.saveToFile()
+	err := r.repair(job)
+	go r.saveToFile()
+	return err
+}
 
-	j := r.NewJob(arrs, mediaIds)
-
-	if err := r.PreRunChecks(); err != nil {
+func (r *Repair) repair(job *Job) error {
+	if err := r.preRunChecks(); err != nil {
 		return err
 	}
-	var wg sync.WaitGroup
-	errors := make(chan error)
-	for _, a := range j.Arrs {
-		wg.Add(1)
-		go func(a *arr.Arr) {
-			defer wg.Done()
-			if len(j.MediaIDs) == 0 {
-				if err := r.RepairArr(a, ""); err != nil {
-					log.Printf("Error repairing %s: %v", a.Name, err)
-					errors <- err
+
+	// Create a new error group with context
+	g, ctx := errgroup.WithContext(context.Background())
+
+	// Use a mutex to protect concurrent access to brokenItems
+	var mu sync.Mutex
+	brokenItems := map[string][]arr.ContentFile{}
+
+	for _, a := range job.Arrs {
+		a := a // Capture range variable
+		g.Go(func() error {
+			var items []arr.ContentFile
+			var err error
+
+			if len(job.MediaIDs) == 0 {
+				items, err = r.repairArr(job, a, "")
+				if err != nil {
+					r.logger.Error().Err(err).Msgf("Error repairing %s", a.Name)
+					return err
 				}
 			} else {
-				for _, id := range j.MediaIDs {
-					if err := r.RepairArr(a, id); err != nil {
-						log.Printf("Error repairing %s: %v", a.Name, err)
-						errors <- err
+				for _, id := range job.MediaIDs {
+					// Check if any other goroutine has failed
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
 					}
+
+					someItems, err := r.repairArr(job, a, id)
+					if err != nil {
+						r.logger.Error().Err(err).Msgf("Error repairing %s with ID %s", a.Name, id)
+						return err
+					}
+					items = append(items, someItems...)
 				}
 			}
-		}(a)
+
+			// Safely append the found items to the shared slice
+			if len(items) > 0 {
+				mu.Lock()
+				brokenItems[a.Name] = items
+				mu.Unlock()
+			}
+
+			return nil
+		})
 	}
-	wg.Wait()
-	close(errors)
-	err := <-errors
-	if err != nil {
-		j.FailedAt = time.Now()
-		j.Error = err.Error()
+
+	// Wait for all goroutines to complete and check for errors
+	if err := g.Wait(); err != nil {
+		job.FailedAt = time.Now()
+		job.Error = err.Error()
+		job.Status = JobFailed
+		job.CompletedAt = time.Now()
+		go func() {
+			if err := request.SendDiscordMessage("repair_failed", "error", job.discordContext()); err != nil {
+				r.logger.Error().Msgf("Error sending discord message: %v", err)
+			}
+		}()
 		return err
 	}
-	j.CompletedAt = time.Now()
+
+	if len(brokenItems) == 0 {
+		job.CompletedAt = time.Now()
+		job.Status = JobCompleted
+
+		go func() {
+			if err := request.SendDiscordMessage("repair_complete", "success", job.discordContext()); err != nil {
+				r.logger.Error().Msgf("Error sending discord message: %v", err)
+			}
+		}()
+
+		return nil
+	}
+
+	job.BrokenItems = brokenItems
+	if job.AutoProcess {
+		// Job is already processed
+		job.CompletedAt = time.Now() // Mark as completed
+		job.Status = JobCompleted
+		go func() {
+			if err := request.SendDiscordMessage("repair_complete", "success", job.discordContext()); err != nil {
+				r.logger.Error().Msgf("Error sending discord message: %v", err)
+			}
+		}()
+	} else {
+		job.Status = JobPending
+		go func() {
+			if err := request.SendDiscordMessage("repair_pending", "pending", job.discordContext()); err != nil {
+				r.logger.Error().Msgf("Error sending discord message: %v", err)
+			}
+		}()
+	}
 	return nil
 }
 
@@ -138,8 +290,8 @@ func (r *Repair) Start(ctx context.Context) error {
 	if r.runOnStart {
 		r.logger.Info().Msgf("Running initial repair")
 		go func() {
-			if err := r.Repair(r.arrs.GetAll(), []string{}); err != nil {
-				r.logger.Info().Msgf("Error during initial repair: %v", err)
+			if err := r.AddJob([]string{}, []string{}, r.autoProcess); err != nil {
+				r.logger.Error().Err(err).Msg("Error running initial repair")
 			}
 		}()
 	}
@@ -156,9 +308,8 @@ func (r *Repair) Start(ctx context.Context) error {
 			return nil
 		case t := <-ticker.C:
 			r.logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
-			err := r.Repair(r.arrs.GetAll(), []string{})
-			if err != nil {
-				r.logger.Info().Msgf("Error during repair: %v", err)
+			if err := r.AddJob([]string{}, []string{}, r.autoProcess); err != nil {
+				r.logger.Error().Err(err).Msg("Error running repair")
 			}
 
 			// If using time-of-day schedule, reset the ticker for next day
@@ -171,55 +322,78 @@ func (r *Repair) Start(ctx context.Context) error {
 	}
 }
 
-func (r *Repair) RepairArr(a *arr.Arr, tmdbId string) error {
-
-	cfg := config.GetConfig()
+func (r *Repair) repairArr(j *Job, a *arr.Arr, tmdbId string) ([]arr.ContentFile, error) {
+	brokenItems := make([]arr.ContentFile, 0)
 
 	r.logger.Info().Msgf("Starting repair for %s", a.Name)
 	media, err := a.GetMedia(tmdbId)
 	if err != nil {
 		r.logger.Info().Msgf("Failed to get %s media: %v", a.Name, err)
-		return err
+		return brokenItems, err
 	}
 	r.logger.Info().Msgf("Found %d %s media", len(media), a.Name)
 
 	if len(media) == 0 {
 		r.logger.Info().Msgf("No %s media found", a.Name)
-		return nil
+		return brokenItems, nil
 	}
 	// Check first media to confirm mounts are accessible
 	if !r.isMediaAccessible(media[0]) {
 		r.logger.Info().Msgf("Skipping repair. Parent directory not accessible for. Check your mounts")
-		return nil
+		return brokenItems, nil
 	}
 
-	semaphore := make(chan struct{}, runtime.NumCPU()*4)
-	totalBrokenItems := 0
-	var wg sync.WaitGroup
+	// Create a new error group
+	g, ctx := errgroup.WithContext(context.Background())
+
+	// Limit concurrent goroutines
+	g.SetLimit(runtime.NumCPU() * 4)
+
+	// Mutex for brokenItems
+	var mu sync.Mutex
+
 	for _, m := range media {
-		wg.Add(1)
-		semaphore <- struct{}{}
-		go func(m arr.Content) {
-			defer wg.Done()
-			defer func() { <-semaphore }()
-			brokenItems := r.getBrokenFiles(m)
-			if brokenItems != nil {
-				r.logger.Debug().Msgf("Found %d broken files for %s", len(brokenItems), m.Title)
-				if !cfg.Repair.SkipDeletion {
-					if err := a.DeleteFiles(brokenItems); err != nil {
-						r.logger.Info().Msgf("Failed to delete broken items for %s: %v", m.Title, err)
+		m := m // Create a new variable scoped to the loop iteration
+		g.Go(func() error {
+			// Check if context was canceled
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			items := r.getBrokenFiles(m)
+			if items != nil {
+				r.logger.Debug().Msgf("Found %d broken files for %s", len(items), m.Title)
+				if j.AutoProcess {
+					r.logger.Info().Msgf("Auto processing %d broken items for %s", len(items), m.Title)
+
+					// Delete broken items
+
+					if err := a.DeleteFiles(items); err != nil {
+						r.logger.Debug().Msgf("Failed to delete broken items for %s: %v", m.Title, err)
+					}
+
+					// Search for missing items
+					if err := a.SearchMissing(items); err != nil {
+						r.logger.Debug().Msgf("Failed to search missing items for %s: %v", m.Title, err)
 					}
 				}
-				if err := a.SearchMissing(brokenItems); err != nil {
-					r.logger.Info().Msgf("Failed to search missing items for %s: %v", m.Title, err)
-				}
-				totalBrokenItems += len(brokenItems)
+
+				mu.Lock()
+				brokenItems = append(brokenItems, items...)
+				mu.Unlock()
 			}
-		}(m)
+			return nil
+		})
 	}
-	wg.Wait()
-	r.logger.Info().Msgf("Repair completed for %s. %d broken items found", a.Name, totalBrokenItems)
-	return nil
+
+	if err := g.Wait(); err != nil {
+		return brokenItems, err
+	}
+
+	r.logger.Info().Msgf("Repair completed for %s. %d broken items found", a.Name, len(brokenItems))
+	return brokenItems, nil
 }
 
 func (r *Repair) isMediaAccessible(m arr.Content) bool {
@@ -328,9 +502,13 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
-		resp.Body.Close()
+		err = resp.Body.Close()
+		if err != nil {
+			return nil
+		}
 		if resp.StatusCode != http.StatusOK {
 			r.logger.Debug().Msgf("Failed to get download url for %s", fullURL)
+			resp.Body.Close()
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
@@ -349,4 +527,130 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 	}
 	r.logger.Debug().Msgf("%d broken files found for %s", len(brokenFiles), media.Title)
 	return brokenFiles
+}
+
+func (r *Repair) GetJob(id string) *Job {
+	for _, job := range r.Jobs {
+		if job.ID == id {
+			return job
+		}
+	}
+	return nil
+}
+
+func (r *Repair) GetJobs() []*Job {
+	jobs := make([]*Job, 0)
+	for _, job := range r.Jobs {
+		jobs = append(jobs, job)
+	}
+	sort.Slice(jobs, func(i, j int) bool {
+		return jobs[i].StartedAt.After(jobs[j].StartedAt)
+	})
+
+	return jobs
+}
+
+func (r *Repair) ProcessJob(id string) error {
+	job := r.GetJob(id)
+	if job == nil {
+		return fmt.Errorf("job %s not found", id)
+	}
+	if job.Status != JobPending {
+		return fmt.Errorf("job %s not pending", id)
+	}
+	if job.StartedAt.IsZero() {
+		return fmt.Errorf("job %s not started", id)
+	}
+	if !job.CompletedAt.IsZero() {
+		return fmt.Errorf("job %s already completed", id)
+	}
+	if !job.FailedAt.IsZero() {
+		return fmt.Errorf("job %s already failed", id)
+	}
+
+	brokenItems := job.BrokenItems
+	if len(brokenItems) == 0 {
+		r.logger.Info().Msgf("No broken items found for job %s", id)
+		job.CompletedAt = time.Now()
+		job.Status = JobCompleted
+		return nil
+	}
+
+	// Create a new error group
+	g := new(errgroup.Group)
+
+	for arrName, items := range brokenItems {
+		items := items
+		arrName := arrName
+		g.Go(func() error {
+			a := r.arrs.Get(arrName)
+			if a == nil {
+				r.logger.Error().Msgf("Arr %s not found", arrName)
+				return nil
+			}
+
+			if err := a.DeleteFiles(items); err != nil {
+				r.logger.Error().Err(err).Msgf("Failed to delete broken items for %s", arrName)
+				return nil
+
+			}
+			// Search for missing items
+			if err := a.SearchMissing(items); err != nil {
+				r.logger.Error().Err(err).Msgf("Failed to search missing items for %s", arrName)
+				return nil
+			}
+			return nil
+
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		job.FailedAt = time.Now()
+		job.Error = err.Error()
+		job.CompletedAt = time.Now()
+		job.Status = JobFailed
+		return err
+	}
+
+	job.CompletedAt = time.Now()
+	job.Status = JobCompleted
+
+	return nil
+}
+
+func (r *Repair) saveToFile() {
+	// Save jobs to file
+	data, err := json.Marshal(r.Jobs)
+	if err != nil {
+		r.logger.Debug().Err(err).Msg("Failed to marshal jobs")
+	}
+	err = os.WriteFile(r.filename, data, 0644)
+}
+
+func (r *Repair) loadFromFile() {
+	data, err := os.ReadFile(r.filename)
+	if err != nil && os.IsNotExist(err) {
+		r.Jobs = make(map[string]*Job)
+		return
+	}
+	jobs := make(map[string]*Job)
+	err = json.Unmarshal(data, &jobs)
+	if err != nil {
+		r.logger.Debug().Err(err).Msg("Failed to unmarshal jobs")
+	}
+	r.Jobs = jobs
+}
+
+func (r *Repair) DeleteJobs(ids []string) {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		for k, job := range r.Jobs {
+			if job.ID == id {
+				delete(r.Jobs, k)
+			}
+		}
+	}
+	go r.saveToFile()
 }

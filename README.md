@@ -48,20 +48,35 @@ The proxy is useful for filtering out un-cached Debrid torrents
 
 ### Installation
 
-##### Docker Compose
+##### Docker
+
+###### Registry
+You can use either hub.docker.com or ghcr.io to pull the image. The image is available on both platforms.
+
+- Docker Hub: `cy01/blackhole:latest`
+- GitHub Container Registry: `ghcr.io/sirrobot01/decypharr:latest`
+
+###### Tags
+
+- `latest`: The latest stable release
+- `beta`: The latest beta release
+- `vX.Y.Z`: A specific version (e.g `v0.1.0`)
+- `nightly`: The latest nightly build. This is highly unstable
+
+
 ```yaml
 version: '3.7'
 services:
-  blackhole:
+  decypharr:
     image: cy01/blackhole:latest # or cy01/blackhole:beta
-    container_name: blackhole
+    container_name: decypharr
     ports:
       - "8282:8282" # qBittorrent
       - "8181:8181" # Proxy
     user: "1000:1000"
     volumes:
       - /mnt/:/mnt
-      - ~/plex/configs/blackhole/:/app # config.json must be in this directory
+      - ~/plex/configs/decypharr/:/app # config.json must be in this directory
     environment:
       - PUID=1000
       - PGID=1000
@@ -78,7 +93,7 @@ services:
 Download the binary from the releases page and run it with the config file.
 
 ```bash
-./blackhole --config /app
+./decypharr --config /app
 ```
 
 ### Usage
@@ -116,7 +131,7 @@ This is the default config file. You can create a `config.json` file in the root
     }
   ],
   "proxy": {
-    "enabled": true,
+    "enabled": false,
     "port": "8100",
     "username": "username",
     "password": "password"
@@ -124,7 +139,8 @@ This is the default config file. You can create a `config.json` file in the root
   "qbittorrent": {
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
-    "categories": ["sonarr", "radarr"]
+    "categories": ["sonarr", "radarr"],
+    "log_level": "info"
   },
   "repair": {
     "enabled": false,
@@ -147,6 +163,7 @@ Full config are [here](doc/config.full.json)
 - The `max_cache_size` key is used to set the maximum number of infohashes that can be stored in the availability cache. This is used to prevent round trip to the debrid provider when using the proxy/Qbittorrent. The default value is `1000`
 - The `allowed_file_types` key is an array of allowed file types that can be downloaded. By default, all movie, tv show and music file types are allowed
 - The `use_auth` is used to enable basic authentication for the UI. The default value is `false`
+- The `discord_webhook_url` is used to send notifications to discord
 
 ##### Debrid Config
 - The `debrids` key is an array of debrid providers
@@ -164,7 +181,7 @@ The `repair` key is used to enable the repair worker
 - The `interval` key is the interval in either minutes, seconds, hours, days. Use any of this format, e.g 12:00, 5:00, 1h, 1d, 1m, 1s.
 - The `run_on_start` key is used to run the repair worker on start
 - The `zurg_url` is the url of the zurg server. Typically `http://localhost:9999` or `http://zurg:9999`
-- The `skip_deletion`: true if you don't want to delete the files
+- The `auto_process` is used to automatically process the repair worker. This will delete broken symlinks and re-search for missing files
 
 ##### Proxy Config
 - The `enabled` key is used to enable the proxy
@@ -191,15 +208,6 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 
 </details>
 
-
-### Proxy
-
-**Note**: Proxy has stopped working for Real Debrid, Debrid Link, and All Debrid. It still works for Torbox. This is due to the changes in the API of the Debrid Providers.
-
-The proxy is useful in filtering out un-cached Debrid torrents. 
-The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 
-The proxy listens on the port `8181` by default. The username and password can be set in the config file.
-
 ### Repair Worker
 
 The repair worker is a simple worker that checks for missing files in the Arrs(Sonarr, Radarr, etc). It's particularly useful for files either deleted by the Debrid provider or files with bad symlinks.
@@ -210,6 +218,14 @@ The repair worker is a simple worker that checks for missing files in the Arrs(S
 - Search for missing files
 - Search for deleted/unreadable files
 
+
+### Proxy
+
+#### **Note**: Proxy has stopped working for Real Debrid, Debrid Link, and All Debrid. It still works for Torbox. This is due to the changes in the API of the Debrid Providers.
+
+The proxy is useful in filtering out un-cached Debrid torrents. 
+The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 
+The proxy listens on the port `8181` by default. The username and password can be set in the config file.
 
 ### Changelog
 

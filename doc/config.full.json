@@ -58,7 +58,7 @@
       "name": "sonarr",
       "host": "http://host:8989",
       "token": "arr_key",
-      "cleanup": false
+      "cleanup": true
     },
     {
       "name": "radarr",
@@ -72,11 +72,12 @@
     "interval": "12h",
     "run_on_start": false,
     "zurg_url": "http://zurg:9999",
-    "skip_deletion": false
+    "auto_process": false
   },
   "log_level": "info",
   "min_file_size": "",
   "max_file_size": "",
   "allowed_file_types": [],
-  "use_auth": false
+  "use_auth": false,
+  "discord_webhook_url": "https://discord.com/api/webhooks/...",
 }

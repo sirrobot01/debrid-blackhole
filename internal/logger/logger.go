@@ -85,9 +85,10 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 	return logger
 }
 
-func GetLogger(level string) zerolog.Logger {
+func GetDefaultLogger() zerolog.Logger {
 	once.Do(func() {
-		logger = NewLogger("decypharr", level, os.Stdout)
+		cfg := config.GetConfig()
+		logger = NewLogger("decypharr", cfg.LogLevel, os.Stdout)
 	})
 	return logger
 }
