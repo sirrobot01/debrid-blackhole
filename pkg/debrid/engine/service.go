@@ -13,7 +13,7 @@ type Service interface {
 	DeleteTorrent(tr *torrent.Torrent)
 	IsAvailable(infohashes []string) map[string]bool
 	GetCheckCached() bool
-	GetTorrent(id string) (*torrent.Torrent, error)
+	GetTorrent(torrent *torrent.Torrent) (*torrent.Torrent, error)
 	GetTorrents() ([]*torrent.Torrent, error)
 	GetName() string
 	GetLogger() zerolog.Logger

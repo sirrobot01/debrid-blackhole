@@ -12,7 +12,7 @@
                             <div class="col-md-6">
                             <div class="form-group">
                                 <label for="qbitDebug">Log Level</label>
-                                <select class="form-select" name="qbit.log_level" id="log-level" disabled>
+                                <select class="form-select" name="log_level" id="log-level" disabled>
                                     <option value="info">Info</option>
                                     <option value="debug">Debug</option>
                                     <option value="warn">Warning</option>
@@ -114,18 +114,6 @@
                                 <label class="form-label">Refresh Interval (seconds)</label>
                                 <input type="number" class="form-control" name="qbit.refresh_interval">
                             </div>
-                            <div class="col-12 mb-3">
-                                <div class="form-group">
-                                    <label for="qbitDebug">Log Level</label>
-                                    <select class="form-select" name="qbit.log_level" id="qbitDebug" disabled>
-                                        <option value="info">Info</option>
-                                        <option value="debug">Debug</option>
-                                        <option value="warn">Warning</option>
-                                        <option value="error">Error</option>
-                                        <option value="trace">Trace</option>
-                                    </select>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -225,8 +213,20 @@
             <div class="row">
                 <div class="col-md-2 mb-3">
                     <div class="form-check">
-                        <label class="form-check-label" for="repairOnStart">Cleanup Queue</label>
+                        <label class="form-check-label">Cleanup Queue</label>
                         <input type="checkbox" disabled class="form-check-input" name="arr[${index}].cleanup">
+                    </div>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <div class="form-check">
+                        <label class="form-check-label">Skip Repair</label>
+                        <input type="checkbox" disabled class="form-check-input" name="arr[${index}].skip_repair">
+                    </div>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <div class="form-check">
+                        <label class="form-check-label">Download Uncached</label>
+                        <input type="checkbox" disabled class="form-check-input" name="arr[${index}].download_uncached">
                     </div>
                 </div>
             </div>

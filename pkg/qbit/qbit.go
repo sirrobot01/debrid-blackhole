@@ -33,7 +33,7 @@ func New() *QBit {
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Storage:         NewTorrentStorage(filepath.Join(_cfg.Path, "torrents.json")),
-		logger:          logger.NewLogger("qbit", cfg.LogLevel, os.Stdout),
+		logger:          logger.NewLogger("qbit", _cfg.LogLevel, os.Stdout),
 		RefreshInterval: refreshInterval,
 	}
 }

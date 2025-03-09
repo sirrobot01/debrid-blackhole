@@ -11,24 +11,6 @@ import (
 	"sync"
 )
 
-type Arr struct {
-	Name  string `json:"name"`
-	Token string `json:"-"`
-	Host  string `json:"host"`
-}
-
-type ArrHistorySchema struct {
-	Page          int    `json:"page"`
-	PageSize      int    `json:"pageSize"`
-	SortKey       string `json:"sortKey"`
-	SortDirection string `json:"sortDirection"`
-	TotalRecords  int    `json:"totalRecords"`
-	Records       []struct {
-		ID         int    `json:"id"`
-		DownloadID string `json:"downloadId"`
-	} `json:"records"`
-}
-
 type Torrent struct {
 	Id               string                   `json:"id"`
 	InfoHash         string                   `json:"info_hash"`
@@ -51,9 +33,10 @@ type Torrent struct {
 
 	Debrid string `json:"debrid"`
 
-	Arr            *arr.Arr   `json:"arr"`
-	Mu             sync.Mutex `json:"-"`
-	SizeDownloaded int64      `json:"-"` // This is used for local download
+	Arr              *arr.Arr   `json:"arr"`
+	Mu               sync.Mutex `json:"-"`
+	SizeDownloaded   int64      `json:"-"` // This is used for local download
+	DownloadUncached bool       `json:"-"`
 }
 
 type DownloadLinks struct {

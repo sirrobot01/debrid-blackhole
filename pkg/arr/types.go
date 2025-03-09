@@ -14,13 +14,14 @@ type Movie struct {
 }
 
 type ContentFile struct {
-	Name       string `json:"name"`
-	Path       string `json:"path"`
-	Id         int    `json:"id"`
-	FileId     int    `json:"fileId"`
-	TargetPath string `json:"targetPath"`
-	IsSymlink  bool   `json:"isSymlink"`
-	IsBroken   bool   `json:"isBroken"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Id           int    `json:"id"`
+	FileId       int    `json:"fileId"`
+	TargetPath   string `json:"targetPath"`
+	IsSymlink    bool   `json:"isSymlink"`
+	IsBroken     bool   `json:"isBroken"`
+	SeasonNumber int    `json:"seasonNumber"`
 }
 
 type Content struct {

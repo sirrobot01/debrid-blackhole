@@ -47,13 +47,14 @@ func createDebrid(dc config.Debrid, cache *cache.Cache) engine.Service {
 	}
 }
 
-func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlink bool) (*torrent.Torrent, error) {
+func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlink, downloadUncached bool) (*torrent.Torrent, error) {
 	debridTorrent := &torrent.Torrent{
-		InfoHash: magnet.InfoHash,
-		Magnet:   magnet,
-		Name:     magnet.Name,
-		Arr:      a,
-		Size:     magnet.Size,
+		InfoHash:         magnet.InfoHash,
+		Magnet:           magnet,
+		Name:             magnet.Name,
+		Arr:              a,
+		Size:             magnet.Size,
+		DownloadUncached: cmp.Or(downloadUncached, a.DownloadUncached),
 	}
 
 	errs := make([]error, 0)

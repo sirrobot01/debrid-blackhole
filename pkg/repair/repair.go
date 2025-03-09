@@ -12,6 +12,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
 	"golang.org/x/sync/errgroup"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -75,13 +76,13 @@ type Job struct {
 	ID          string                       `json:"id"`
 	Arrs        []*arr.Arr                   `json:"arrs"`
 	MediaIDs    []string                     `json:"media_ids"`
-	OneOff      bool                         `json:"one_off"`
 	StartedAt   time.Time                    `json:"created_at"`
 	BrokenItems map[string][]arr.ContentFile `json:"broken_items"`
 	Status      JobStatus                    `json:"status"`
 	CompletedAt time.Time                    `json:"finished_at"`
 	FailedAt    time.Time                    `json:"failed_at"`
 	AutoProcess bool                         `json:"auto_process"`
+	Recurrent   bool                         `json:"recurrent"`
 
 	Error string `json:"error"`
 }
@@ -106,10 +107,14 @@ func (j *Job) discordContext() string {
 }
 
 func (r *Repair) getArrs(arrNames []string) []*arr.Arr {
+	checkSkip := true // This is useful when user triggers repair with specific arrs
 	arrs := make([]*arr.Arr, 0)
 	if len(arrNames) == 0 {
+		// No specific arrs, get all
+		// Also check if any arrs are set to skip repair
 		arrs = r.arrs.GetAll()
 	} else {
+		checkSkip = false
 		for _, name := range arrNames {
 			a := r.arrs.Get(name)
 			if a == nil || a.Host == "" || a.Token == "" {
@@ -118,7 +123,17 @@ func (r *Repair) getArrs(arrNames []string) []*arr.Arr {
 			arrs = append(arrs, a)
 		}
 	}
-	return arrs
+	if !checkSkip {
+		return arrs
+	}
+	filtered := make([]*arr.Arr, 0)
+	for _, a := range arrs {
+		if a.SkipRepair {
+			continue
+		}
+		filtered = append(filtered, a)
+	}
+	return filtered
 }
 
 func jobKey(arrNames []string, mediaIDs []string) string {
@@ -133,7 +148,7 @@ func (r *Repair) reset(j *Job) {
 	j.FailedAt = time.Time{}
 	j.BrokenItems = nil
 	j.Error = ""
-	if j.Arrs == nil {
+	if j.Recurrent || j.Arrs == nil {
 		j.Arrs = r.getArrs([]string{}) // Get new arrs
 	}
 }
@@ -166,13 +181,17 @@ func (r *Repair) preRunChecks() error {
 	return nil
 }
 
-func (r *Repair) AddJob(arrsNames []string, mediaIDs []string, autoProcess bool) error {
+func (r *Repair) AddJob(arrsNames []string, mediaIDs []string, autoProcess, recurrent bool) error {
 	key := jobKey(arrsNames, mediaIDs)
 	job, ok := r.Jobs[key]
+	if job != nil && job.Status == JobStarted {
+		return fmt.Errorf("job already running")
+	}
 	if !ok {
 		job = r.newJob(arrsNames, mediaIDs)
 	}
 	job.AutoProcess = autoProcess
+	job.Recurrent = recurrent
 	r.reset(job)
 	r.Jobs[key] = job
 	go r.saveToFile()
@@ -290,7 +309,7 @@ func (r *Repair) Start(ctx context.Context) error {
 	if r.runOnStart {
 		r.logger.Info().Msgf("Running initial repair")
 		go func() {
-			if err := r.AddJob([]string{}, []string{}, r.autoProcess); err != nil {
+			if err := r.AddJob([]string{}, []string{}, r.autoProcess, true); err != nil {
 				r.logger.Error().Err(err).Msg("Error running initial repair")
 			}
 		}()
@@ -308,7 +327,7 @@ func (r *Repair) Start(ctx context.Context) error {
 			return nil
 		case t := <-ticker.C:
 			r.logger.Info().Msgf("Running repair at %v", t.Format("15:04:05"))
-			if err := r.AddJob([]string{}, []string{}, r.autoProcess); err != nil {
+			if err := r.AddJob([]string{}, []string{}, r.autoProcess, true); err != nil {
 				r.logger.Error().Err(err).Msg("Error running repair")
 			}
 
@@ -483,6 +502,16 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 			uniqueParents[parent] = append(uniqueParents[parent], file)
 		}
 	}
+	client := &http.Client{
+		Timeout: 0,
+		Transport: &http.Transport{
+			TLSHandshakeTimeout: 60 * time.Second,
+			DialContext: (&net.Dialer{
+				Timeout:   20 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+		},
+	}
 	// Access zurg url + symlink folder + first file(encoded)
 	for parent, f := range uniqueParents {
 		r.logger.Debug().Msgf("Checking %s", parent)
@@ -496,25 +525,25 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 			continue
 		}
 
-		resp, err := http.Get(fullURL)
+		resp, err := client.Get(fullURL)
 		if err != nil {
 			r.logger.Debug().Err(err).Msgf("Failed to reach %s", fullURL)
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
-		err = resp.Body.Close()
-		if err != nil {
-			return nil
-		}
+
 		if resp.StatusCode != http.StatusOK {
 			r.logger.Debug().Msgf("Failed to get download url for %s", fullURL)
 			resp.Body.Close()
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
+
 		downloadUrl := resp.Request.URL.String()
+		resp.Body.Close()
+
 		if downloadUrl != "" {
-			r.logger.Debug().Msgf("Found download url: %s", downloadUrl)
+			r.logger.Trace().Msgf("Found download url: %s", downloadUrl)
 		} else {
 			r.logger.Debug().Msgf("Failed to get download url for %s", fullURL)
 			brokenFiles = append(brokenFiles, f...)

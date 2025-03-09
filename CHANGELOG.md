@@ -159,3 +159,8 @@
 - Minor bug fixes
 - Add Tautulli support
   - playback_failed event triggers a repair
+- Miscellaneous improvements
+  - Add an option to skip the repair worker for a specific arr
+  - Arr specific uncached downloading option
+  - Option to download uncached torrents from UI
+- Remove QbitTorrent Log level(Use the global log level)

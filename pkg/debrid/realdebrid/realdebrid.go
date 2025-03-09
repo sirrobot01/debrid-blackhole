@@ -160,9 +160,8 @@ func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) 
 	return t, nil
 }
 
-func (r *RealDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
-	t := &torrent.Torrent{}
-	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, id)
+func (r *RealDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := r.client.MakeRequest(req)
 	if err != nil {
@@ -174,7 +173,6 @@ func (r *RealDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
 		return t, err
 	}
 	name := utils.RemoveInvalidChars(data.OriginalFilename)
-	t.Id = id
 	t.Name = name
 	t.Bytes = data.Bytes
 	t.Folder = name
@@ -251,7 +249,7 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 			}
 			break
 		} else if slices.Contains(r.GetDownloadingStatus(), status) {
-			if !r.DownloadUncached {
+			if !r.DownloadUncached && !t.DownloadUncached {
 				return t, fmt.Errorf("torrent: %s not cached", t.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

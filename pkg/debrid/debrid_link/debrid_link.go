@@ -97,9 +97,8 @@ func (dl *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 	return result
 }
 
-func (dl *DebridLink) GetTorrent(id string) (*torrent.Torrent, error) {
-	t := &torrent.Torrent{}
-	url := fmt.Sprintf("%s/seedbox/list?ids=%s", dl.Host, id)
+func (dl *DebridLink) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+	url := fmt.Sprintf("%s/seedbox/list?ids=%s", dl.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := dl.client.MakeRequest(req)
 	if err != nil {
@@ -204,7 +203,7 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 
 func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		t, err := dl.GetTorrent(torrent.Id)
+		t, err := dl.GetTorrent(torrent)
 		torrent = t
 		if err != nil || torrent == nil {
 			return torrent, err
@@ -218,7 +217,7 @@ func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*to
 			}
 			break
 		} else if slices.Contains(dl.GetDownloadingStatus(), status) {
-			if !dl.DownloadUncached {
+			if !dl.DownloadUncached && !torrent.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

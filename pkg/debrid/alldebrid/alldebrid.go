@@ -135,9 +135,8 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) []torrent.F
 	return result
 }
 
-func (ad *AllDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
-	t := &torrent.Torrent{}
-	url := fmt.Sprintf("%s/magnet/status?id=%s", ad.Host, id)
+func (ad *AllDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+	url := fmt.Sprintf("%s/magnet/status?id=%s", ad.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := ad.client.MakeRequest(req)
 	if err != nil {
@@ -152,7 +151,6 @@ func (ad *AllDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
 	data := res.Data.Magnets
 	status := getAlldebridStatus(data.StatusCode)
 	name := data.Filename
-	t.Id = id
 	t.Name = name
 	t.Status = status
 	t.Filename = name
@@ -176,7 +174,7 @@ func (ad *AllDebrid) GetTorrent(id string) (*torrent.Torrent, error) {
 
 func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		tb, err := ad.GetTorrent(torrent.Id)
+		tb, err := ad.GetTorrent(torrent)
 
 		torrent = tb
 
@@ -194,7 +192,7 @@ func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*tor
 			}
 			break
 		} else if slices.Contains(ad.GetDownloadingStatus(), status) {
-			if !ad.DownloadUncached {
+			if !ad.DownloadUncached && !torrent.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

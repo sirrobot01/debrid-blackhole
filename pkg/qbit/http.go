@@ -59,7 +59,7 @@ func (q *QBit) authContext(next http.Handler) http.Handler {
 		// Check if arr exists
 		a := svc.Arr.Get(category)
 		if a == nil {
-			a = arr.New(category, "", "", false)
+			a = arr.New(category, "", "", false, false, false)
 		}
 		if err == nil {
 			host = strings.TrimSpace(host)

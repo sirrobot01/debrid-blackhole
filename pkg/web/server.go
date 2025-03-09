@@ -307,10 +307,11 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 
 	arrName := r.FormValue("arr")
 	notSymlink := r.FormValue("notSymlink") == "true"
+	downloadUncached := r.FormValue("downloadUncached") == "true"
 
 	_arr := svc.Arr.Get(arrName)
 	if _arr == nil {
-		_arr = arr.New(arrName, "", "", false)
+		_arr = arr.New(arrName, "", "", false, false, false)
 	}
 
 	// Handle URLs
@@ -323,7 +324,7 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, url := range urlList {
-			importReq := qbit.NewImportRequest(url, _arr, !notSymlink)
+			importReq := qbit.NewImportRequest(url, _arr, !notSymlink, downloadUncached)
 			err := importReq.Process(ui.qbit)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
@@ -348,7 +349,7 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			importReq := qbit.NewImportRequest(magnet.Link, _arr, !notSymlink)
+			importReq := qbit.NewImportRequest(magnet.Link, _arr, !notSymlink, downloadUncached)
 			err = importReq.Process(ui.qbit)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("File %s: %v", fileHeader.Filename, err))
@@ -384,7 +385,7 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 	if req.Async {
 		go func() {
-			if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess); err != nil {
+			if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess, false); err != nil {
 				ui.logger.Error().Err(err).Msg("Failed to repair media")
 			}
 		}()
@@ -392,10 +393,9 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess); err != nil {
+	if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess, false); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to repair: %v", err), http.StatusInternalServerError)
 		return
-
 	}
 
 	request.JSONResponse(w, "Repair completed", http.StatusOK)
@@ -437,7 +437,14 @@ func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	arrCfgs := make([]config.Arr, 0)
 	svc := service.GetService()
 	for _, a := range svc.Arr.GetAll() {
-		arrCfgs = append(arrCfgs, config.Arr{Host: a.Host, Name: a.Name, Token: a.Token, Cleanup: a.Cleanup})
+		arrCfgs = append(arrCfgs, config.Arr{
+			Host:             a.Host,
+			Name:             a.Name,
+			Token:            a.Token,
+			Cleanup:          a.Cleanup,
+			SkipRepair:       a.SkipRepair,
+			DownloadUncached: a.DownloadUncached,
+		})
 	}
 	cfg.Arrs = arrCfgs
 	request.JSONResponse(w, cfg, http.StatusOK)

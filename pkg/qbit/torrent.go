@@ -56,7 +56,7 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 		return fmt.Errorf("arr not found in context")
 	}
 	isSymlink := ctx.Value("isSymlink").(bool)
-	debridTorrent, err := db.ProcessTorrent(svc.Debrid, magnet, a, isSymlink)
+	debridTorrent, err := db.ProcessTorrent(svc.Debrid, magnet, a, isSymlink, false)
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
@@ -185,7 +185,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	}
 	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
 	if debridTorrent.Status != "downloaded" {
-		debridTorrent, _ = _db.GetTorrent(t.ID)
+		debridTorrent, _ = _db.GetTorrent(debridTorrent)
 	}
 	t = q.UpdateTorrentMin(t, debridTorrent)
 	t.ContentPath = t.TorrentPath + string(os.PathSeparator)

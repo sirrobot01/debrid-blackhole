@@ -25,21 +25,25 @@ const (
 )
 
 type Arr struct {
-	Name    string `json:"name"`
-	Host    string `json:"host"`
-	Token   string `json:"token"`
-	Type    Type   `json:"type"`
-	Cleanup bool   `json:"cleanup"`
-	client  *http.Client
+	Name             string `json:"name"`
+	Host             string `json:"host"`
+	Token            string `json:"token"`
+	Type             Type   `json:"type"`
+	Cleanup          bool   `json:"cleanup"`
+	SkipRepair       bool   `json:"skip_repair"`
+	DownloadUncached bool   `json:"download_uncached"`
+	client           *http.Client
 }
 
-func New(name, host, token string, cleanup bool) *Arr {
+func New(name, host, token string, cleanup, skipRepair, downloadUncached bool) *Arr {
 	return &Arr{
-		Name:    name,
-		Host:    host,
-		Token:   strings.TrimSpace(token),
-		Type:    InferType(host, name),
-		Cleanup: cleanup,
+		Name:             name,
+		Host:             host,
+		Token:            strings.TrimSpace(token),
+		Type:             InferType(host, name),
+		Cleanup:          cleanup,
+		SkipRepair:       skipRepair,
+		DownloadUncached: downloadUncached,
 		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -142,7 +146,7 @@ func NewStorage() *Storage {
 	arrs := make(map[string]*Arr)
 	for _, a := range config.GetConfig().Arrs {
 		name := a.Name
-		arrs[name] = New(name, a.Host, a.Token, a.Cleanup)
+		arrs[name] = New(name, a.Host, a.Token, a.Cleanup, a.SkipRepair, a.DownloadUncached)
 	}
 	return &Storage{
 		Arrs: arrs,

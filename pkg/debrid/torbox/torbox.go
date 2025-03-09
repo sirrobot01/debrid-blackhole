@@ -149,9 +149,8 @@ func getTorboxStatus(status string, finished bool) string {
 	}
 }
 
-func (tb *Torbox) GetTorrent(id string) (*torrent.Torrent, error) {
-	t := &torrent.Torrent{}
-	url := fmt.Sprintf("%s/api/torrents/mylist/?id=%s", tb.Host, id)
+func (tb *Torbox) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+	url := fmt.Sprintf("%s/api/torrents/mylist/?id=%s", tb.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
 	if err != nil {
@@ -164,7 +163,6 @@ func (tb *Torbox) GetTorrent(id string) (*torrent.Torrent, error) {
 	}
 	data := res.Data
 	name := data.Name
-	t.Id = id
 	t.Name = name
 	t.Bytes = data.Size
 	t.Folder = name
@@ -215,7 +213,7 @@ func (tb *Torbox) GetTorrent(id string) (*torrent.Torrent, error) {
 
 func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		t, err := tb.GetTorrent(torrent.Id)
+		t, err := tb.GetTorrent(torrent)
 
 		torrent = t
 
@@ -233,7 +231,7 @@ func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torren
 			}
 			break
 		} else if slices.Contains(tb.GetDownloadingStatus(), status) {
-			if !tb.DownloadUncached {
+			if !tb.DownloadUncached && !torrent.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.

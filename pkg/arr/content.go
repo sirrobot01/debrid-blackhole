@@ -5,11 +5,23 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type episode struct {
 	Id            int `json:"id"`
 	EpisodeFileID int `json:"episodeFileId"`
+}
+
+type sonarrSearch struct {
+	Name         string `json:"name"`
+	SeasonNumber int    `json:"seasonNumber"`
+	SeriesId     int    `json:"episodeIds"`
+}
+
+type radarrSearch struct {
+	Name     string `json:"name"`
+	MovieIds []int  `json:"movieIds"`
 }
 
 func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
@@ -80,9 +92,10 @@ func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
 				continue
 			}
 			files = append(files, ContentFile{
-				FileId: file.Id,
-				Path:   file.Path,
-				Id:     eId,
+				FileId:       file.Id,
+				Path:         file.Path,
+				Id:           eId,
+				SeasonNumber: file.SeasonNumber,
 			})
 		}
 		if len(files) == 0 {
@@ -132,29 +145,64 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	return contents, nil
 }
 
-func (a *Arr) search(ids []int) error {
-	var payload interface{}
-	switch a.Type {
-	case Sonarr:
-		payload = struct {
-			Name       string `json:"name"`
-			EpisodeIds []int  `json:"episodeIds"`
-		}{
-			Name:       "EpisodeSearch",
-			EpisodeIds: ids,
-		}
-	case Radarr:
-		payload = struct {
-			Name     string `json:"name"`
-			MovieIds []int  `json:"movieIds"`
-		}{
-			Name:     "MoviesSearch",
-			MovieIds: ids,
-		}
-	default:
-		return fmt.Errorf("unknown arr type: %s", a.Type)
+// searchSonarr searches for missing files in the arr
+// map ids are series id and season number
+func (a *Arr) searchSonarr(files []ContentFile) error {
+	ids := make(map[string]any)
+	for _, f := range files {
+		// Join series id and season number
+		id := fmt.Sprintf("%d-%d", f.Id, f.SeasonNumber)
+		ids[id] = nil
 	}
+	errs := make(chan error, len(ids))
+	for id := range ids {
+		go func() {
+			parts := strings.Split(id, "-")
+			if len(parts) != 2 {
+				return
+			}
+			seriesId, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return
+			}
+			seasonNumber, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return
+			}
+			payload := sonarrSearch{
+				Name:         "SeasonSearch",
+				SeasonNumber: seasonNumber,
+				SeriesId:     seriesId,
+			}
+			resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
+			if err != nil {
+				errs <- fmt.Errorf("failed to automatic search: %v", err)
+				return
+			}
+			if statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'; !statusOk {
+				errs <- fmt.Errorf("failed to automatic search. Status Code: %s", resp.Status)
+				return
+			}
+		}()
+	}
+	for range ids {
+		err := <-errs
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (a *Arr) searchRadarr(files []ContentFile) error {
+	ids := make([]int, 0)
+	for _, f := range files {
+		ids = append(ids, f.Id)
+	}
+	payload := radarrSearch{
+		Name:     "MoviesSearch",
+		MovieIds: ids,
+	}
 	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 	if err != nil {
 		return fmt.Errorf("failed to automatic search: %v", err)
@@ -166,16 +214,14 @@ func (a *Arr) search(ids []int) error {
 }
 
 func (a *Arr) SearchMissing(files []ContentFile) error {
-
-	ids := make([]int, 0)
-	for _, f := range files {
-		ids = append(ids, f.Id)
+	switch a.Type {
+	case Sonarr:
+		return a.searchSonarr(files)
+	case Radarr:
+		return a.searchRadarr(files)
+	default:
+		return fmt.Errorf("unknown arr type: %s", a.Type)
 	}
-
-	if len(ids) == 0 {
-		return nil
-	}
-	return a.search(ids)
 }
 
 func (a *Arr) DeleteFiles(files []ContentFile) error {

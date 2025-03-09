@@ -51,20 +51,30 @@
     "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"],
     "refresh_interval": 5,
-    "log_level": "info"
   },
   "arrs": [
     {
       "name": "sonarr",
-      "host": "http://host:8989",
+      "host": "http://radarr:8989",
       "token": "arr_key",
-      "cleanup": true
+      "cleanup": true,
+      "skip_repair": true,
+      "download_uncached": false
     },
     {
       "name": "radarr",
-      "host": "http://host:7878",
+      "host": "http://radarr:7878",
       "token": "arr_key",
-      "cleanup": false
+      "cleanup": false,
+      "download_uncached": false
+    },
+    {
+      "name": "lidarr",
+      "host": "http://lidarr:7878",
+      "token": "arr_key",
+      "cleanup": false,
+      "skip_repair": true,
+      "download_uncached": false
     }
   ],
   "repair": {

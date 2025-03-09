@@ -38,17 +38,18 @@ type QBitTorrent struct {
 	Username        string   `json:"username"`
 	Password        string   `json:"password"`
 	Port            string   `json:"port"`
-	LogLevel        string   `json:"log_level"`
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	RefreshInterval int      `json:"refresh_interval"`
 }
 
 type Arr struct {
-	Name    string `json:"name"`
-	Host    string `json:"host"`
-	Token   string `json:"token"`
-	Cleanup bool   `json:"cleanup"`
+	Name             string `json:"name"`
+	Host             string `json:"host"`
+	Token            string `json:"token"`
+	Cleanup          bool   `json:"cleanup"`
+	SkipRepair       bool   `json:"skip_repair"`
+	DownloadUncached bool   `json:"download_uncached"`
 }
 
 type Repair struct {

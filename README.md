@@ -140,14 +140,14 @@ This is the default config file. You can create a `config.json` file in the root
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"],
-    "log_level": "info"
   },
   "repair": {
     "enabled": false,
     "interval": "12h",
     "run_on_start": false
   },
-  "use_auth": false
+  "use_auth": false,
+  "log_level": "info"
 }
 ```
 

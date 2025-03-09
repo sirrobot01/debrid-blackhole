@@ -187,7 +187,7 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 			q.logger.Debug().Msgf("Found torrent path: %s", torrentPath)
 			return torrentPath, err
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

@@ -12,14 +12,15 @@ import (
 )
 
 type ImportRequest struct {
-	ID        string   `json:"id"`
-	Path      string   `json:"path"`
-	URI       string   `json:"uri"`
-	Arr       *arr.Arr `json:"arr"`
-	IsSymlink bool     `json:"isSymlink"`
-	SeriesId  int      `json:"series"`
-	Seasons   []int    `json:"seasons"`
-	Episodes  []string `json:"episodes"`
+	ID               string   `json:"id"`
+	Path             string   `json:"path"`
+	URI              string   `json:"uri"`
+	Arr              *arr.Arr `json:"arr"`
+	IsSymlink        bool     `json:"isSymlink"`
+	SeriesId         int      `json:"series"`
+	Seasons          []int    `json:"seasons"`
+	Episodes         []string `json:"episodes"`
+	DownloadUncached bool     `json:"downloadUncached"`
 
 	Failed      bool      `json:"failed"`
 	FailedAt    time.Time `json:"failedAt"`
@@ -40,15 +41,16 @@ type ManualImportResponseSchema struct {
 	Id                  int       `json:"id"`
 }
 
-func NewImportRequest(uri string, arr *arr.Arr, isSymlink bool) *ImportRequest {
+func NewImportRequest(uri string, arr *arr.Arr, isSymlink, downloadUncached bool) *ImportRequest {
 	return &ImportRequest{
-		ID:        uuid.NewString(),
-		URI:       uri,
-		Arr:       arr,
-		Failed:    false,
-		Completed: false,
-		Async:     false,
-		IsSymlink: isSymlink,
+		ID:               uuid.NewString(),
+		URI:              uri,
+		Arr:              arr,
+		Failed:           false,
+		Completed:        false,
+		Async:            false,
+		IsSymlink:        isSymlink,
+		DownloadUncached: downloadUncached,
 	}
 }
 
@@ -72,7 +74,7 @@ func (i *ImportRequest) Process(q *QBit) (err error) {
 		return fmt.Errorf("error parsing magnet link: %w", err)
 	}
 	torrent := CreateTorrentFromMagnet(magnet, i.Arr.Name, "manual")
-	debridTorrent, err := debrid.ProcessTorrent(svc.Debrid, magnet, i.Arr, i.IsSymlink)
+	debridTorrent, err := debrid.ProcessTorrent(svc.Debrid, magnet, i.Arr, i.IsSymlink, i.DownloadUncached)
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
