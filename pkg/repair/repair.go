@@ -532,7 +532,7 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 			continue
 		}
 
-		if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			r.logger.Debug().Msgf("Failed to get download url for %s", fullURL)
 			resp.Body.Close()
 			brokenFiles = append(brokenFiles, f...)

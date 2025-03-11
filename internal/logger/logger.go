@@ -32,11 +32,10 @@ func GetLogPath() string {
 func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 
 	rotatingLogFile := &lumberjack.Logger{
-		Filename:   GetLogPath(),
-		MaxSize:    2,
-		MaxBackups: 2,
-		MaxAge:     28,
-		Compress:   true,
+		Filename: GetLogPath(),
+		MaxSize:  10,
+		MaxAge:   15,
+		Compress: true,
 	}
 
 	consoleWriter := zerolog.ConsoleWriter{
