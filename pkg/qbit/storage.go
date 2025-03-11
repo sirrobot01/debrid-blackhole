@@ -219,14 +219,14 @@ func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
 }
 
 func (ts *TorrentStorage) Save() error {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
 	return ts.saveToFile()
 }
 
 // saveToFile is a helper function to write the current state to the JSON file
 func (ts *TorrentStorage) saveToFile() error {
+	ts.mu.RLock()
 	data, err := json.MarshalIndent(ts.torrents, "", "  ")
+	ts.mu.RUnlock()
 	if err != nil {
 		return err
 	}

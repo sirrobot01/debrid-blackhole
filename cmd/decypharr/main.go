@@ -2,6 +2,7 @@ package decypharr
 
 import (
 	"context"
+	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
@@ -11,7 +12,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"github.com/sirrobot01/debrid-blackhole/pkg/web"
 	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
-	"log"
+	"runtime/debug"
 	"sync"
 )
 
@@ -36,41 +37,51 @@ func Start(ctx context.Context) error {
 	srv.Mount("/", webRoutes)
 	srv.Mount("/api/v2", qbitRoutes)
 
-	if cfg.Proxy.Enabled {
+	safeGo := func(f func() error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := proxy.NewProxy().Start(ctx); err != nil {
+			defer func() {
+				if r := recover(); r != nil {
+					stack := debug.Stack()
+					_log.Error().
+						Interface("panic", r).
+						Str("stack", string(stack)).
+						Msg("Recovered from panic in goroutine")
+
+					// Send error to channel so the main goroutine is aware
+					errChan <- fmt.Errorf("panic: %v", r)
+				}
+			}()
+
+			if err := f(); err != nil {
 				errChan <- err
 			}
 		}()
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := srv.Start(ctx); err != nil {
-			errChan <- err
-		}
+	if cfg.Proxy.Enabled {
+		safeGo(func() error {
+			return proxy.NewProxy().Start(ctx)
+		})
+	}
 
-	}()
+	safeGo(func() error {
+		return srv.Start(ctx)
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := worker.Start(ctx); err != nil {
-			errChan <- err
-		}
-	}()
+	safeGo(func() error {
+		return worker.Start(ctx)
+	})
 
 	if cfg.Repair.Enabled {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := svc.Repair.Start(ctx); err != nil {
-				log.Printf("Error during repair: %v", err)
+		safeGo(func() error {
+			err := svc.Repair.Start(ctx)
+			if err != nil {
+				_log.Error().Err(err).Msg("Error during repair")
 			}
-		}()
+			return nil // Not propagating repair errors to terminate the app
+		})
 	}
 
 	go func() {
