@@ -17,6 +17,7 @@ type ContentFile struct {
 	Name         string `json:"name"`
 	Path         string `json:"path"`
 	Id           int    `json:"id"`
+	EpisodeId    int    `json:"showId"`
 	FileId       int    `json:"fileId"`
 	TargetPath   string `json:"targetPath"`
 	IsSymlink    bool   `json:"isSymlink"`

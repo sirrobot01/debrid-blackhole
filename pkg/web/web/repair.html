@@ -286,7 +286,7 @@
                         </div>
                     </td>
                     <td><a href="#" class="text-link view-job" data-id="${job.id}"><small>${job.id.substring(0, 8)}</small></a></td>
-                    <td>${job.arrs.map(a => a.name).join(', ')}</td>
+                    <td>${job.arrs.join(', ')}</td>
                     <td><small>${formattedDate}</small></td>
                     <td><span class="${statusClass}">${status}</span></td>
                     <td>${totalItems}</td>
@@ -447,7 +447,10 @@
         async function processJob(jobId) {
             try {
                 const response = await fetch(`/internal/repair/jobs/${jobId}/process`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                 });
 
                 if (!response.ok) throw new Error(await response.text());
@@ -496,7 +499,7 @@
             document.getElementById('modalJobStatus').innerHTML = `<span class="${statusClass}">${status}</span>`;
 
             // Set other job details
-            document.getElementById('modalJobArrs').textContent = job.arrs.map(a => a.name).join(', ');
+            document.getElementById('modalJobArrs').textContent = job.arrs.join(', ');
             document.getElementById('modalJobMediaIds').textContent = job.media_ids && job.media_ids.length > 0 ?
                 job.media_ids.join(', ') : 'All';
             document.getElementById('modalJobAutoProcess').textContent = job.auto_process ? 'Yes' : 'No';

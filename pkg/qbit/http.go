@@ -152,7 +152,7 @@ func (q *QBit) handleTorrentsInfo(w http.ResponseWriter, r *http.Request) {
 	category := ctx.Value("category").(string)
 	filter := strings.Trim(r.URL.Query().Get("filter"), "")
 	hashes, _ := ctx.Value("hashes").([]string)
-	torrents := q.Storage.GetAll(category, filter, hashes)
+	torrents := q.Storage.GetAllSorted(category, filter, hashes, "added_on", false)
 	request.JSONResponse(w, torrents, http.StatusOK)
 }
 

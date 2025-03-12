@@ -74,7 +74,7 @@ const (
 
 type Job struct {
 	ID          string                       `json:"id"`
-	Arrs        []*arr.Arr                   `json:"arrs"`
+	Arrs        []string                     `json:"arrs"`
 	MediaIDs    []string                     `json:"media_ids"`
 	StartedAt   time.Time                    `json:"created_at"`
 	BrokenItems map[string][]arr.ContentFile `json:"broken_items"`
@@ -96,44 +96,34 @@ func (j *Job) discordContext() string {
 		**Started At**: %s
 		**Completed At**: %s 
 `
-	arrs := make([]string, 0)
-	for _, a := range j.Arrs {
-		arrs = append(arrs, a.Name)
-	}
 
 	dateFmt := "2006-01-02 15:04:05"
 
-	return fmt.Sprintf(format, j.ID, strings.Join(arrs, ","), strings.Join(j.MediaIDs, ", "), j.Status, j.StartedAt.Format(dateFmt), j.CompletedAt.Format(dateFmt))
+	return fmt.Sprintf(format, j.ID, strings.Join(j.Arrs, ","), strings.Join(j.MediaIDs, ", "), j.Status, j.StartedAt.Format(dateFmt), j.CompletedAt.Format(dateFmt))
 }
 
-func (r *Repair) getArrs(arrNames []string) []*arr.Arr {
-	checkSkip := true // This is useful when user triggers repair with specific arrs
-	arrs := make([]*arr.Arr, 0)
+func (r *Repair) getArrs(arrNames []string) []string {
+	arrs := make([]string, 0)
 	if len(arrNames) == 0 {
 		// No specific arrs, get all
 		// Also check if any arrs are set to skip repair
-		arrs = r.arrs.GetAll()
+		_arrs := r.arrs.GetAll()
+		for _, a := range _arrs {
+			if a.SkipRepair {
+				continue
+			}
+			arrs = append(arrs, a.Name)
+		}
 	} else {
-		checkSkip = false
 		for _, name := range arrNames {
 			a := r.arrs.Get(name)
 			if a == nil || a.Host == "" || a.Token == "" {
 				continue
 			}
-			arrs = append(arrs, a)
+			arrs = append(arrs, a.Name)
 		}
 	}
-	if !checkSkip {
-		return arrs
-	}
-	filtered := make([]*arr.Arr, 0)
-	for _, a := range arrs {
-		if a.SkipRepair {
-			continue
-		}
-		filtered = append(filtered, a)
-	}
-	return filtered
+	return arrs
 }
 
 func jobKey(arrNames []string, mediaIDs []string) string {
@@ -221,7 +211,7 @@ func (r *Repair) repair(job *Job) error {
 			if len(job.MediaIDs) == 0 {
 				items, err = r.repairArr(job, a, "")
 				if err != nil {
-					r.logger.Error().Err(err).Msgf("Error repairing %s", a.Name)
+					r.logger.Error().Err(err).Msgf("Error repairing %s", a)
 					return err
 				}
 			} else {
@@ -235,7 +225,7 @@ func (r *Repair) repair(job *Job) error {
 
 					someItems, err := r.repairArr(job, a, id)
 					if err != nil {
-						r.logger.Error().Err(err).Msgf("Error repairing %s with ID %s", a.Name, id)
+						r.logger.Error().Err(err).Msgf("Error repairing %s with ID %s", a, id)
 						return err
 					}
 					items = append(items, someItems...)
@@ -245,7 +235,7 @@ func (r *Repair) repair(job *Job) error {
 			// Safely append the found items to the shared slice
 			if len(items) > 0 {
 				mu.Lock()
-				brokenItems[a.Name] = items
+				brokenItems[a] = items
 				mu.Unlock()
 			}
 
@@ -341,8 +331,9 @@ func (r *Repair) Start(ctx context.Context) error {
 	}
 }
 
-func (r *Repair) repairArr(j *Job, a *arr.Arr, tmdbId string) ([]arr.ContentFile, error) {
+func (r *Repair) repairArr(j *Job, _arr string, tmdbId string) ([]arr.ContentFile, error) {
 	brokenItems := make([]arr.ContentFile, 0)
+	a := r.arrs.Get(_arr)
 
 	r.logger.Info().Msgf("Starting repair for %s", a.Name)
 	media, err := a.GetMedia(tmdbId)
@@ -665,7 +656,9 @@ func (r *Repair) loadFromFile() {
 	jobs := make(map[string]*Job)
 	err = json.Unmarshal(data, &jobs)
 	if err != nil {
-		r.logger.Debug().Err(err).Msg("Failed to unmarshal jobs")
+		r.logger.Trace().Err(err).Msg("Failed to unmarshal jobs; resetting")
+		r.Jobs = make(map[string]*Job)
+		return
 	}
 	r.Jobs = jobs
 }

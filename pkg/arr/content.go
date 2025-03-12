@@ -94,7 +94,8 @@ func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
 			files = append(files, ContentFile{
 				FileId:       file.Id,
 				Path:         file.Path,
-				Id:           eId,
+				Id:           d.Id,
+				EpisodeId:    eId,
 				SeasonNumber: file.SeasonNumber,
 			})
 		}
@@ -179,7 +180,7 @@ func (a *Arr) searchSonarr(files []ContentFile) error {
 				errs <- fmt.Errorf("failed to automatic search: %v", err)
 				return
 			}
-			if statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'; !statusOk {
+			if resp.StatusCode >= 300 || resp.StatusCode < 200 {
 				errs <- fmt.Errorf("failed to automatic search. Status Code: %s", resp.Status)
 				return
 			}
