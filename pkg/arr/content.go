@@ -16,7 +16,7 @@ type episode struct {
 type sonarrSearch struct {
 	Name         string `json:"name"`
 	SeasonNumber int    `json:"seasonNumber"`
-	SeriesId     int    `json:"episodeIds"`
+	SeriesId     int    `json:"seriesId"`
 }
 
 type radarrSearch struct {

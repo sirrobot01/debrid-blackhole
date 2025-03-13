@@ -461,11 +461,12 @@ func (ui *Handler) handleProcessRepairJob(w http.ResponseWriter, r *http.Request
 		http.Error(w, "No job ID provided", http.StatusBadRequest)
 		return
 	}
-	svc := service.GetService()
-	if err := svc.Repair.ProcessJob(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	go func() {
+		svc := service.GetService()
+		if err := svc.Repair.ProcessJob(id); err != nil {
+			ui.logger.Error().Err(err).Msg("Failed to process repair job")
+		}
+	}()
 	w.WriteHeader(http.StatusOK)
 }
 
