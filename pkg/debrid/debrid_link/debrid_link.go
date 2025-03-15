@@ -292,5 +292,5 @@ func New(dc config.Debrid, cache *cache.Cache) *DebridLink {
 }
 
 func (dl *DebridLink) GetTorrents() ([]*torrent.Torrent, error) {
-	return nil, fmt.Errorf("not implemented")
+	return nil, nil
 }

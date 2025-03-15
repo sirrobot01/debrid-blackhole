@@ -3,15 +3,17 @@ package service
 import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/cache"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
 	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
 	"sync"
 )
 
 type Service struct {
-	Repair *repair.Repair
-	Arr    *arr.Storage
-	Debrid *engine.Engine
+	Repair      *repair.Repair
+	Arr         *arr.Storage
+	Debrid      *engine.Engine
+	DebridCache *cache.Manager
 }
 
 var (
@@ -24,9 +26,10 @@ func New() *Service {
 		arrs := arr.NewStorage()
 		deb := debrid.New()
 		instance = &Service{
-			Repair: repair.New(arrs),
-			Arr:    arrs,
-			Debrid: deb,
+			Repair:      repair.New(arrs),
+			Arr:         arrs,
+			Debrid:      deb,
+			DebridCache: cache.NewManager(deb),
 		}
 	})
 	return instance

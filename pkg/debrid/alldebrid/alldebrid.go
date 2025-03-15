@@ -273,7 +273,7 @@ func (ad *AllDebrid) GetCheckCached() bool {
 }
 
 func (ad *AllDebrid) GetTorrents() ([]*torrent.Torrent, error) {
-	return nil, fmt.Errorf("not implemented")
+	return nil, nil
 }
 
 func (ad *AllDebrid) GetDownloadingStatus() []string {

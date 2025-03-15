@@ -329,7 +329,7 @@ func (tb *Torbox) GetCheckCached() bool {
 }
 
 func (tb *Torbox) GetTorrents() ([]*torrent.Torrent, error) {
-	return nil, fmt.Errorf("not implemented")
+	return nil, nil
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *Torbox {

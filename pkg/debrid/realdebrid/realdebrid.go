@@ -345,8 +345,11 @@ func (r *RealDebrid) getTorrents(offset int, limit int) ([]*torrent.Torrent, err
 		return nil, err
 	}
 	torrents := make([]*torrent.Torrent, 0)
+	filenames := map[string]bool{}
 	for _, t := range data {
-
+		if _, exists := filenames[t.Filename]; exists {
+			continue
+		}
 		torrents = append(torrents, &torrent.Torrent{
 			Id:               t.Id,
 			Name:             t.Filename,
@@ -364,18 +367,10 @@ func (r *RealDebrid) getTorrents(offset int, limit int) ([]*torrent.Torrent, err
 func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 	torrents := make([]*torrent.Torrent, 0)
 	offset := 0
-	limit := 5000
-	for {
-		ts, err := r.getTorrents(offset, limit)
-		if err != nil {
-			break
-		}
-		if len(ts) == 0 {
-			break
-		}
-		torrents = append(torrents, ts...)
-		offset = len(torrents)
-	}
+	limit := 1000
+	ts, _ := r.getTorrents(offset, limit)
+	torrents = append(torrents, ts...)
+	offset = len(torrents)
 	return torrents, nil
 
 }

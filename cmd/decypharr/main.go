@@ -11,6 +11,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"github.com/sirrobot01/debrid-blackhole/pkg/web"
+	"github.com/sirrobot01/debrid-blackhole/pkg/webdav"
 	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
 	"runtime/debug"
 	"sync"
@@ -30,12 +31,16 @@ func Start(ctx context.Context) error {
 	svc := service.New()
 	_qbit := qbit.New()
 	srv := server.New()
-	webRoutes := web.New(_qbit).Routes()
+	_webdav := webdav.New()
+
+	ui := web.New(_qbit).Routes()
+	webdavRoutes := _webdav.Routes()
 	qbitRoutes := _qbit.Routes()
 
 	// Register routes
-	srv.Mount("/", webRoutes)
+	srv.Mount("/", ui)
 	srv.Mount("/api/v2", qbitRoutes)
+	srv.Mount("/webdav", webdavRoutes)
 
 	safeGo := func(f func() error) {
 		wg.Add(1)
@@ -65,6 +70,10 @@ func Start(ctx context.Context) error {
 			return proxy.NewProxy().Start(ctx)
 		})
 	}
+
+	safeGo(func() error {
+		return _webdav.Start(ctx)
+	})
 
 	safeGo(func() error {
 		return srv.Start(ctx)

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,19 +61,23 @@ func (h *Handler) refreshRootListing() {
 		return
 	}
 
-	var files []os.FileInfo
-	h.cache.GetTorrents().Range(func(key, value interface{}) bool {
-		cachedTorrent := value.(*cache.CachedTorrent)
+	torrents := h.cache.GetTorrentNames()
+	files := make([]os.FileInfo, 0, len(torrents))
+
+	for name, cachedTorrent := range torrents {
 		if cachedTorrent != nil && cachedTorrent.Torrent != nil {
 			files = append(files, &FileInfo{
-				name:    cachedTorrent.Torrent.Name,
+				name:    name,
 				size:    0,
 				mode:    0755 | os.ModeDir,
 				modTime: time.Now(),
 				isDir:   true,
 			})
 		}
-		return true
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Name() < files[j].Name()
 	})
 
 	h.rootListing.Store(files)
