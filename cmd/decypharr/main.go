@@ -12,11 +12,24 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"github.com/sirrobot01/debrid-blackhole/pkg/web"
 	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
+	"os"
 	"runtime/debug"
+	"strconv"
 	"sync"
+	"syscall"
 )
 
 func Start(ctx context.Context) error {
+
+	if umaskStr := os.Getenv("UMASK"); umaskStr != "" {
+		umask, err := strconv.ParseInt(umaskStr, 8, 32)
+		if err != nil {
+			return fmt.Errorf("invalid UMASK value: %s", umaskStr)
+		}
+		// Set umask
+		syscall.Umask(int(umask))
+	}
+
 	cfg := config.GetConfig()
 	var wg sync.WaitGroup
 	errChan := make(chan error)
