@@ -51,6 +51,7 @@
     "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"],
     "refresh_interval": 5,
+    "skip_pre_cache": false
   },
   "arrs": [
     {

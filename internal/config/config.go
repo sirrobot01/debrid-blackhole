@@ -41,6 +41,7 @@ type QBitTorrent struct {
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	RefreshInterval int      `json:"refresh_interval"`
+	SkipPreCache    bool     `json:"skip_pre_cache"`
 }
 
 type Arr struct {
