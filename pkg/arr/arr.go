@@ -31,11 +31,11 @@ type Arr struct {
 	Type             Type   `json:"type"`
 	Cleanup          bool   `json:"cleanup"`
 	SkipRepair       bool   `json:"skip_repair"`
-	DownloadUncached bool   `json:"download_uncached"`
+	DownloadUncached *bool  `json:"download_uncached"`
 	client           *http.Client
 }
 
-func New(name, host, token string, cleanup, skipRepair, downloadUncached bool) *Arr {
+func New(name, host, token string, cleanup, skipRepair bool, downloadUncached *bool) *Arr {
 	return &Arr{
 		Name:             name,
 		Host:             host,

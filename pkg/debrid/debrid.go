@@ -47,14 +47,14 @@ func createDebrid(dc config.Debrid, cache *cache.Cache) engine.Service {
 	}
 }
 
-func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlink, downloadUncached bool) (*torrent.Torrent, error) {
+func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlink, overrideDownloadUncached bool) (*torrent.Torrent, error) {
+
 	debridTorrent := &torrent.Torrent{
-		InfoHash:         magnet.InfoHash,
-		Magnet:           magnet,
-		Name:             magnet.Name,
-		Arr:              a,
-		Size:             magnet.Size,
-		DownloadUncached: cmp.Or(downloadUncached, a.DownloadUncached),
+		InfoHash: magnet.InfoHash,
+		Magnet:   magnet,
+		Name:     magnet.Name,
+		Arr:      a,
+		Size:     magnet.Size,
 	}
 
 	errs := make([]error, 0)
@@ -62,6 +62,17 @@ func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlin
 	for index, db := range d.Debrids {
 		logger := db.GetLogger()
 		logger.Info().Msgf("Processing debrid: %s", db.GetName())
+
+		// Override first, arr second, debrid third
+
+		if overrideDownloadUncached {
+			debridTorrent.DownloadUncached = true
+		} else if a.DownloadUncached != nil {
+			// Arr cached is set
+			debridTorrent.DownloadUncached = *a.DownloadUncached
+		} else {
+			debridTorrent.DownloadUncached = db.GetDownloadUncached()
+		}
 
 		logger.Info().Msgf("Torrent Hash: %s", debridTorrent.InfoHash)
 		if db.GetCheckCached() {

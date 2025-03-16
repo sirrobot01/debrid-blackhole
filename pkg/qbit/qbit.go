@@ -19,6 +19,7 @@ type QBit struct {
 	logger          zerolog.Logger
 	Tags            []string
 	RefreshInterval int
+	SkipPreCache    bool
 }
 
 func New() *QBit {
@@ -35,5 +36,6 @@ func New() *QBit {
 		Storage:         NewTorrentStorage(filepath.Join(_cfg.Path, "torrents.json")),
 		logger:          logger.NewLogger("qbit", _cfg.LogLevel, os.Stdout),
 		RefreshInterval: refreshInterval,
+		SkipPreCache:    cfg.SkipPreCache,
 	}
 }

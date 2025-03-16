@@ -6,6 +6,7 @@ import (
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -202,4 +203,56 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.F
 		// It's okay if the symlink already exists
 		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fullPath, err)
 	}
+	if q.SkipPreCache {
+		return
+	}
+	go func() {
+		err := q.preCacheFile(torrentFilePath)
+		if err != nil {
+			q.logger.Debug().Msgf("Failed to pre-cache file: %s: %v", torrentFilePath, err)
+		}
+	}()
+}
+
+func (q *QBit) preCacheFile(filePath string) error {
+	q.logger.Trace().Msgf("Pre-caching file: %s", filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	// Pre-cache the file header (first 256KB) using 16KB chunks.
+	q.readSmallChunks(file, 0, 256*1024, 16*1024)
+	q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
+
+	return nil
+}
+
+func (q *QBit) readSmallChunks(file *os.File, startPos int64, totalToRead int, chunkSize int) {
+	_, err := file.Seek(startPos, 0)
+	if err != nil {
+		return
+	}
+
+	buf := make([]byte, chunkSize)
+	bytesRemaining := totalToRead
+
+	for bytesRemaining > 0 {
+		toRead := chunkSize
+		if bytesRemaining < chunkSize {
+			toRead = bytesRemaining
+		}
+
+		n, err := file.Read(buf[:toRead])
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return
+		}
+
+		bytesRemaining -= n
+	}
+	return
 }

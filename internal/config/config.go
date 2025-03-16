@@ -41,6 +41,7 @@ type QBitTorrent struct {
 	DownloadFolder  string   `json:"download_folder"`
 	Categories      []string `json:"categories"`
 	RefreshInterval int      `json:"refresh_interval"`
+	SkipPreCache    bool     `json:"skip_pre_cache"`
 }
 
 type Arr struct {
@@ -49,7 +50,7 @@ type Arr struct {
 	Token            string `json:"token"`
 	Cleanup          bool   `json:"cleanup"`
 	SkipRepair       bool   `json:"skip_repair"`
-	DownloadUncached bool   `json:"download_uncached"`
+	DownloadUncached *bool  `json:"download_uncached"`
 }
 
 type Repair struct {
