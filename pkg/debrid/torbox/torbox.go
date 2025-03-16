@@ -231,7 +231,7 @@ func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torren
 			}
 			break
 		} else if slices.Contains(tb.GetDownloadingStatus(), status) {
-			if !tb.DownloadUncached && !torrent.DownloadUncached {
+			if !torrent.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.
@@ -330,6 +330,10 @@ func (tb *Torbox) GetCheckCached() bool {
 
 func (tb *Torbox) GetTorrents() ([]*torrent.Torrent, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (tb *Torbox) GetDownloadUncached() bool {
+	return tb.DownloadUncached
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *Torbox {

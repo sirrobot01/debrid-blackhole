@@ -249,12 +249,9 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 			}
 			break
 		} else if slices.Contains(r.GetDownloadingStatus(), status) {
-			if !r.DownloadUncached && !t.DownloadUncached {
+			if !t.DownloadUncached {
 				return t, fmt.Errorf("torrent: %s not cached", t.Name)
 			}
-			// Break out of the loop if the torrent is downloading.
-			// This is necessary to prevent infinite loop since we moved to sync downloading and async processing
-			break
 		} else {
 			return t, fmt.Errorf("torrent: %s has error: %s", t.Name, status)
 		}
@@ -382,6 +379,10 @@ func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 
 func (r *RealDebrid) GetDownloadingStatus() []string {
 	return []string{"downloading", "magnet_conversion", "queued", "compressing", "uploading"}
+}
+
+func (r *RealDebrid) GetDownloadUncached() bool {
+	return r.DownloadUncached
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *RealDebrid {

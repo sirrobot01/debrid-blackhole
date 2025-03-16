@@ -192,7 +192,7 @@ func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*tor
 			}
 			break
 		} else if slices.Contains(ad.GetDownloadingStatus(), status) {
-			if !ad.DownloadUncached && !torrent.DownloadUncached {
+			if !torrent.DownloadUncached {
 				return torrent, fmt.Errorf("torrent: %s not cached", torrent.Name)
 			}
 			// Break out of the loop if the torrent is downloading.
@@ -278,6 +278,10 @@ func (ad *AllDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 
 func (ad *AllDebrid) GetDownloadingStatus() []string {
 	return []string{"downloading"}
+}
+
+func (ad *AllDebrid) GetDownloadUncached() bool {
+	return ad.DownloadUncached
 }
 
 func New(dc config.Debrid, cache *cache.Cache) *AllDebrid {

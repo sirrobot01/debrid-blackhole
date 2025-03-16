@@ -50,7 +50,7 @@ type Arr struct {
 	Token            string `json:"token"`
 	Cleanup          bool   `json:"cleanup"`
 	SkipRepair       bool   `json:"skip_repair"`
-	DownloadUncached bool   `json:"download_uncached"`
+	DownloadUncached *bool  `json:"download_uncached"`
 }
 
 type Repair struct {
