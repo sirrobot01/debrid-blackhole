@@ -2,34 +2,33 @@ package torrent
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type Torrent struct {
-	Id               string                   `json:"id"`
-	InfoHash         string                   `json:"info_hash"`
-	Name             string                   `json:"name"`
-	Folder           string                   `json:"folder"`
-	Filename         string                   `json:"filename"`
-	OriginalFilename string                   `json:"original_filename"`
-	Size             int64                    `json:"size"`
-	Bytes            int64                    `json:"bytes"` // Size of only the files that are downloaded
-	Magnet           *utils.Magnet            `json:"magnet"`
-	Files            []File                   `json:"files"`
-	Status           string                   `json:"status"`
-	Added            string                   `json:"added"`
-	Progress         float64                  `json:"progress"`
-	Speed            int64                    `json:"speed"`
-	Seeders          int                      `json:"seeders"`
-	Links            []string                 `json:"links"`
-	DownloadLinks    map[string]DownloadLinks `json:"download_links"`
-	MountPath        string                   `json:"mount_path"`
+	Id               string          `json:"id"`
+	InfoHash         string          `json:"info_hash"`
+	Name             string          `json:"name"`
+	Folder           string          `json:"folder"`
+	Filename         string          `json:"filename"`
+	OriginalFilename string          `json:"original_filename"`
+	Size             int64           `json:"size"`
+	Bytes            int64           `json:"bytes"` // Size of only the files that are downloaded
+	Magnet           *utils.Magnet   `json:"magnet"`
+	Files            map[string]File `json:"files"`
+	Status           string          `json:"status"`
+	Added            string          `json:"added"`
+	Progress         float64         `json:"progress"`
+	Speed            int64           `json:"speed"`
+	Seeders          int             `json:"seeders"`
+	Links            []string        `json:"links"`
+	MountPath        string          `json:"mount_path"`
 
 	Debrid string `json:"debrid"`
 
@@ -40,9 +39,12 @@ type Torrent struct {
 }
 
 type DownloadLinks struct {
-	Filename     string `json:"filename"`
-	Link         string `json:"link"`
-	DownloadLink string `json:"download_link"`
+	Filename     string    `json:"filename"`
+	Link         string    `json:"link"`
+	DownloadLink string    `json:"download_link"`
+	Generated    time.Time `json:"generated"`
+	Size         int64     `json:"size"`
+	Id           string    `json:"id"`
 }
 
 func (t *Torrent) GetSymlinkFolder(parent string) string {
@@ -69,11 +71,13 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 }
 
 type File struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	Path string `json:"path"`
-	Link string `json:"link"`
+	Id           string    `json:"id"`
+	Name         string    `json:"name"`
+	Size         int64     `json:"size"`
+	Path         string    `json:"path"`
+	Link         string    `json:"link"`
+	DownloadLink string    `json:"download_link"`
+	Generated    time.Time `json:"generated"`
 }
 
 func (t *Torrent) Cleanup(remove bool) {
@@ -92,31 +96,4 @@ func (t *Torrent) GetFile(id string) *File {
 		}
 	}
 	return nil
-}
-
-func GetLocalCache(infohashes []string, cache *cache.Cache) ([]string, map[string]bool) {
-	result := make(map[string]bool)
-	hashes := make([]string, 0)
-
-	if len(infohashes) == 0 {
-		return hashes, result
-	}
-	if len(infohashes) == 1 {
-		if cache.Exists(infohashes[0]) {
-			return hashes, map[string]bool{infohashes[0]: true}
-		}
-		return infohashes, result
-	}
-
-	cachedHashes := cache.GetMultiple(infohashes)
-	for _, h := range infohashes {
-		_, exists := cachedHashes[h]
-		if !exists {
-			hashes = append(hashes, h)
-		} else {
-			result[h] = true
-		}
-	}
-
-	return infohashes, result
 }

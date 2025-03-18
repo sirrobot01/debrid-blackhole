@@ -1,20 +1,19 @@
 package alldebrid
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 	"slices"
+	"time"
 
 	"net/http"
 	gourl "net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 )
@@ -24,11 +23,11 @@ type AllDebrid struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
-	client           *request.RLHTTPClient
-	cache            *cache.Cache
-	MountPath        string
-	logger           zerolog.Logger
-	CheckCached      bool
+	client           *request.Client
+
+	MountPath   string
+	logger      zerolog.Logger
+	CheckCached bool
 }
 
 func (ad *AllDebrid) GetName() string {
@@ -39,15 +38,9 @@ func (ad *AllDebrid) GetLogger() zerolog.Logger {
 	return ad.logger
 }
 
-func (ad *AllDebrid) IsAvailable(infohashes []string) map[string]bool {
+func (ad *AllDebrid) IsAvailable(hashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
-	hashes, result := torrent.GetLocalCache(infohashes, ad.cache)
-
-	if len(hashes) == 0 {
-		// Either all the infohashes are locally cached or none are
-		ad.cache.AddMultiple(result)
-		return result
-	}
+	result := make(map[string]bool)
 
 	// Divide hashes into groups of 100
 	// AllDebrid does not support checking cached infohashes
@@ -91,8 +84,8 @@ func getAlldebridStatus(statusCode int) string {
 	}
 }
 
-func flattenFiles(files []MagnetFile, parentPath string, index *int) []torrent.File {
-	result := make([]torrent.File, 0)
+func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]torrent.File {
+	result := make(map[string]torrent.File)
 
 	cfg := config.GetConfig()
 
@@ -104,7 +97,15 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) []torrent.F
 
 		if f.Elements != nil {
 			// This is a folder, recurse into it
-			result = append(result, flattenFiles(f.Elements, currentPath, index)...)
+			subFiles := flattenFiles(f.Elements, currentPath, index)
+			for k, v := range subFiles {
+				if _, ok := result[k]; ok {
+					// File already exists, use path as key
+					result[v.Path] = v
+				} else {
+					result[k] = v
+				}
+			}
 		} else {
 			// This is a file
 			fileName := filepath.Base(f.Name)
@@ -128,25 +129,25 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) []torrent.F
 				Size: f.Size,
 				Path: currentPath,
 			}
-			result = append(result, file)
+			result[file.Name] = file
 		}
 	}
 
 	return result
 }
 
-func (ad *AllDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (ad *AllDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	url := fmt.Sprintf("%s/magnet/status?id=%s", ad.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := ad.client.MakeRequest(req)
 	if err != nil {
-		return t, err
+		return err
 	}
 	var res TorrentInfoResponse
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		ad.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)
-		return t, err
+		return err
 	}
 	data := res.Data.Magnets
 	status := getAlldebridStatus(data.StatusCode)
@@ -158,7 +159,6 @@ func (ad *AllDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 	t.Folder = name
 	t.MountPath = ad.MountPath
 	t.Debrid = ad.Name
-	t.DownloadLinks = make(map[string]torrent.DownloadLinks)
 	if status == "downloaded" {
 		t.Bytes = data.Size
 
@@ -169,23 +169,21 @@ func (ad *AllDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 		files := flattenFiles(data.Files, "", &index)
 		t.Files = files
 	}
-	return t, nil
+	return nil
 }
 
 func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		tb, err := ad.GetTorrent(torrent)
+		err := ad.UpdateTorrent(torrent)
 
-		torrent = tb
-
-		if err != nil || tb == nil {
-			return tb, err
+		if err != nil || torrent == nil {
+			return torrent, err
 		}
 		status := torrent.Status
 		if status == "downloaded" {
 			ad.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
-				err = ad.GetDownloadLinks(torrent)
+				err = ad.GenerateDownloadLinks(torrent)
 				if err != nil {
 					return torrent, err
 				}
@@ -217,8 +215,7 @@ func (ad *AllDebrid) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (ad *AllDebrid) GetDownloadLinks(t *torrent.Torrent) error {
-	downloadLinks := make(map[string]torrent.DownloadLinks)
+func (ad *AllDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
 	for _, file := range t.Files {
 		url := fmt.Sprintf("%s/link/unlock", ad.Host)
 		query := gourl.Values{}
@@ -234,19 +231,15 @@ func (ad *AllDebrid) GetDownloadLinks(t *torrent.Torrent) error {
 			return err
 		}
 		link := data.Data.Link
+		file.DownloadLink = link
+		file.Generated = time.Now()
+		t.Files[file.Name] = file
 
-		dl := torrent.DownloadLinks{
-			Link:         file.Link,
-			Filename:     data.Data.Filename,
-			DownloadLink: link,
-		}
-		downloadLinks[file.Id] = dl
 	}
-	t.DownloadLinks = downloadLinks
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.DownloadLinks {
+func (ad *AllDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -261,11 +254,9 @@ func (ad *AllDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *to
 		return nil
 	}
 	link := data.Data.Link
-	return &torrent.DownloadLinks{
-		DownloadLink: link,
-		Link:         file.Link,
-		Filename:     data.Data.Filename,
-	}
+	file.DownloadLink = link
+	file.Generated = time.Now()
+	return file
 }
 
 func (ad *AllDebrid) GetCheckCached() bool {
@@ -273,6 +264,10 @@ func (ad *AllDebrid) GetCheckCached() bool {
 }
 
 func (ad *AllDebrid) GetTorrents() ([]*torrent.Torrent, error) {
+	return nil, nil
+}
+
+func (ad *AllDebrid) GetDownloads() (map[string]torrent.DownloadLinks, error) {
 	return nil, nil
 }
 
@@ -284,21 +279,27 @@ func (ad *AllDebrid) GetDownloadUncached() bool {
 	return ad.DownloadUncached
 }
 
-func New(dc config.Debrid, cache *cache.Cache) *AllDebrid {
+func (ad *AllDebrid) ConvertLinksToFiles(links []string) []torrent.File {
+	return nil
+}
+
+func New(dc config.Debrid) *AllDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	client := request.NewRLHTTPClient(rl, headers)
+	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	client := request.New().
+		WithHeaders(headers).
+		WithRateLimiter(rl).WithLogger(_log)
 	return &AllDebrid{
 		Name:             "alldebrid",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
-		cache:            cache,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
+		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel),
 		CheckCached:      dc.CheckCached,
 	}
 }

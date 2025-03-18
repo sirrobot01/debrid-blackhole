@@ -185,7 +185,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	}
 	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
 	if debridTorrent.Status != "downloaded" {
-		debridTorrent, _ = _db.GetTorrent(debridTorrent)
+		_ = _db.UpdateTorrent(debridTorrent)
 	}
 	t = q.UpdateTorrentMin(t, debridTorrent)
 	t.ContentPath = t.TorrentPath + string(os.PathSeparator)

@@ -2,20 +2,19 @@ package torbox
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"time"
 
 	"mime/multipart"
 	"net/http"
 	gourl "net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -28,11 +27,11 @@ type Torbox struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
-	client           *request.RLHTTPClient
-	cache            *cache.Cache
-	MountPath        string
-	logger           zerolog.Logger
-	CheckCached      bool
+	client           *request.Client
+
+	MountPath   string
+	logger      zerolog.Logger
+	CheckCached bool
 }
 
 func (tb *Torbox) GetName() string {
@@ -43,15 +42,9 @@ func (tb *Torbox) GetLogger() zerolog.Logger {
 	return tb.logger
 }
 
-func (tb *Torbox) IsAvailable(infohashes []string) map[string]bool {
+func (tb *Torbox) IsAvailable(hashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
-	hashes, result := torrent.GetLocalCache(infohashes, tb.cache)
-
-	if len(hashes) == 0 {
-		// Either all the infohashes are locally cached or none are
-		tb.cache.AddMultiple(result)
-		return result
-	}
+	result := make(map[string]bool)
 
 	// Divide hashes into groups of 100
 	for i := 0; i < len(hashes); i += 100 {
@@ -91,13 +84,12 @@ func (tb *Torbox) IsAvailable(infohashes []string) map[string]bool {
 			return result
 		}
 
-		for h, cache := range *res.Data {
-			if cache.Size > 0 {
+		for h, c := range *res.Data {
+			if c.Size > 0 {
 				result[strings.ToUpper(h)] = true
 			}
 		}
 	}
-	tb.cache.AddMultiple(result) // Add the results to the cache
 	return result
 }
 
@@ -149,17 +141,17 @@ func getTorboxStatus(status string, finished bool) string {
 	}
 }
 
-func (tb *Torbox) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (tb *Torbox) UpdateTorrent(t *torrent.Torrent) error {
 	url := fmt.Sprintf("%s/api/torrents/mylist/?id=%s", tb.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
 	if err != nil {
-		return t, err
+		return err
 	}
 	var res InfoResponse
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
-		return t, err
+		return err
 	}
 	data := res.Data
 	name := data.Name
@@ -174,8 +166,6 @@ func (tb *Torbox) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 	t.OriginalFilename = name
 	t.MountPath = tb.MountPath
 	t.Debrid = tb.Name
-	t.DownloadLinks = make(map[string]torrent.DownloadLinks)
-	files := make([]torrent.File, 0)
 	cfg := config.GetConfig()
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
@@ -196,35 +186,32 @@ func (tb *Torbox) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 			Size: f.Size,
 			Path: fileName,
 		}
-		files = append(files, file)
+		t.Files[fileName] = file
 	}
 	var cleanPath string
-	if len(files) > 0 {
+	if len(t.Files) > 0 {
 		cleanPath = path.Clean(data.Files[0].Name)
 	} else {
 		cleanPath = path.Clean(data.Name)
 	}
 
 	t.OriginalFilename = strings.Split(cleanPath, "/")[0]
-	t.Files = files
-	//t.Debrid = tb
-	return t, nil
+	t.Debrid = tb.Name
+	return nil
 }
 
 func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		t, err := tb.GetTorrent(torrent)
+		err := tb.UpdateTorrent(torrent)
 
-		torrent = t
-
-		if err != nil || t == nil {
-			return t, err
+		if err != nil || torrent == nil {
+			return torrent, err
 		}
 		status := torrent.Status
 		if status == "downloaded" {
 			tb.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
 			if !isSymlink {
-				err = tb.GetDownloadLinks(torrent)
+				err = tb.GenerateDownloadLinks(torrent)
 				if err != nil {
 					return torrent, err
 				}
@@ -258,8 +245,7 @@ func (tb *Torbox) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (tb *Torbox) GetDownloadLinks(t *torrent.Torrent) error {
-	downloadLinks := make(map[string]torrent.DownloadLinks)
+func (tb *Torbox) GenerateDownloadLinks(t *torrent.Torrent) error {
 	for _, file := range t.Files {
 		url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 		query := gourl.Values{}
@@ -279,21 +265,15 @@ func (tb *Torbox) GetDownloadLinks(t *torrent.Torrent) error {
 		if data.Data == nil {
 			return fmt.Errorf("error getting download links")
 		}
-		idx := 0
 		link := *data.Data
-
-		dl := torrent.DownloadLinks{
-			Link:         link,
-			Filename:     t.Files[idx].Name,
-			DownloadLink: link,
-		}
-		downloadLinks[file.Id] = dl
+		file.DownloadLink = link
+		file.Generated = time.Now()
+		t.Files[file.Name] = file
 	}
-	t.DownloadLinks = downloadLinks
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.DownloadLinks {
+func (tb *Torbox) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -313,11 +293,9 @@ func (tb *Torbox) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torre
 		return nil
 	}
 	link := *data.Data
-	return &torrent.DownloadLinks{
-		Link:         file.Link,
-		Filename:     file.Name,
-		DownloadLink: link,
-	}
+	file.DownloadLink = link
+	file.Generated = time.Now()
+	return file
 }
 
 func (tb *Torbox) GetDownloadingStatus() []string {
@@ -336,21 +314,32 @@ func (tb *Torbox) GetDownloadUncached() bool {
 	return tb.DownloadUncached
 }
 
-func New(dc config.Debrid, cache *cache.Cache) *Torbox {
+func New(dc config.Debrid) *Torbox {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	client := request.NewRLHTTPClient(rl, headers)
+	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	client := request.New().
+		WithHeaders(headers).
+		WithRateLimiter(rl).WithLogger(_log)
+
 	return &Torbox{
 		Name:             "torbox",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
-		cache:            cache,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
+		logger:           _log,
 		CheckCached:      dc.CheckCached,
 	}
+}
+
+func (tb *Torbox) ConvertLinksToFiles(links []string) []torrent.File {
+	return nil
+}
+
+func (tb *Torbox) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+	return nil, nil
 }

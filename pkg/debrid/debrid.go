@@ -1,13 +1,12 @@
 package debrid
 
 import (
-	"cmp"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/alldebrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid_link"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/realdebrid"
@@ -17,33 +16,33 @@ import (
 
 func New() *engine.Engine {
 	cfg := config.GetConfig()
-	maxCachedSize := cmp.Or(cfg.MaxCacheSize, 1000)
-	debrids := make([]engine.Service, 0)
-	// Divide the cache size by the number of debrids
-	maxCacheSize := maxCachedSize / len(cfg.Debrids)
+	debrids := make([]debrid.Client, 0)
 
 	for _, dc := range cfg.Debrids {
-		d := createDebrid(dc, cache.New(maxCacheSize))
-		logger := d.GetLogger()
+		client := createDebridClient(dc)
+		logger := client.GetLogger()
 		logger.Info().Msg("Debrid Service started")
-		debrids = append(debrids, d)
+		debrids = append(debrids, client)
 	}
-	d := &engine.Engine{Debrids: debrids, LastUsed: 0}
+	d := &engine.Engine{
+		Debrids:  debrids,
+		LastUsed: 0,
+	}
 	return d
 }
 
-func createDebrid(dc config.Debrid, cache *cache.Cache) engine.Service {
+func createDebridClient(dc config.Debrid) debrid.Client {
 	switch dc.Name {
 	case "realdebrid":
-		return realdebrid.New(dc, cache)
+		return realdebrid.New(dc)
 	case "torbox":
-		return torbox.New(dc, cache)
+		return torbox.New(dc)
 	case "debridlink":
-		return debrid_link.New(dc, cache)
+		return debrid_link.New(dc)
 	case "alldebrid":
-		return alldebrid.New(dc, cache)
+		return alldebrid.New(dc)
 	default:
-		return realdebrid.New(dc, cache)
+		return realdebrid.New(dc)
 	}
 }
 
@@ -55,6 +54,7 @@ func ProcessTorrent(d *engine.Engine, magnet *utils.Magnet, a *arr.Arr, isSymlin
 		Name:     magnet.Name,
 		Arr:      a,
 		Size:     magnet.Size,
+		Files:    make(map[string]torrent.File),
 	}
 
 	errs := make([]error, 0)

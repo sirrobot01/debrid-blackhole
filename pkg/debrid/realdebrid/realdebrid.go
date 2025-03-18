@@ -1,22 +1,23 @@
 package realdebrid
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"io"
 	"net/http"
 	gourl "net/url"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 type RealDebrid struct {
@@ -24,11 +25,11 @@ type RealDebrid struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
-	client           *request.RLHTTPClient
-	cache            *cache.Cache
-	MountPath        string
-	logger           zerolog.Logger
-	CheckCached      bool
+	client           *request.Client
+
+	MountPath   string
+	logger      zerolog.Logger
+	CheckCached bool
 }
 
 func (r *RealDebrid) GetName() string {
@@ -39,11 +40,11 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
-// GetTorrentFiles returns a list of torrent files from the torrent info
+// getTorrentFiles returns a list of torrent files from the torrent info
 // validate is used to determine if the files should be validated
 // if validate is false, selected files will be returned
-func GetTorrentFiles(data TorrentInfo, validate bool) []torrent.File {
-	files := make([]torrent.File, 0)
+func getTorrentFiles(t *torrent.Torrent, data TorrentInfo, validate bool) map[string]torrent.File {
+	files := make(map[string]torrent.File)
 	cfg := config.GetConfig()
 	idx := 0
 	for _, f := range data.Files {
@@ -72,6 +73,13 @@ func GetTorrentFiles(data TorrentInfo, validate bool) []torrent.File {
 		if len(data.Links) > idx {
 			_link = data.Links[idx]
 		}
+
+		if a, ok := t.Files[name]; ok {
+			a.Link = _link
+			files[name] = a
+			continue
+		}
+
 		file := torrent.File{
 			Name: name,
 			Path: name,
@@ -79,21 +87,15 @@ func GetTorrentFiles(data TorrentInfo, validate bool) []torrent.File {
 			Id:   strconv.Itoa(fileId),
 			Link: _link,
 		}
-		files = append(files, file)
+		files[name] = file
 		idx++
 	}
 	return files
 }
 
-func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
+func (r *RealDebrid) IsAvailable(hashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
-	hashes, result := torrent.GetLocalCache(infohashes, r.cache)
-
-	if len(hashes) == 0 {
-		// Either all the infohashes are locally cached or none are
-		r.cache.AddMultiple(result)
-		return result
-	}
+	result := make(map[string]bool)
 
 	// Divide hashes into groups of 100
 	for i := 0; i < len(hashes); i += 200 {
@@ -136,7 +138,6 @@ func (r *RealDebrid) IsAvailable(infohashes []string) map[string]bool {
 			}
 		}
 	}
-	r.cache.AddMultiple(result) // Add the results to the cache
 	return result
 }
 
@@ -160,17 +161,17 @@ func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) 
 	return t, nil
 }
 
-func (r *RealDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (r *RealDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := r.client.MakeRequest(req)
 	if err != nil {
-		return t, err
+		return err
 	}
 	var data TorrentInfo
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
-		return t, err
+		return err
 	}
 	name := utils.RemoveInvalidChars(data.OriginalFilename)
 	t.Name = name
@@ -185,10 +186,8 @@ func (r *RealDebrid) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 	t.Links = data.Links
 	t.MountPath = r.MountPath
 	t.Debrid = r.Name
-	t.DownloadLinks = make(map[string]torrent.DownloadLinks)
-	files := GetTorrentFiles(data, false) // Get selected files
-	t.Files = files
-	return t, nil
+	t.Files = getTorrentFiles(t, data, false) // Get selected files
+	return nil
 }
 
 func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
@@ -219,13 +218,12 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 		t.Debrid = r.Name
 		t.MountPath = r.MountPath
 		if status == "waiting_files_selection" {
-			files := GetTorrentFiles(data, true) // Validate files to be selected
-			t.Files = files
-			if len(files) == 0 {
+			t.Files = getTorrentFiles(t, data, true)
+			if len(t.Files) == 0 {
 				return t, fmt.Errorf("no video files found")
 			}
 			filesId := make([]string, 0)
-			for _, f := range files {
+			for _, f := range t.Files {
 				filesId = append(filesId, f.Id)
 			}
 			p := gourl.Values{
@@ -238,11 +236,10 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 				return t, err
 			}
 		} else if status == "downloaded" {
-			files := GetTorrentFiles(data, false) // Get selected files
-			t.Files = files
+			t.Files = getTorrentFiles(t, data, false) // Get selected files
 			r.logger.Info().Msgf("Torrent: %s downloaded to RD", t.Name)
 			if !isSymlink {
-				err = r.GetDownloadLinks(t)
+				err = r.GenerateDownloadLinks(t)
 				if err != nil {
 					return t, err
 				}
@@ -271,12 +268,11 @@ func (r *RealDebrid) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (r *RealDebrid) GetDownloadLinks(t *torrent.Torrent) error {
+func (r *RealDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
-	downloadLinks := make(map[string]torrent.DownloadLinks)
 	for _, f := range t.Files {
-		dlLink := t.DownloadLinks[f.Id]
-		if f.Link == "" || dlLink.DownloadLink != "" {
+		if f.DownloadLink != "" {
+			// Or check the generated link
 			continue
 		}
 		payload := gourl.Values{
@@ -291,18 +287,41 @@ func (r *RealDebrid) GetDownloadLinks(t *torrent.Torrent) error {
 		if err = json.Unmarshal(resp, &data); err != nil {
 			return err
 		}
-		download := torrent.DownloadLinks{
-			Link:         data.Link,
-			Filename:     data.Filename,
-			DownloadLink: data.Download,
-		}
-		downloadLinks[f.Id] = download
+		f.DownloadLink = data.Download
+		f.Generated = time.Now()
+		t.Files[f.Name] = f
 	}
-	t.DownloadLinks = downloadLinks
 	return nil
 }
 
-func (r *RealDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.DownloadLinks {
+func (r *RealDebrid) ConvertLinksToFiles(links []string) []torrent.File {
+	files := make([]torrent.File, 0)
+	for _, l := range links {
+		url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
+		payload := gourl.Values{
+			"link": {l},
+		}
+		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+		resp, err := r.client.MakeRequest(req)
+		if err != nil {
+			continue
+		}
+		var data UnrestrictResponse
+		if err = json.Unmarshal(resp, &data); err != nil {
+			continue
+		}
+		files = append(files, torrent.File{
+			Name:         data.Filename,
+			Size:         data.Filesize,
+			Link:         l,
+			DownloadLink: data.Download,
+			Generated:    time.Now(),
+		})
+	}
+	return files
+}
+
+func (r *RealDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	payload := gourl.Values{
 		"link": {file.Link},
@@ -316,32 +335,43 @@ func (r *RealDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *to
 	if err = json.Unmarshal(resp, &data); err != nil {
 		return nil
 	}
-	return &torrent.DownloadLinks{
-		Link:         data.Link,
-		Filename:     data.Filename,
-		DownloadLink: data.Download,
-	}
+	file.DownloadLink = data.Download
+	file.Generated = time.Now()
+	return file
 }
 
 func (r *RealDebrid) GetCheckCached() bool {
 	return r.CheckCached
 }
 
-func (r *RealDebrid) getTorrents(offset int, limit int) ([]*torrent.Torrent, error) {
+func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent, error) {
 	url := fmt.Sprintf("%s/torrents?limit=%d", r.Host, limit)
+	torrents := make([]*torrent.Torrent, 0)
 	if offset > 0 {
 		url = fmt.Sprintf("%s&offset=%d", url, offset)
 	}
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	resp, err := r.client.MakeRequest(req)
+	resp, err := r.client.Do(req)
+
 	if err != nil {
-		return nil, err
+		return 0, torrents, err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return 0, torrents, fmt.Errorf("realdebrid API error: %d", resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, torrents, err
+	}
+	totalItems, _ := strconv.Atoi(resp.Header.Get("X-Total-Count"))
 	var data []TorrentsResponse
-	if err = json.Unmarshal(resp, &data); err != nil {
-		return nil, err
+	if err = json.Unmarshal(body, &data); err != nil {
+		return 0, nil, err
 	}
-	torrents := make([]*torrent.Torrent, 0)
 	filenames := map[string]bool{}
 	for _, t := range data {
 		if _, exists := filenames[t.Filename]; exists {
@@ -356,20 +386,122 @@ func (r *RealDebrid) getTorrents(offset int, limit int) ([]*torrent.Torrent, err
 			Filename:         t.Filename,
 			OriginalFilename: t.Filename,
 			Links:            t.Links,
+			Files:            make(map[string]torrent.File),
+			InfoHash:         t.Hash,
+			Debrid:           r.Name,
+			MountPath:        r.MountPath,
 		})
 	}
-	return torrents, nil
+	return totalItems, torrents, nil
 }
 
 func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
-	torrents := make([]*torrent.Torrent, 0)
-	offset := 0
-	limit := 1000
-	ts, _ := r.getTorrents(offset, limit)
-	torrents = append(torrents, ts...)
-	offset = len(torrents)
-	return torrents, nil
+	limit := 5000
 
+	// Get first batch and total count
+	totalItems, firstBatch, err := r.getTorrents(0, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	allTorrents := firstBatch
+
+	// Calculate remaining requests
+	remaining := totalItems - len(firstBatch)
+	if remaining <= 0 {
+		return allTorrents, nil
+	}
+
+	// Prepare for concurrent fetching
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var fetchError error
+
+	// Calculate how many more requests we need
+	batchCount := (remaining + limit - 1) / limit // ceiling division
+
+	for i := 1; i <= batchCount; i++ {
+		wg.Add(1)
+		go func(batchOffset int) {
+			defer wg.Done()
+
+			_, batch, err := r.getTorrents(batchOffset, limit)
+			if err != nil {
+				mu.Lock()
+				fetchError = err
+				mu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			allTorrents = append(allTorrents, batch...)
+			mu.Unlock()
+		}(i * limit)
+	}
+
+	// Wait for all fetches to complete
+	wg.Wait()
+
+	if fetchError != nil {
+		return nil, fetchError
+	}
+
+	return allTorrents, nil
+}
+
+func (r *RealDebrid) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+	links := make(map[string]torrent.DownloadLinks)
+	offset := 0
+	limit := 5000
+	for {
+		dl, err := r._getDownloads(offset, limit)
+		if err != nil {
+			break
+		}
+		if len(dl) == 0 {
+			break
+		}
+
+		for _, d := range dl {
+			if _, exists := links[d.Link]; exists {
+				// This is ordered by date, so we can skip the rest
+				continue
+			}
+			links[d.Link] = d
+		}
+
+		offset += len(dl)
+	}
+	return links, nil
+}
+
+func (r *RealDebrid) _getDownloads(offset int, limit int) ([]torrent.DownloadLinks, error) {
+	url := fmt.Sprintf("%s/downloads?limit=%d", r.Host, limit)
+	if offset > 0 {
+		url = fmt.Sprintf("%s&offset=%d", url, offset)
+	}
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := r.client.MakeRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	var data []DownloadsResponse
+	if err = json.Unmarshal(resp, &data); err != nil {
+		return nil, err
+	}
+	links := make([]torrent.DownloadLinks, 0)
+	for _, d := range data {
+		links = append(links, torrent.DownloadLinks{
+			Filename:     d.Filename,
+			Size:         d.Filesize,
+			Link:         d.Link,
+			DownloadLink: d.Download,
+			Generated:    d.Generated,
+			Id:           d.Id,
+		})
+
+	}
+	return links, nil
 }
 
 func (r *RealDebrid) GetDownloadingStatus() []string {
@@ -380,21 +512,23 @@ func (r *RealDebrid) GetDownloadUncached() bool {
 	return r.DownloadUncached
 }
 
-func New(dc config.Debrid, cache *cache.Cache) *RealDebrid {
+func New(dc config.Debrid) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	client := request.NewRLHTTPClient(rl, headers)
+	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	client := request.New().
+		WithHeaders(headers).
+		WithRateLimiter(rl).WithLogger(_log)
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
-		cache:            cache,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
+		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel),
 		CheckCached:      dc.CheckCached,
 	}
 }

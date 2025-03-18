@@ -2,15 +2,15 @@ package repair
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/engine"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"golang.org/x/sync/errgroup"
 	"net"
 	"net/http"
@@ -29,7 +29,7 @@ import (
 type Repair struct {
 	Jobs        map[string]*Job
 	arrs        *arr.Storage
-	deb         engine.Service
+	deb         debrid.Client
 	duration    time.Duration
 	runOnStart  bool
 	ZurgURL     string
@@ -47,7 +47,7 @@ func New(arrs *arr.Storage) *Repair {
 	}
 	r := &Repair{
 		arrs:        arrs,
-		logger:      logger.NewLogger("repair", cfg.LogLevel, os.Stdout),
+		logger:      logger.NewLogger("repair", cfg.LogLevel),
 		duration:    duration,
 		runOnStart:  cfg.Repair.RunOnStart,
 		ZurgURL:     cfg.Repair.ZurgURL,

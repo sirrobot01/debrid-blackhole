@@ -1,7 +1,7 @@
 package arr
 
 import (
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"net/http"
 	url2 "net/url"
 )

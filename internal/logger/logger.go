@@ -29,7 +29,7 @@ func GetLogPath() string {
 	return filepath.Join(logsDir, "decypharr.log")
 }
 
-func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
+func NewLogger(prefix string, level string) zerolog.Logger {
 
 	rotatingLogFile := &lumberjack.Logger{
 		Filename: GetLogPath(),
@@ -39,7 +39,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 	}
 
 	consoleWriter := zerolog.ConsoleWriter{
-		Out:        output,
+		Out:        os.Stdout,
 		TimeFormat: "2006-01-02 15:04:05",
 		NoColor:    false, // Set to true if you don't want colors
 		FormatLevel: func(i interface{}) string {
@@ -87,7 +87,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 func GetDefaultLogger() zerolog.Logger {
 	once.Do(func() {
 		cfg := config.GetConfig()
-		logger = NewLogger("decypharr", cfg.LogLevel, os.Stdout)
+		logger = NewLogger("decypharr", cfg.LogLevel)
 	})
 	return logger
 }

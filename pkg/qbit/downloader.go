@@ -52,7 +52,7 @@ Loop:
 
 func (q *QBit) ProcessManualFile(torrent *Torrent) (string, error) {
 	debridTorrent := torrent.DebridTorrent
-	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.DownloadLinks))
+	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.Files))
 	torrentPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, utils.RemoveExtension(debridTorrent.OriginalFilename))
 	torrentPath = utils.RemoveInvalidChars(torrentPath)
 	err := os.MkdirAll(torrentPath, os.ModePerm)
@@ -103,21 +103,21 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 			Transport: tr,
 		},
 	}
-	for _, link := range debridTorrent.DownloadLinks {
-		if link.DownloadLink == "" {
-			q.logger.Info().Msgf("No download link found for %s", link.Filename)
+	for _, file := range debridTorrent.Files {
+		if file.DownloadLink == "" {
+			q.logger.Info().Msgf("No download link found for %s", file.Name)
 			continue
 		}
 		wg.Add(1)
 		semaphore <- struct{}{}
-		go func(link debrid.DownloadLinks) {
+		go func(file debrid.File) {
 			defer wg.Done()
 			defer func() { <-semaphore }()
-			filename := link.Filename
+			filename := file.Link
 
 			err := Download(
 				client,
-				link.DownloadLink,
+				file.DownloadLink,
 				filepath.Join(parent, filename),
 				progressCallback,
 			)
@@ -127,7 +127,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 			} else {
 				q.logger.Info().Msgf("Downloaded %s", filename)
 			}
-		}(link)
+		}(file)
 	}
 	wg.Wait()
 	q.logger.Info().Msgf("Downloaded all files for %s", debridTorrent.Name)

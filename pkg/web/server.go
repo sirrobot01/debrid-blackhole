@@ -2,8 +2,8 @@ package web
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
@@ -14,7 +14,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -64,7 +63,7 @@ func New(qbit *qbit.QBit) *Handler {
 	cfg := config.GetConfig()
 	return &Handler{
 		qbit:   qbit,
-		logger: logger.NewLogger("ui", cfg.LogLevel, os.Stdout),
+		logger: logger.NewLogger("ui", cfg.LogLevel),
 	}
 }
 

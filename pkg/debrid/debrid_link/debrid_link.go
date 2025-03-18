@@ -2,19 +2,18 @@ package debrid_link
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/cache"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 	"slices"
+	"time"
 
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -23,11 +22,11 @@ type DebridLink struct {
 	Host             string `json:"host"`
 	APIKey           string
 	DownloadUncached bool
-	client           *request.RLHTTPClient
-	cache            *cache.Cache
-	MountPath        string
-	logger           zerolog.Logger
-	CheckCached      bool
+	client           *request.Client
+
+	MountPath   string
+	logger      zerolog.Logger
+	CheckCached bool
 }
 
 func (dl *DebridLink) GetName() string {
@@ -38,15 +37,9 @@ func (dl *DebridLink) GetLogger() zerolog.Logger {
 	return dl.logger
 }
 
-func (dl *DebridLink) IsAvailable(infohashes []string) map[string]bool {
+func (dl *DebridLink) IsAvailable(hashes []string) map[string]bool {
 	// Check if the infohashes are available in the local cache
-	hashes, result := torrent.GetLocalCache(infohashes, dl.cache)
-
-	if len(hashes) == 0 {
-		// Either all the infohashes are locally cached or none are
-		dl.cache.AddMultiple(result)
-		return result
-	}
+	result := make(map[string]bool)
 
 	// Divide hashes into groups of 100
 	for i := 0; i < len(hashes); i += 100 {
@@ -93,32 +86,31 @@ func (dl *DebridLink) IsAvailable(infohashes []string) map[string]bool {
 			}
 		}
 	}
-	dl.cache.AddMultiple(result) // Add the results to the cache
 	return result
 }
 
-func (dl *DebridLink) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (dl *DebridLink) UpdateTorrent(t *torrent.Torrent) error {
 	url := fmt.Sprintf("%s/seedbox/list?ids=%s", dl.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := dl.client.MakeRequest(req)
 	if err != nil {
-		return t, err
+		return err
 	}
 	var res TorrentInfo
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
-		return t, err
+		return err
 	}
 	if !res.Success {
-		return t, fmt.Errorf("error getting torrent")
+		return fmt.Errorf("error getting torrent")
 	}
 	if res.Value == nil {
-		return t, fmt.Errorf("torrent not found")
+		return fmt.Errorf("torrent not found")
 	}
 	dt := *res.Value
 
 	if len(dt) == 0 {
-		return t, fmt.Errorf("torrent not found")
+		return fmt.Errorf("torrent not found")
 	}
 	data := dt[0]
 	status := "downloading"
@@ -136,21 +128,22 @@ func (dl *DebridLink) GetTorrent(t *torrent.Torrent) (*torrent.Torrent, error) {
 	t.Seeders = data.PeersConnected
 	t.Filename = name
 	t.OriginalFilename = name
-	files := make([]torrent.File, len(data.Files))
 	cfg := config.GetConfig()
-	for i, f := range data.Files {
+	for _, f := range data.Files {
 		if !cfg.IsSizeAllowed(f.Size) {
 			continue
 		}
-		files[i] = torrent.File{
-			Id:   f.ID,
-			Name: f.Name,
-			Size: f.Size,
-			Path: f.Name,
+		file := torrent.File{
+			Id:           f.ID,
+			Name:         f.Name,
+			Size:         f.Size,
+			Path:         f.Name,
+			DownloadLink: f.DownloadURL,
+			Link:         f.DownloadURL,
 		}
+		t.Files[f.Name] = file
 	}
-	t.Files = files
-	return t, nil
+	return nil
 }
 
 func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) {
@@ -185,33 +178,32 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	t.OriginalFilename = name
 	t.MountPath = dl.MountPath
 	t.Debrid = dl.Name
-	t.DownloadLinks = make(map[string]torrent.DownloadLinks)
-	files := make([]torrent.File, len(data.Files))
-	for i, f := range data.Files {
-		files[i] = torrent.File{
-			Id:   f.ID,
-			Name: f.Name,
-			Size: f.Size,
-			Path: f.Name,
-			Link: f.DownloadURL,
+	for _, f := range data.Files {
+		file := torrent.File{
+			Id:           f.ID,
+			Name:         f.Name,
+			Size:         f.Size,
+			Path:         f.Name,
+			Link:         f.DownloadURL,
+			DownloadLink: f.DownloadURL,
+			Generated:    time.Now(),
 		}
+		t.Files[f.Name] = file
 	}
-	t.Files = files
 
 	return t, nil
 }
 
 func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
 	for {
-		t, err := dl.GetTorrent(torrent)
-		torrent = t
+		err := dl.UpdateTorrent(torrent)
 		if err != nil || torrent == nil {
 			return torrent, err
 		}
 		status := torrent.Status
 		if status == "downloaded" {
 			dl.logger.Info().Msgf("Torrent: %s downloaded", torrent.Name)
-			err = dl.GetDownloadLinks(torrent)
+			err = dl.GenerateDownloadLinks(torrent)
 			if err != nil {
 				return torrent, err
 			}
@@ -242,25 +234,16 @@ func (dl *DebridLink) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (dl *DebridLink) GetDownloadLinks(t *torrent.Torrent) error {
-	downloadLinks := make(map[string]torrent.DownloadLinks)
-	for _, f := range t.Files {
-		dl := torrent.DownloadLinks{
-			Link:     f.Link,
-			Filename: f.Name,
-		}
-		downloadLinks[f.Id] = dl
-	}
-	t.DownloadLinks = downloadLinks
+func (dl *DebridLink) GenerateDownloadLinks(t *torrent.Torrent) error {
 	return nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.DownloadLinks {
-	dlLink, ok := t.DownloadLinks[file.Id]
-	if !ok {
-		return nil
-	}
-	return &dlLink
+func (dl *DebridLink) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+	return nil, nil
+}
+
+func (dl *DebridLink) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
+	return file
 }
 
 func (dl *DebridLink) GetDownloadingStatus() []string {
@@ -275,26 +258,32 @@ func (dl *DebridLink) GetDownloadUncached() bool {
 	return dl.DownloadUncached
 }
 
-func New(dc config.Debrid, cache *cache.Cache) *DebridLink {
+func New(dc config.Debrid) *DebridLink {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 		"Content-Type":  "application/json",
 	}
-	client := request.NewRLHTTPClient(rl, headers)
+	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	client := request.New().
+		WithHeaders(headers).
+		WithRateLimiter(rl).WithLogger(_log)
 	return &DebridLink{
 		Name:             "debridlink",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
-		cache:            cache,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel, os.Stdout),
+		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel),
 		CheckCached:      dc.CheckCached,
 	}
 }
 
 func (dl *DebridLink) GetTorrents() ([]*torrent.Torrent, error) {
 	return nil, nil
+}
+
+func (dl *DebridLink) ConvertLinksToFiles(links []string) []torrent.File {
+	return nil
 }

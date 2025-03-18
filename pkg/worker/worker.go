@@ -6,7 +6,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
-	"os"
 	"sync"
 	"time"
 )
@@ -20,7 +19,7 @@ func getLogger() zerolog.Logger {
 
 	once.Do(func() {
 		cfg := config.GetConfig()
-		_logInstance = logger.NewLogger("worker", cfg.LogLevel, os.Stdout)
+		_logInstance = logger.NewLogger("worker", cfg.LogLevel)
 	})
 	return _logInstance
 }

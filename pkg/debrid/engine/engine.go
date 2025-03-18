@@ -1,18 +1,22 @@
 package engine
 
+import (
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+)
+
 type Engine struct {
-	Debrids  []Service
+	Debrids  []debrid.Client
 	LastUsed int
 }
 
-func (d *Engine) Get() Service {
+func (d *Engine) Get() debrid.Client {
 	if d.LastUsed == 0 {
 		return d.Debrids[0]
 	}
 	return d.Debrids[d.LastUsed]
 }
 
-func (d *Engine) GetByName(name string) Service {
+func (d *Engine) GetByName(name string) debrid.Client {
 	for _, deb := range d.Debrids {
 		if deb.GetName() == name {
 			return deb
@@ -21,6 +25,6 @@ func (d *Engine) GetByName(name string) Service {
 	return nil
 }
 
-func (d *Engine) GetDebrids() []Service {
+func (d *Engine) GetDebrids() []debrid.Client {
 	return d.Debrids
 }

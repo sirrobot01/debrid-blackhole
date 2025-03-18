@@ -6,6 +6,8 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/cmd/decypharr"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"log"
+	"net/http"
+	_ "net/http/pprof" // registers pprof handlers
 	"runtime/debug"
 )
 
@@ -14,6 +16,12 @@ func main() {
 		if r := recover(); r != nil {
 			log.Printf("FATAL: Recovered from panic in main: %v\n", r)
 			debug.PrintStack()
+		}
+	}()
+
+	go func() {
+		if err := http.ListenAndServe(":6060", nil); err != nil {
+			log.Fatalf("pprof server failed: %v", err)
 		}
 	}()
 	var configPath string

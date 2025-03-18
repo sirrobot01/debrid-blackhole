@@ -2,7 +2,7 @@ package server
 
 import (
 	"cmp"
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"net/http"
 )

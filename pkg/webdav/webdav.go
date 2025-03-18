@@ -9,7 +9,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"html/template"
 	"net/http"
-	"os"
 	"sync"
 )
 
@@ -23,8 +22,10 @@ func New() *WebDav {
 	w := &WebDav{
 		Handlers: make([]*Handler, 0),
 	}
-	for name, c := range svc.DebridCache.GetCaches() {
-		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name), cfg.LogLevel, os.Stdout))
+	debrids := svc.Debrid.GetDebrids()
+	cacheManager := NewCacheManager(debrids)
+	for name, c := range cacheManager.GetCaches() {
+		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name), cfg.LogLevel))
 		w.Handlers = append(w.Handlers, h)
 	}
 	return w
@@ -33,7 +34,7 @@ func New() *WebDav {
 func (wd *WebDav) Routes() http.Handler {
 	chi.RegisterMethod("PROPFIND")
 	chi.RegisterMethod("PROPPATCH")
-	chi.RegisterMethod("MKCOL") // Note: it was "MKOL" in your example, should be "MKCOL"
+	chi.RegisterMethod("MKCOL")
 	chi.RegisterMethod("COPY")
 	chi.RegisterMethod("MOVE")
 	chi.RegisterMethod("LOCK")
@@ -97,6 +98,7 @@ func (wd *WebDav) setupRootHandler(r chi.Router) {
 func (wd *WebDav) commonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("DAV", "1, 2")
+		w.Header().Set("Cache-Control", "max-age=3600")
 		w.Header().Set("Allow", "OPTIONS, PROPFIND, GET, HEAD, POST, PUT, DELETE, MKCOL, PROPPATCH, COPY, MOVE, LOCK, UNLOCK")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PROPFIND, GET, HEAD, POST, PUT, DELETE, MKCOL, PROPPATCH, COPY, MOVE, LOCK, UNLOCK")
