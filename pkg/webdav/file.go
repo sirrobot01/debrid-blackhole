@@ -138,7 +138,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekCurrent:
 		newOffset = f.offset + offset
 	case io.SeekEnd:
-		newOffset = f.size - offset
+		newOffset = f.size + offset
 	default:
 		return 0, os.ErrInvalid
 	}

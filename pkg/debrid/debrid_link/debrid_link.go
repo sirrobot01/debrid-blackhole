@@ -264,7 +264,7 @@ func New(dc config.Debrid) *DebridLink {
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 		"Content-Type":  "application/json",
 	}
-	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	_log := logger.NewLogger(dc.Name)
 	client := request.New().
 		WithHeaders(headers).
 		WithRateLimiter(rl).WithLogger(_log)
@@ -275,7 +275,7 @@ func New(dc config.Debrid) *DebridLink {
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel),
+		logger:           logger.NewLogger(dc.Name),
 		CheckCached:      dc.CheckCached,
 	}
 }

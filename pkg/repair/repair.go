@@ -47,7 +47,7 @@ func New(arrs *arr.Storage) *Repair {
 	}
 	r := &Repair{
 		arrs:        arrs,
-		logger:      logger.NewLogger("repair", cfg.LogLevel),
+		logger:      logger.NewLogger("repair"),
 		duration:    duration,
 		runOnStart:  cfg.Repair.RunOnStart,
 		ZurgURL:     cfg.Repair.ZurgURL,

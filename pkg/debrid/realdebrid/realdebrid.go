@@ -517,7 +517,7 @@ func New(dc config.Debrid) *RealDebrid {
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	_log := logger.NewLogger(dc.Name)
 	client := request.New().
 		WithHeaders(headers).
 		WithRateLimiter(rl).WithLogger(_log)
@@ -528,7 +528,7 @@ func New(dc config.Debrid) *RealDebrid {
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name, config.GetConfig().LogLevel),
+		logger:           logger.NewLogger(dc.Name),
 		CheckCached:      dc.CheckCached,
 	}
 }

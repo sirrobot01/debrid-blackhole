@@ -18,8 +18,7 @@ var (
 func getLogger() zerolog.Logger {
 
 	once.Do(func() {
-		cfg := config.GetConfig()
-		_logInstance = logger.NewLogger("worker", cfg.LogLevel)
+		_logInstance = logger.NewLogger("worker")
 	})
 	return _logInstance
 }

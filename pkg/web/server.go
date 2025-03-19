@@ -60,10 +60,9 @@ type Handler struct {
 }
 
 func New(qbit *qbit.QBit) *Handler {
-	cfg := config.GetConfig()
 	return &Handler{
 		qbit:   qbit,
-		logger: logger.NewLogger("ui", cfg.LogLevel),
+		logger: logger.NewLogger("ui"),
 	}
 }
 

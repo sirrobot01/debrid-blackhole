@@ -22,8 +22,7 @@ type Server struct {
 }
 
 func New() *Server {
-	cfg := config.GetConfig()
-	l := logger.NewLogger("http", cfg.LogLevel)
+	l := logger.NewLogger("http")
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))

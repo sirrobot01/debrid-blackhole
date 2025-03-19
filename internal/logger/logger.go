@@ -29,7 +29,9 @@ func GetLogPath() string {
 	return filepath.Join(logsDir, "decypharr.log")
 }
 
-func NewLogger(prefix string, level string) zerolog.Logger {
+func NewLogger(prefix string) zerolog.Logger {
+
+	level := config.GetConfig().LogLevel
 
 	rotatingLogFile := &lumberjack.Logger{
 		Filename: GetLogPath(),
@@ -86,8 +88,7 @@ func NewLogger(prefix string, level string) zerolog.Logger {
 
 func GetDefaultLogger() zerolog.Logger {
 	once.Do(func() {
-		cfg := config.GetConfig()
-		logger = NewLogger("decypharr", cfg.LogLevel)
+		logger = NewLogger("decypharr")
 	})
 	return logger
 }

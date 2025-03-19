@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -52,7 +53,7 @@ func (h *Handler) Mkdir(ctx context.Context, name string, perm os.FileMode) erro
 func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 	name = path.Clean("/" + name)
 
-	rootDir := h.getParentRootPath()
+	rootDir := h.getRootPath()
 
 	if name == rootDir {
 		return os.ErrPermission
@@ -67,6 +68,8 @@ func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 	if filename == "" {
 		h.cache.GetClient().DeleteTorrent(cachedTorrent.Torrent)
 		go h.cache.refreshListings()
+		go h.cache.refreshTorrents()
+		go h.cache.resetPropfindResponse()
 		return nil
 	}
 
@@ -78,7 +81,7 @@ func (h *Handler) Rename(ctx context.Context, oldName, newName string) error {
 	return os.ErrPermission // Read-only filesystem
 }
 
-func (h *Handler) getParentRootPath() string {
+func (h *Handler) getRootPath() string {
 	return fmt.Sprintf("/webdav/%s", h.Name)
 }
 
@@ -86,37 +89,33 @@ func (h *Handler) getTorrentsFolders() []os.FileInfo {
 	return h.cache.GetListing()
 }
 
+func (h *Handler) getParentItems() []string {
+	return []string{"__all__", "torrents", "version.txt"}
+}
+
 func (h *Handler) getParentFiles() []os.FileInfo {
 	now := time.Now()
-	rootFiles := []os.FileInfo{
-		&FileInfo{
-			name:    "__all__",
+	rootFiles := make([]os.FileInfo, 0, len(h.getParentItems()))
+	for _, item := range h.getParentItems() {
+		f := &FileInfo{
+			name:    item,
 			size:    0,
 			mode:    0755 | os.ModeDir,
 			modTime: now,
 			isDir:   true,
-		},
-		&FileInfo{
-			name:    "torrents",
-			size:    0,
-			mode:    0755 | os.ModeDir,
-			modTime: now,
-			isDir:   true,
-		},
-		&FileInfo{
-			name:    "version.txt",
-			size:    int64(len("v1.0.0")),
-			mode:    0644,
-			modTime: now,
-			isDir:   false,
-		},
+		}
+		if item == "version.txt" {
+			f.isDir = false
+			f.size = int64(len("v1.0.0"))
+		}
+		rootFiles = append(rootFiles, f)
 	}
 	return rootFiles
 }
 
 func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	name = path.Clean("/" + name)
-	rootDir := h.getParentRootPath()
+	rootDir := h.getRootPath()
 
 	// Fast path optimization with a map lookup instead of string comparisons
 	switch name {
@@ -138,7 +137,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 	}
 
 	// Single check for top-level folders
-	if name == path.Join(rootDir, "__all__") || name == path.Join(rootDir, "torrents") {
+	if h.isParentPath(name) {
 		folderName := strings.TrimPrefix(name, rootDir)
 		folderName = strings.TrimPrefix(folderName, "/")
 
@@ -157,7 +156,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 	_path := strings.TrimPrefix(name, rootDir)
 	parts := strings.Split(strings.TrimPrefix(_path, "/"), "/")
 
-	if len(parts) >= 2 && (parts[0] == "__all__" || parts[0] == "torrents") {
+	if len(parts) >= 2 && (slices.Contains(h.getParentItems(), parts[0])) {
 
 		torrentName := parts[1]
 		cachedTorrent := h.cache.GetTorrentByName(torrentName)
@@ -224,71 +223,76 @@ func (h *Handler) getFileInfos(torrent *torrent.Torrent) []os.FileInfo {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
 	// Handle OPTIONS
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	//Add specific PROPFIND optimization
+	// Cache PROPFIND responses for a short time to reduce load.
 	if r.Method == "PROPFIND" {
-		propfindStart := time.Now()
+		// Determine the Depth; default to "1" if not provided.
+		depth := r.Header.Get("Depth")
+		if depth == "" {
+			depth = "1"
+		}
+		// Use both path and Depth header to form the cache key.
+		cacheKey := fmt.Sprintf("propfind:%s:%s", r.URL.Path, depth)
 
-		// Check if this is the slow path we identified
-		if strings.Contains(r.URL.Path, "__all__") {
-			// Fast path for this specific directory
-			depth := r.Header.Get("Depth")
-			if depth == "1" || depth == "" {
-				// This is a listing request
+		// Determine TTL based on the requested folder:
+		// - If the path is exactly the parent folder (which changes frequently),
+		//   use a short TTL.
+		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
+		var ttl time.Duration
+		if h.isParentPath(r.URL.Path) {
+			ttl = 10 * time.Second
+		} else {
+			ttl = 1 * time.Minute
+		}
 
-				// Use a cached response if available
-				cachedKey := "propfind_" + r.URL.Path
-				if cachedResponse, ok := h.responseCache.Load(cachedKey); ok {
-					responseData := cachedResponse.([]byte)
+		// Check if we have a cached response that hasn't expired.
+		if cached, ok := h.cache.propfindResp.Load(cacheKey); ok {
+			if respCache, ok := cached.(propfindResponse); ok {
+				if time.Since(respCache.ts) < ttl {
 					w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-					w.Header().Set("Content-Length", fmt.Sprintf("%d", len(responseData)))
-					w.Write(responseData)
+					w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.data)))
+					w.Write(respCache.data)
 					return
 				}
-
-				// Otherwise process normally but cache the result
-				responseRecorder := httptest.NewRecorder()
-
-				// Process the request with the standard handler
-				handler := &webdav.Handler{
-					FileSystem: h,
-					LockSystem: webdav.NewMemLS(),
-					Logger: func(r *http.Request, err error) {
-						if err != nil {
-							h.logger.Error().Err(err).Msg("WebDAV error")
-						}
-					},
-				}
-				handler.ServeHTTP(responseRecorder, r)
-
-				// Cache the response for future requests
-				responseData := responseRecorder.Body.Bytes()
-				h.responseCache.Store(cachedKey, responseData)
-
-				// Send to the real client
-				for k, v := range responseRecorder.Header() {
-					w.Header()[k] = v
-				}
-				w.WriteHeader(responseRecorder.Code)
-				w.Write(responseData)
-				return
 			}
 		}
 
-		h.logger.Debug().
-			Dur("propfind_prepare", time.Since(propfindStart)).
-			Msg("Proceeding with standard PROPFIND")
+		// No valid cache entry; process the PROPFIND request.
+		responseRecorder := httptest.NewRecorder()
+		handler := &webdav.Handler{
+			FileSystem: h,
+			LockSystem: webdav.NewMemLS(),
+			Logger: func(r *http.Request, err error) {
+				if err != nil {
+					h.logger.Error().Err(err).Msg("WebDAV error")
+				}
+			},
+		}
+		handler.ServeHTTP(responseRecorder, r)
+		responseData := responseRecorder.Body.Bytes()
+
+		// Store the new response in the cache.
+		h.cache.propfindResp.Store(cacheKey, propfindResponse{
+			data: responseData,
+			ts:   time.Now(),
+		})
+
+		// Forward the captured response to the client.
+		for k, v := range responseRecorder.Header() {
+			w.Header()[k] = v
+		}
+		w.WriteHeader(responseRecorder.Code)
+		w.Write(responseData)
+		return
 	}
 
-	// Check if this is a GET request for a file
+	// Handle GET requests for file/directory content
 	if r.Method == "GET" {
-		openStart := time.Now()
 		f, err := h.OpenFile(r.Context(), r.URL.Path, os.O_RDONLY, 0)
 		if err != nil {
 			h.logger.Debug().Err(err).Str("path", r.URL.Path).Msg("Failed to open file")
@@ -304,17 +308,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// If the target is a directory, use your directory listing logic.
 		if fi.IsDir() {
-			dirStart := time.Now()
 			h.serveDirectory(w, r, f)
-			h.logger.Info().
-				Dur("directory_time", time.Since(dirStart)).
-				Msg("Directory served")
 			return
 		}
 
-		// For file requests, use http.ServeContent.
-		// Ensure f implements io.ReadSeeker.
 		rs, ok := f.(io.ReadSeeker)
 		if !ok {
 			// If not, read the entire file into memory as a fallback.
@@ -326,8 +325,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			rs = bytes.NewReader(buf)
 		}
-
-		// Set Content-Type based on file name.
 		fileName := fi.Name()
 		contentType := getContentType(fileName)
 		w.Header().Set("Content-Type", contentType)
@@ -335,13 +332,62 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Serve the file with the correct modification time.
 		// http.ServeContent automatically handles Range requests.
 		http.ServeContent(w, r, fileName, fi.ModTime(), rs)
-		h.logger.Info().
-			Dur("open_attempt_time", time.Since(openStart)).
-			Msg("Served file using ServeContent")
+
+		// Set headers to indicate support for range requests and content type.
+		//fileName := fi.Name()
+		//w.Header().Set("Accept-Ranges", "bytes")
+		//w.Header().Set("Content-Type", getContentType(fileName))
+		//
+		//// If a Range header is provided, parse and handle partial content.
+		//rangeHeader := r.Header.Get("Range")
+		//if rangeHeader != "" {
+		//	parts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
+		//	if len(parts) == 2 {
+		//		start, startErr := strconv.ParseInt(parts[0], 10, 64)
+		//		end := fi.Size() - 1
+		//		if parts[1] != "" {
+		//			var endErr error
+		//			end, endErr = strconv.ParseInt(parts[1], 10, 64)
+		//			if endErr != nil {
+		//				end = fi.Size() - 1
+		//			}
+		//		}
+		//
+		//		if startErr == nil && start < fi.Size() {
+		//			if start > end {
+		//				start, end = end, start
+		//			}
+		//			if end >= fi.Size() {
+		//				end = fi.Size() - 1
+		//			}
+		//
+		//			contentLength := end - start + 1
+		//			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fi.Size()))
+		//			w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
+		//			w.WriteHeader(http.StatusPartialContent)
+		//
+		//			// Attempt to cast to your concrete File type to call Seek.
+		//			if file, ok := f.(*File); ok {
+		//				_, err = file.Seek(start, io.SeekStart)
+		//				if err != nil {
+		//					h.logger.Error().Err(err).Msg("Failed to seek in file")
+		//					http.Error(w, "Server Error", http.StatusInternalServerError)
+		//					return
+		//				}
+		//
+		//				limitedReader := io.LimitReader(f, contentLength)
+		//				h.ioCopy(limitedReader, w)
+		//				return
+		//			}
+		//		}
+		//	}
+		//}
+		//w.Header().Set("Content-Length", fmt.Sprintf("%d", fi.Size()))
+		//h.ioCopy(f, w)
 		return
 	}
 
-	// Default to standard WebDAV handler for other requests
+	// Fallback: for other methods, use the standard WebDAV handler.
 	handler := &webdav.Handler{
 		FileSystem: h,
 		LockSystem: webdav.NewMemLS(),
@@ -355,7 +401,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		},
 	}
-
 	handler.ServeHTTP(w, r)
 }
 
@@ -382,6 +427,17 @@ func getContentType(fileName string) string {
 		contentType = "text/vtt"
 	}
 	return contentType
+}
+
+func (h *Handler) isParentPath(_path string) bool {
+	rootPath := h.getRootPath()
+	parents := h.getParentItems()
+	for _, p := range parents {
+		if _path == path.Join(rootPath, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file webdav.File) {
@@ -432,36 +488,35 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 }
 
 func (h *Handler) ioCopy(reader io.Reader, w io.Writer) (int64, error) {
-	// Start with a smaller initial buffer for faster first byte time
-	buffer := make([]byte, 8*1024) // 8KB initial buffer
-	written := int64(0)
-
-	// First chunk needs to be delivered ASAP
+	// Start with a smaller buffer for faster first byte delivery.
+	buf := make([]byte, 4*1024) // 8KB initial buffer
+	totalWritten := int64(0)
 	firstChunk := true
 
 	for {
-		n, err := reader.Read(buffer)
+		n, err := reader.Read(buf)
 		if n > 0 {
-			nw, ew := w.Write(buffer[:n])
+			nw, ew := w.Write(buf[:n])
 			if ew != nil {
 				var opErr *net.OpError
 				if errors.As(ew, &opErr) && opErr.Err.Error() == "write: broken pipe" {
 					h.logger.Debug().Msg("Client closed connection (normal for streaming)")
+					return totalWritten, ew
 				}
-				break
+				return totalWritten, ew
 			}
-			written += int64(nw)
+			totalWritten += int64(nw)
 
-			// Flush immediately after first chunk, then less frequently
+			// Flush immediately after the first chunk.
 			if firstChunk {
 				if flusher, ok := w.(http.Flusher); ok {
 					flusher.Flush()
 				}
 				firstChunk = false
-
-				// Increase buffer size after first chunk
-				buffer = make([]byte, 64*1024) // 512KB for subsequent reads
-			} else if written%(2*1024*1024) < int64(n) { // Flush every 2MB
+				// Increase buffer size for subsequent reads.
+				buf = make([]byte, 512*1024) // 64KB buffer after first chunk
+			} else if totalWritten%(2*1024*1024) < int64(n) {
+				// Flush roughly every 2MB of data transferred.
 				if flusher, ok := w.(http.Flusher); ok {
 					flusher.Flush()
 				}
@@ -476,5 +531,5 @@ func (h *Handler) ioCopy(reader io.Reader, w io.Writer) (int64, error) {
 		}
 	}
 
-	return written, nil
+	return totalWritten, nil
 }

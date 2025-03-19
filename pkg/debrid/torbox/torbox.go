@@ -319,7 +319,7 @@ func New(dc config.Debrid) *Torbox {
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	_log := logger.NewLogger(dc.Name, config.GetConfig().LogLevel)
+	_log := logger.NewLogger(dc.Name)
 	client := request.New().
 		WithHeaders(headers).
 		WithRateLimiter(rl).WithLogger(_log)

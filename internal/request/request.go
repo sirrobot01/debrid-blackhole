@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"golang.org/x/time/rate"
 	"io"
@@ -227,7 +226,7 @@ func New(options ...ClientOption) *Client {
 			http.StatusServiceUnavailable:  true,
 			http.StatusGatewayTimeout:      true,
 		},
-		logger: logger.NewLogger("request", config.GetConfig().LogLevel),
+		logger: logger.NewLogger("request"),
 	}
 
 	// Apply options
