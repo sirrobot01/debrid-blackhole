@@ -6,23 +6,26 @@ This is an implementation of QbitTorrent with a **Multiple Debrid service suppor
 
 ### Table of Contents
 
+- [DecyphArr(Qbittorent, but with Debrid Support)](#decypharrqbittorent-but-with-debrid-support)
+- [Table of Contents](#table-of-contents)
 - [Features](#features)
 - [Supported Debrid Providers](#supported-debrid-providers)
 - [Installation](#installation)
-  - [Docker Compose](#docker-compose)
-  - [Binary](#binary)
+    - [Docker](#docker)
+      - [Registry](#registry)
+      - [Tags](#tags)
+    - [Binary](#binary)
 - [Usage](#usage)
-- [Connecting to Sonarr/Radarr](#connecting-to-sonarrradarr)
-- [Sample Config](#sample-config)
-- [Config Notes](#config-notes)
-  - [Log Level](#log-level)
-  - [Max Cache Size](#max-cache-size)
-  - [Debrid Config](#debrid-config)
-  - [Proxy Config](#proxy-config)
-  - [Qbittorrent Config](#qbittorrent-config)
-  - [Arrs Config](#arrs-config)
-- [Proxy](#proxy)
+  - [Connecting to Sonarr/Radarr](#connecting-to-sonarrradarr)
+  - [Basic Sample Config](#basic-sample-config)
+    - [Debrid Config](#debrid-config)
+    - [Repair Config (**BETA**)](#repair-config-beta)
+    - [Proxy Config](#proxy-config)
+    - [Qbittorrent Config](#qbittorrent-config)
+    - [Arrs Config](#arrs-config)
 - [Repair Worker](#repair-worker)
+- [Proxy](#proxy)
+  - [**Note**: Proxy has stopped working for Real Debrid, Debrid Link, and All Debrid. It still works for Torbox. This is due to the changes in the API of the Debrid Providers.](#note-proxy-has-stopped-working-for-real-debrid-debrid-link-and-all-debrid-it-still-works-for-torbox-this-is-due-to-the-changes-in-the-api-of-the-debrid-providers)
 - [Changelog](#changelog)
 - [TODO](#todo)
 
@@ -139,7 +142,7 @@ This is the default config file. You can create a `config.json` file in the root
   "qbittorrent": {
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
-    "categories": ["sonarr", "radarr"],
+    "categories": ["sonarr", "radarr"]
   },
   "repair": {
     "enabled": false,
