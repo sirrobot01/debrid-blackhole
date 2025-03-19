@@ -173,7 +173,7 @@ func (r *RealDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	if err != nil {
 		return err
 	}
-	name := utils.RemoveInvalidChars(data.OriginalFilename)
+	name := utils.RemoveExtension(data.OriginalFilename)
 	t.Name = name
 	t.Bytes = data.Bytes
 	t.Folder = name
@@ -379,7 +379,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent
 		}
 		torrents = append(torrents, &torrent.Torrent{
 			Id:               t.Id,
-			Name:             t.Filename,
+			Name:             utils.RemoveInvalidChars(t.Filename),
 			Bytes:            t.Bytes,
 			Progress:         t.Progress,
 			Status:           t.Status,

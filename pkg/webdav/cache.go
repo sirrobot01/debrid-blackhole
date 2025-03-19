@@ -8,6 +8,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"os"
 	"path/filepath"
@@ -108,7 +109,10 @@ func (c *Cache) refreshListings() {
 }
 
 func (c *Cache) GetListing() []os.FileInfo {
-	return c.listings.Load().([]os.FileInfo)
+	if v, ok := c.listings.Load().([]os.FileInfo); ok {
+		return v
+	}
+	return nil
 }
 
 func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
@@ -249,6 +253,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		if len(ct.Files) != 0 {
 			// We can assume the torrent is complete
 			ct.IsComplete = true
+			ct.Torrent.Name = utils.RemoveExtension(ct.Torrent.Filename) // Update the name
 			torrents[ct.Id] = &ct
 		}
 	}
