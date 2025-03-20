@@ -2,11 +2,13 @@ package webdav
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"golang.org/x/net/webdav"
 	"html/template"
 	"io"
@@ -14,7 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path"
+	path "path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -24,7 +26,7 @@ import (
 type Handler struct {
 	Name          string
 	logger        zerolog.Logger
-	cache         *Cache
+	cache         *debrid.Cache
 	lastRefresh   time.Time
 	refreshMutex  sync.Mutex
 	RootPath      string
@@ -33,7 +35,7 @@ type Handler struct {
 	ctx           context.Context
 }
 
-func NewHandler(name string, cache *Cache, logger zerolog.Logger) *Handler {
+func NewHandler(name string, cache *debrid.Cache, logger zerolog.Logger) *Handler {
 	h := &Handler{
 		Name:     name,
 		cache:    cache,
@@ -67,9 +69,7 @@ func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 
 	if filename == "" {
 		h.cache.GetClient().DeleteTorrent(cachedTorrent.Torrent)
-		go h.cache.refreshListings()
-		go h.cache.refreshTorrents()
-		go h.cache.resetPropfindResponse()
+		h.cache.OnRemove(cachedTorrent.Id)
 		return nil
 	}
 
@@ -117,22 +117,29 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 	name = path.Clean("/" + name)
 	rootDir := h.getRootPath()
 
+	metadataOnly := false
+	if ctx.Value("metadataOnly") != nil {
+		metadataOnly = true
+	}
+
 	// Fast path optimization with a map lookup instead of string comparisons
 	switch name {
 	case rootDir:
 		return &File{
-			cache:    h.cache,
-			isDir:    true,
-			children: h.getParentFiles(),
-			name:     "/",
+			cache:        h.cache,
+			isDir:        true,
+			children:     h.getParentFiles(),
+			name:         "/",
+			metadataOnly: metadataOnly,
 		}, nil
 	case path.Join(rootDir, "version.txt"):
 		return &File{
-			cache:   h.cache,
-			isDir:   false,
-			content: []byte("v1.0.0"),
-			name:    "version.txt",
-			size:    int64(len("v1.0.0")),
+			cache:        h.cache,
+			isDir:        false,
+			content:      []byte("v1.0.0"),
+			name:         "version.txt",
+			size:         int64(len("v1.0.0")),
+			metadataOnly: metadataOnly,
 		}, nil
 	}
 
@@ -145,11 +152,12 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 		children := h.getTorrentsFolders()
 
 		return &File{
-			cache:    h.cache,
-			isDir:    true,
-			children: children,
-			name:     folderName,
-			size:     0,
+			cache:        h.cache,
+			isDir:        true,
+			children:     children,
+			name:         folderName,
+			size:         0,
+			metadataOnly: metadataOnly,
 		}, nil
 	}
 
@@ -168,12 +176,13 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 		if len(parts) == 2 {
 			// Torrent folder level
 			return &File{
-				cache:     h.cache,
-				torrentId: cachedTorrent.Id,
-				isDir:     true,
-				children:  h.getFileInfos(cachedTorrent.Torrent),
-				name:      cachedTorrent.Name,
-				size:      cachedTorrent.Size,
+				cache:        h.cache,
+				torrentId:    cachedTorrent.Id,
+				isDir:        true,
+				children:     h.getFileInfos(cachedTorrent.Torrent),
+				name:         cachedTorrent.Name,
+				size:         cachedTorrent.Size,
+				metadataOnly: metadataOnly,
 			}, nil
 		}
 
@@ -189,6 +198,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 				size:         file.Size,
 				link:         file.Link,
 				downloadLink: file.DownloadLink,
+				metadataOnly: metadataOnly,
 			}
 			return fi, nil
 		}
@@ -207,7 +217,7 @@ func (h *Handler) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	return f.Stat()
 }
 
-func (h *Handler) getFileInfos(torrent *torrent.Torrent) []os.FileInfo {
+func (h *Handler) getFileInfos(torrent *types.Torrent) []os.FileInfo {
 	files := make([]os.FileInfo, 0, len(torrent.Files))
 	now := time.Now()
 	for _, file := range torrent.Files {
@@ -232,34 +242,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Cache PROPFIND responses for a short time to reduce load.
 	if r.Method == "PROPFIND" {
 		// Determine the Depth; default to "1" if not provided.
+		// Set metadata only
+		ctx := context.WithValue(r.Context(), "metadataOnly", true)
+		r = r.WithContext(ctx)
+		cleanPath := path.Clean(r.URL.Path)
 		depth := r.Header.Get("Depth")
 		if depth == "" {
 			depth = "1"
 		}
 		// Use both path and Depth header to form the cache key.
-		cacheKey := fmt.Sprintf("propfind:%s:%s", r.URL.Path, depth)
+		cacheKey := fmt.Sprintf("propfind:%s:%s", cleanPath, depth)
 
 		// Determine TTL based on the requested folder:
 		// - If the path is exactly the parent folder (which changes frequently),
 		//   use a short TTL.
 		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
-		var ttl time.Duration
+		ttl := 30 * time.Minute
 		if h.isParentPath(r.URL.Path) {
-			ttl = 10 * time.Second
-		} else {
-			ttl = 1 * time.Minute
+			ttl = 20 * time.Second
 		}
 
-		// Check if we have a cached response that hasn't expired.
-		if cached, ok := h.cache.propfindResp.Load(cacheKey); ok {
-			if respCache, ok := cached.(propfindResponse); ok {
-				if time.Since(respCache.ts) < ttl {
-					w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-					w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.data)))
-					w.Write(respCache.data)
-					return
-				}
-			}
+		if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {
+			return
 		}
 
 		// No valid cache entry; process the PROPFIND request.
@@ -276,10 +280,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handler.ServeHTTP(responseRecorder, r)
 		responseData := responseRecorder.Body.Bytes()
 
-		// Store the new response in the cache.
-		h.cache.propfindResp.Store(cacheKey, propfindResponse{
-			data: responseData,
-			ts:   time.Now(),
+		// Create compressed version
+		var gzippedData []byte
+		if len(responseData) > 0 {
+			var buf bytes.Buffer
+			gzw := gzip.NewWriter(&buf)
+			if _, err := gzw.Write(responseData); err == nil {
+				if err := gzw.Close(); err == nil {
+					gzippedData = buf.Bytes()
+				}
+			}
+		}
+
+		h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
+			Data:        responseData,
+			GzippedData: gzippedData,
+			Ts:          time.Now(),
 		})
 
 		// Forward the captured response to the client.
@@ -332,58 +348,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Serve the file with the correct modification time.
 		// http.ServeContent automatically handles Range requests.
 		http.ServeContent(w, r, fileName, fi.ModTime(), rs)
-
-		// Set headers to indicate support for range requests and content type.
-		//fileName := fi.Name()
-		//w.Header().Set("Accept-Ranges", "bytes")
-		//w.Header().Set("Content-Type", getContentType(fileName))
-		//
-		//// If a Range header is provided, parse and handle partial content.
-		//rangeHeader := r.Header.Get("Range")
-		//if rangeHeader != "" {
-		//	parts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
-		//	if len(parts) == 2 {
-		//		start, startErr := strconv.ParseInt(parts[0], 10, 64)
-		//		end := fi.Size() - 1
-		//		if parts[1] != "" {
-		//			var endErr error
-		//			end, endErr = strconv.ParseInt(parts[1], 10, 64)
-		//			if endErr != nil {
-		//				end = fi.Size() - 1
-		//			}
-		//		}
-		//
-		//		if startErr == nil && start < fi.Size() {
-		//			if start > end {
-		//				start, end = end, start
-		//			}
-		//			if end >= fi.Size() {
-		//				end = fi.Size() - 1
-		//			}
-		//
-		//			contentLength := end - start + 1
-		//			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fi.Size()))
-		//			w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
-		//			w.WriteHeader(http.StatusPartialContent)
-		//
-		//			// Attempt to cast to your concrete File type to call Seek.
-		//			if file, ok := f.(*File); ok {
-		//				_, err = file.Seek(start, io.SeekStart)
-		//				if err != nil {
-		//					h.logger.Error().Err(err).Msg("Failed to seek in file")
-		//					http.Error(w, "Server Error", http.StatusInternalServerError)
-		//					return
-		//				}
-		//
-		//				limitedReader := io.LimitReader(f, contentLength)
-		//				h.ioCopy(limitedReader, w)
-		//				return
-		//			}
-		//		}
-		//	}
-		//}
-		//w.Header().Set("Content-Length", fmt.Sprintf("%d", fi.Size()))
-		//h.ioCopy(f, w)
 		return
 	}
 
@@ -433,11 +397,41 @@ func (h *Handler) isParentPath(_path string) bool {
 	rootPath := h.getRootPath()
 	parents := h.getParentItems()
 	for _, p := range parents {
-		if _path == path.Join(rootPath, p) {
+		if path.Clean(_path) == path.Clean(path.Join(rootPath, p)) {
 			return true
 		}
 	}
 	return false
+}
+
+func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, cacheKey string, ttl time.Duration) bool {
+	cached, ok := h.cache.PropfindResp.Load(cacheKey)
+	if !ok {
+		return false
+	}
+
+	respCache, ok := cached.(debrid.PropfindResponse)
+	if !ok {
+		return false
+	}
+
+	if time.Since(respCache.Ts) >= ttl {
+		// Remove expired cache entry
+		h.cache.PropfindResp.Delete(cacheKey)
+		return false
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	if acceptsGzip(r) && len(respCache.GzippedData) > 0 {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.GzippedData)))
+		w.Write(respCache.GzippedData)
+	} else {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.Data)))
+		w.Write(respCache.Data)
+	}
+	return true
 }
 
 func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file webdav.File) {

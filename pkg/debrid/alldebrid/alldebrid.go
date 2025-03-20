@@ -8,7 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"slices"
 	"time"
 
@@ -47,7 +47,7 @@ func (ad *AllDebrid) IsAvailable(hashes []string) map[string]bool {
 	return result
 }
 
-func (ad *AllDebrid) SubmitMagnet(torrent *torrent.Torrent) (*torrent.Torrent, error) {
+func (ad *AllDebrid) SubmitMagnet(torrent *types.Torrent) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/magnet/upload", ad.Host)
 	query := gourl.Values{}
 	query.Add("magnets[]", torrent.Magnet.Link)
@@ -84,8 +84,8 @@ func getAlldebridStatus(statusCode int) string {
 	}
 }
 
-func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]torrent.File {
-	result := make(map[string]torrent.File)
+func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]types.File {
+	result := make(map[string]types.File)
 
 	cfg := config.GetConfig()
 
@@ -123,7 +123,7 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]
 			}
 
 			*index++
-			file := torrent.File{
+			file := types.File{
 				Id:   strconv.Itoa(*index),
 				Name: fileName,
 				Size: f.Size,
@@ -136,7 +136,7 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]
 	return result
 }
 
-func (ad *AllDebrid) UpdateTorrent(t *torrent.Torrent) error {
+func (ad *AllDebrid) UpdateTorrent(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/magnet/status?id=%s", ad.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := ad.client.MakeRequest(req)
@@ -172,7 +172,7 @@ func (ad *AllDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
+func (ad *AllDebrid) CheckStatus(torrent *types.Torrent, isSymlink bool) (*types.Torrent, error) {
 	for {
 		err := ad.UpdateTorrent(torrent)
 
@@ -204,7 +204,7 @@ func (ad *AllDebrid) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*tor
 	return torrent, nil
 }
 
-func (ad *AllDebrid) DeleteTorrent(torrent *torrent.Torrent) {
+func (ad *AllDebrid) DeleteTorrent(torrent *types.Torrent) {
 	url := fmt.Sprintf("%s/magnet/delete?id=%s", ad.Host, torrent.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	_, err := ad.client.MakeRequest(req)
@@ -215,7 +215,7 @@ func (ad *AllDebrid) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (ad *AllDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
+func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		url := fmt.Sprintf("%s/link/unlock", ad.Host)
 		query := gourl.Values{}
@@ -239,7 +239,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
+func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -263,11 +263,11 @@ func (ad *AllDebrid) GetCheckCached() bool {
 	return ad.CheckCached
 }
 
-func (ad *AllDebrid) GetTorrents() ([]*torrent.Torrent, error) {
+func (ad *AllDebrid) GetTorrents() ([]*types.Torrent, error) {
 	return nil, nil
 }
 
-func (ad *AllDebrid) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+func (ad *AllDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
 
@@ -279,7 +279,7 @@ func (ad *AllDebrid) GetDownloadUncached() bool {
 	return ad.DownloadUncached
 }
 
-func (ad *AllDebrid) ConvertLinksToFiles(links []string) []torrent.File {
+func (ad *AllDebrid) ConvertLinksToFiles(links []string) []types.File {
 	return nil
 }
 

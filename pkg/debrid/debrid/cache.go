@@ -1,53 +1,50 @@
-package webdav
+package debrid
 
 import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/dgraph-io/badger/v4"
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
 )
 
 type DownloadLinkCache struct {
 	Link string `json:"download_link"`
 }
 
-type propfindResponse struct {
-	data []byte
-	ts   time.Time
+type PropfindResponse struct {
+	Data        []byte
+	GzippedData []byte
+	Ts          time.Time
 }
 
 type CachedTorrent struct {
-	*torrent.Torrent
+	*types.Torrent
 	LastRead   time.Time `json:"last_read"`
 	IsComplete bool      `json:"is_complete"`
 }
 
 type Cache struct {
 	dir    string
-	client debrid.Client
-	db     *badger.DB
+	client types.Client
 	logger zerolog.Logger
 
 	torrents      map[string]*CachedTorrent // key: torrent.Id, value: *CachedTorrent
 	torrentsNames map[string]*CachedTorrent // key: torrent.Name, value: torrent
 	listings      atomic.Value
 	downloadLinks map[string]string // key: file.Link, value: download link
-	propfindResp  sync.Map
+	PropfindResp  sync.Map
 
 	workers int
 
@@ -63,49 +60,34 @@ type Cache struct {
 	downloadLinksMutex sync.Mutex   // for downloadLinks
 }
 
+type fileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+}
+
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
+func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *fileInfo) IsDir() bool        { return fi.isDir }
+func (fi *fileInfo) Sys() interface{}   { return nil }
+
 func (c *Cache) setTorrent(t *CachedTorrent) {
 	c.torrentsMutex.Lock()
 	c.torrents[t.Id] = t
 	c.torrentsNames[t.Name] = t
 	c.torrentsMutex.Unlock()
 
-	go c.refreshListings() // This is concurrent safe
+	tryLock(&c.listingRefreshMu, c.refreshListings)
 
 	go func() {
 		if err := c.SaveTorrent(t); err != nil {
 			c.logger.Debug().Err(err).Msgf("Failed to save torrent %s", t.Id)
 		}
 	}()
-}
-
-func (c *Cache) refreshListings() {
-	// Copy the current torrents to avoid concurrent issues
-	c.torrentsMutex.RLock()
-	torrents := make([]string, 0, len(c.torrents))
-	for _, t := range c.torrents {
-		if t != nil && t.Torrent != nil {
-			torrents = append(torrents, t.Name)
-		}
-	}
-	c.torrentsMutex.RUnlock()
-
-	sort.Slice(torrents, func(i, j int) bool {
-		return torrents[i] < torrents[j]
-	})
-
-	files := make([]os.FileInfo, 0, len(torrents))
-	now := time.Now()
-	for _, t := range torrents {
-		files = append(files, &FileInfo{
-			name:    t,
-			size:    0,
-			mode:    0755 | os.ModeDir,
-			modTime: now,
-			isDir:   true,
-		})
-	}
-	// Atomic store of the complete ready-to-use slice
-	c.listings.Store(files)
 }
 
 func (c *Cache) GetListing() []os.FileInfo {
@@ -124,7 +106,7 @@ func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
 
 	c.torrentsMutex.Unlock()
 
-	go c.refreshListings() // This is concurrent safe
+	tryLock(&c.listingRefreshMu, c.refreshListings)
 
 	go func() {
 		if err := c.SaveTorrents(); err != nil {
@@ -149,31 +131,7 @@ func (c *Cache) GetTorrentNames() map[string]*CachedTorrent {
 	return c.torrentsNames
 }
 
-type Manager struct {
-	caches map[string]*Cache
-}
-
-func NewCacheManager(clients []debrid.Client) *Manager {
-	m := &Manager{
-		caches: make(map[string]*Cache),
-	}
-
-	for _, client := range clients {
-		m.caches[client.GetName()] = NewCache(client)
-	}
-
-	return m
-}
-
-func (m *Manager) GetCaches() map[string]*Cache {
-	return m.caches
-}
-
-func (m *Manager) GetCache(debridName string) *Cache {
-	return m.caches[debridName]
-}
-
-func NewCache(client debrid.Client) *Cache {
+func NewCache(client types.Client) *Cache {
 	cfg := config.GetConfig()
 	dbPath := filepath.Join(cfg.Path, "cache", client.GetName())
 	return &Cache{
@@ -202,7 +160,7 @@ func (c *Cache) Start() error {
 		c.downloadLinksRefreshMu.Lock()
 		defer c.downloadLinksRefreshMu.Unlock()
 		// This prevents the download links from being refreshed twice
-		c.refreshDownloadLinks()
+		tryLock(&c.downloadLinksRefreshMu, c.refreshDownloadLinks)
 	}()
 
 	go func() {
@@ -216,9 +174,6 @@ func (c *Cache) Start() error {
 }
 
 func (c *Cache) Close() error {
-	if c.db != nil {
-		return c.db.Close()
-	}
 	return nil
 }
 
@@ -327,7 +282,7 @@ func (c *Cache) Sync() error {
 
 	c.logger.Info().Msgf("Got %d torrents from %s", len(torrents), c.client.GetName())
 
-	newTorrents := make([]*torrent.Torrent, 0)
+	newTorrents := make([]*types.Torrent, 0)
 	idStore := make(map[string]bool, len(torrents))
 	for _, t := range torrents {
 		idStore[t.Id] = true
@@ -368,12 +323,12 @@ func (c *Cache) Sync() error {
 	return nil
 }
 
-func (c *Cache) sync(torrents []*torrent.Torrent) error {
+func (c *Cache) sync(torrents []*types.Torrent) error {
 	// Calculate optimal workers - balance between CPU and IO
 	workers := runtime.NumCPU() * 50 // A more balanced multiplier for BadgerDB
 
 	// Create channels with appropriate buffering
-	workChan := make(chan *torrent.Torrent, workers*2)
+	workChan := make(chan *types.Torrent, workers*2)
 
 	// Use an atomic counter for progress tracking
 	var processed int64
@@ -398,7 +353,7 @@ func (c *Cache) sync(torrents []*torrent.Torrent) error {
 						return // Channel closed, exit goroutine
 					}
 
-					if err := c.processTorrent(t); err != nil {
+					if err := c.ProcessTorrent(t, true); err != nil {
 						c.logger.Error().Err(err).Str("torrent", t.Name).Msg("sync error")
 						atomic.AddInt64(&errorCount, 1)
 					}
@@ -435,11 +390,11 @@ func (c *Cache) sync(torrents []*torrent.Torrent) error {
 	return nil
 }
 
-func (c *Cache) processTorrent(t *torrent.Torrent) error {
-	var err error
-	err = c.client.UpdateTorrent(t)
-	if err != nil {
-		return fmt.Errorf("failed to get torrent files: %v", err)
+func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
+	if len(t.Files) == 0 {
+		if err := c.client.UpdateTorrent(t); err != nil {
+			return fmt.Errorf("failed to update torrent: %w", err)
+		}
 	}
 
 	ct := &CachedTorrent{
@@ -448,6 +403,9 @@ func (c *Cache) processTorrent(t *torrent.Torrent) error {
 		IsComplete: len(t.Files) > 0,
 	}
 	c.setTorrent(ct)
+	if err := c.RefreshRclone(); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
+	}
 	return nil
 }
 
@@ -469,7 +427,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 		if ct.IsComplete {
 			return ""
 		}
-		ct = c.refreshTorrent(ct) // Refresh the torrent from the debrid service
+		ct = c.refreshTorrent(ct) // Refresh the torrent from the debrid
 		if ct == nil {
 			return ""
 		} else {
@@ -477,7 +435,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 		}
 	}
 
-	c.logger.Debug().Msgf("Getting download link for %s", ct.Name)
+	c.logger.Trace().Msgf("Getting download link for %s", ct.Name)
 	f := c.client.GetDownloadLink(ct.Torrent, &file)
 	if f == nil {
 		return ""
@@ -490,7 +448,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	return f.DownloadLink
 }
 
-func (c *Cache) updateDownloadLink(file *torrent.File) {
+func (c *Cache) updateDownloadLink(file *types.File) {
 	c.downloadLinksMutex.Lock()
 	defer c.downloadLinksMutex.Unlock()
 	c.downloadLinks[file.Link] = file.DownloadLink
@@ -503,109 +461,8 @@ func (c *Cache) checkDownloadLink(link string) string {
 	return ""
 }
 
-func (c *Cache) refreshTorrent(t *CachedTorrent) *CachedTorrent {
-	_torrent := t.Torrent
-	err := c.client.UpdateTorrent(_torrent)
-	if err != nil {
-		c.logger.Debug().Msgf("Failed to get torrent files for %s: %v", t.Id, err)
-		return nil
-	}
-	if len(t.Files) == 0 {
-		return nil
-	}
-
-	ct := &CachedTorrent{
-		Torrent:    _torrent,
-		LastRead:   time.Now(),
-		IsComplete: len(t.Files) > 0,
-	}
-	c.setTorrent(ct)
-
-	return ct
-}
-
-func (c *Cache) refreshDownloadLinks() map[string]string {
-	c.downloadLinksMutex.Lock()
-	defer c.downloadLinksMutex.Unlock()
-
-	downloadLinks, err := c.client.GetDownloads()
-	if err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to get download links")
-		return nil
-	}
-	for k, v := range downloadLinks {
-		c.downloadLinks[k] = v.DownloadLink
-	}
-	return c.downloadLinks
-}
-
-func (c *Cache) GetClient() debrid.Client {
+func (c *Cache) GetClient() types.Client {
 	return c.client
-}
-
-func (c *Cache) refreshTorrents() {
-	c.torrentsMutex.RLock()
-	currentTorrents := c.torrents //
-	// Create a copy of the current torrents to avoid concurrent issues
-	torrents := make(map[string]string, len(currentTorrents)) // a mpa of id and name
-	for _, v := range currentTorrents {
-		torrents[v.Id] = v.Name
-	}
-	c.torrentsMutex.RUnlock()
-
-	// Get new torrents from the debrid service
-	debTorrents, err := c.client.GetTorrents()
-	if err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to get torrents")
-		return
-	}
-
-	if len(debTorrents) == 0 {
-		// Maybe an error occurred
-		return
-	}
-
-	// Get the newly added torrents only
-	newTorrents := make([]*torrent.Torrent, 0)
-	idStore := make(map[string]bool, len(debTorrents))
-	for _, t := range debTorrents {
-		idStore[t.Id] = true
-		if _, ok := torrents[t.Id]; !ok {
-			newTorrents = append(newTorrents, t)
-		}
-	}
-
-	// Check for deleted torrents
-	deletedTorrents := make([]string, 0)
-	for id, _ := range torrents {
-		if _, ok := idStore[id]; !ok {
-			deletedTorrents = append(deletedTorrents, id)
-		}
-	}
-
-	if len(deletedTorrents) > 0 {
-		c.DeleteTorrent(deletedTorrents)
-	}
-
-	if len(newTorrents) == 0 {
-		return
-	}
-	c.logger.Info().Msgf("Found %d new torrents", len(newTorrents))
-
-	// No need for a complex sync process, just add the new torrents
-	wg := sync.WaitGroup{}
-	wg.Add(len(newTorrents))
-	for _, t := range newTorrents {
-		// processTorrent is concurrent safe
-		go func() {
-			defer wg.Done()
-			if err := c.processTorrent(t); err != nil {
-				c.logger.Info().Err(err).Msg("Failed to process torrent")
-			}
-
-		}()
-	}
-	wg.Wait()
 }
 
 func (c *Cache) DeleteTorrent(ids []string) {
@@ -628,25 +485,7 @@ func (c *Cache) removeFromDB(torrentId string) {
 	}
 }
 
-func (c *Cache) resetPropfindResponse() {
-	// Right now, parents are hardcoded
-	parents := []string{"__all__", "torrents"}
-	// Reset only the parent directories
-	// Convert the parents to a keys
-	// This is a bit hacky, but it works
-	// Instead of deleting all the keys, we only delete the parent keys, e.g __all__/ or torrents/
-	keys := make([]string, 0, len(parents))
-	for _, p := range parents {
-		// Construct the key
-		// construct url
-		url := filepath.Join("/webdav/%s/%s", c.client.GetName(), p)
-		key0 := fmt.Sprintf("propfind:%s:0", url)
-		key1 := fmt.Sprintf("propfind:%s:1", url)
-		keys = append(keys, key0, key1)
-	}
-
-	// Delete the keys
-	for _, k := range keys {
-		c.propfindResp.Delete(k)
-	}
+func (c *Cache) OnRemove(torrentId string) {
+	go c.DeleteTorrent([]string{torrentId})
+	go tryLock(&c.listingRefreshMu, c.refreshListings)
 }

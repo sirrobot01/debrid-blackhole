@@ -9,7 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"slices"
 	"time"
 
@@ -89,7 +89,7 @@ func (dl *DebridLink) IsAvailable(hashes []string) map[string]bool {
 	return result
 }
 
-func (dl *DebridLink) UpdateTorrent(t *torrent.Torrent) error {
+func (dl *DebridLink) UpdateTorrent(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/seedbox/list?ids=%s", dl.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := dl.client.MakeRequest(req)
@@ -133,7 +133,7 @@ func (dl *DebridLink) UpdateTorrent(t *torrent.Torrent) error {
 		if !cfg.IsSizeAllowed(f.Size) {
 			continue
 		}
-		file := torrent.File{
+		file := types.File{
 			Id:           f.ID,
 			Name:         f.Name,
 			Size:         f.Size,
@@ -146,7 +146,7 @@ func (dl *DebridLink) UpdateTorrent(t *torrent.Torrent) error {
 	return nil
 }
 
-func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (dl *DebridLink) SubmitMagnet(t *types.Torrent) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/seedbox/add", dl.Host)
 	payload := map[string]string{"url": t.Magnet.Link}
 	jsonPayload, _ := json.Marshal(payload)
@@ -179,7 +179,7 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	t.MountPath = dl.MountPath
 	t.Debrid = dl.Name
 	for _, f := range data.Files {
-		file := torrent.File{
+		file := types.File{
 			Id:           f.ID,
 			Name:         f.Name,
 			Size:         f.Size,
@@ -194,7 +194,7 @@ func (dl *DebridLink) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error)
 	return t, nil
 }
 
-func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
+func (dl *DebridLink) CheckStatus(torrent *types.Torrent, isSymlink bool) (*types.Torrent, error) {
 	for {
 		err := dl.UpdateTorrent(torrent)
 		if err != nil || torrent == nil {
@@ -223,7 +223,7 @@ func (dl *DebridLink) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*to
 	return torrent, nil
 }
 
-func (dl *DebridLink) DeleteTorrent(torrent *torrent.Torrent) {
+func (dl *DebridLink) DeleteTorrent(torrent *types.Torrent) {
 	url := fmt.Sprintf("%s/seedbox/%s/remove", dl.Host, torrent.Id)
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := dl.client.MakeRequest(req)
@@ -234,15 +234,15 @@ func (dl *DebridLink) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (dl *DebridLink) GenerateDownloadLinks(t *torrent.Torrent) error {
+func (dl *DebridLink) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (dl *DebridLink) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
+func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
 	return file
 }
 
@@ -280,10 +280,10 @@ func New(dc config.Debrid) *DebridLink {
 	}
 }
 
-func (dl *DebridLink) GetTorrents() ([]*torrent.Torrent, error) {
+func (dl *DebridLink) GetTorrents() ([]*types.Torrent, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) ConvertLinksToFiles(links []string) []torrent.File {
+func (dl *DebridLink) ConvertLinksToFiles(links []string) []types.File {
 	return nil
 }

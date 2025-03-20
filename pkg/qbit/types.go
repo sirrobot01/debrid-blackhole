@@ -2,7 +2,7 @@ package qbit
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"sync"
 )
 
@@ -173,10 +173,10 @@ type TorrentCategory struct {
 }
 
 type Torrent struct {
-	ID            string           `json:"id"`
-	DebridTorrent *torrent.Torrent `json:"-"`
-	Debrid        string           `json:"debrid"`
-	TorrentPath   string           `json:"-"`
+	ID            string         `json:"id"`
+	DebridTorrent *types.Torrent `json:"-"`
+	Debrid        string         `json:"debrid"`
+	TorrentPath   string         `json:"-"`
 
 	AddedOn           int64   `json:"added_on,omitempty"`
 	AmountLeft        int64   `json:"amount_left"`

@@ -10,7 +10,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"golang.org/x/sync/errgroup"
 	"net"
 	"net/http"
@@ -29,7 +29,7 @@ import (
 type Repair struct {
 	Jobs        map[string]*Job
 	arrs        *arr.Storage
-	deb         debrid.Client
+	deb         types.Client
 	duration    time.Duration
 	runOnStart  bool
 	ZurgURL     string

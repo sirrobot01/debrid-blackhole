@@ -7,8 +7,8 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	db "github.com/sirrobot01/debrid-blackhole/pkg/debrid"
-	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	db "github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"io"
 	"mime/multipart"
@@ -74,13 +74,14 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 }
 
 func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *arr.Arr, isSymlink bool) {
-	debridClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
+	svc := service.GetService()
+	client := svc.Debrid.GetByName(debridTorrent.Debrid)
 	for debridTorrent.Status != "downloaded" {
 		q.logger.Debug().Msgf("%s <- (%s) Download Progress: %.2f%%", debridTorrent.Debrid, debridTorrent.Name, debridTorrent.Progress)
-		dbT, err := debridClient.CheckStatus(debridTorrent, isSymlink)
+		dbT, err := client.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Error().Msgf("Error checking status: %v", err)
-			go debridClient.DeleteTorrent(debridTorrent)
+			go client.DeleteTorrent(debridTorrent)
 			q.MarkAsFailed(torrent)
 			if err := arr.Refresh(); err != nil {
 				q.logger.Error().Msgf("Error refreshing arr: %v", err)
@@ -92,7 +93,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 
 		// Exit the loop for downloading statuses to prevent memory buildup
-		if !slices.Contains(debridClient.GetDownloadingStatus(), debridTorrent.Status) {
+		if !slices.Contains(client.GetDownloadingStatus(), debridTorrent.Status) {
 			break
 		}
 		time.Sleep(time.Duration(q.RefreshInterval) * time.Second)
@@ -102,14 +103,51 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		err                error
 	)
 	debridTorrent.Arr = arr
+
+	// File is done downloading at this stage
+
+	// Check if debrid supports webdav by checking cache
 	if isSymlink {
-		torrentSymlinkPath, err = q.ProcessSymlink(torrent) // /mnt/symlinks/{category}/MyTVShow/
+		cache, ok := svc.Debrid.Caches[debridTorrent.Debrid]
+		if ok {
+			q.logger.Info().Msgf("Using internal webdav for %s", debridTorrent.Debrid)
+			// Use webdav to download the file
+			err := cache.ProcessTorrent(debridTorrent, true)
+			if err != nil {
+				return
+			}
+			rclonePath := filepath.Join(debridTorrent.MountPath, debridTorrent.Name)
+
+			// Check if folder exists here
+			if _, err := os.Stat(rclonePath); os.IsNotExist(err) {
+				q.logger.Debug().Msgf("Folder does not exist: %s", rclonePath)
+
+				// Check if torrent is in the listing
+				listing := cache.GetListing()
+				for _, t := range listing {
+					if t.Name() == debridTorrent.Name {
+						q.logger.Debug().Msgf("Torrent found in listing: %s", debridTorrent.Name)
+					}
+				}
+
+				// Check if torrent is in the webdav
+				if t := cache.GetTorrentByName(debridTorrent.Name); t == nil {
+					q.logger.Debug().Msgf("Torrent not found in webdav: %s", debridTorrent.Name)
+				}
+			}
+
+			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, debridTorrent.Name)
+
+		} else {
+			// User is using either zurg or debrid webdav
+			torrentSymlinkPath, err = q.ProcessSymlink(torrent) // /mnt/symlinks/{category}/MyTVShow/
+		}
 	} else {
 		torrentSymlinkPath, err = q.ProcessManualFile(torrent)
 	}
 	if err != nil {
 		q.MarkAsFailed(torrent)
-		go debridClient.DeleteTorrent(debridTorrent)
+		go client.DeleteTorrent(debridTorrent)
 		q.logger.Info().Msgf("Error: %v", err)
 		return
 	}

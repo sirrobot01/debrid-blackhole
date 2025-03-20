@@ -2,6 +2,7 @@ package webdav
 
 import (
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
 	"net/http"
 	"os"
@@ -20,18 +21,19 @@ var sharedClient = &http.Client{
 }
 
 type File struct {
-	cache     *Cache
+	cache     *debrid.Cache
 	fileId    string
 	torrentId string
 
-	size        int64
-	offset      int64
-	isDir       bool
-	children    []os.FileInfo
-	reader      io.ReadCloser
-	seekPending bool
-	content     []byte
-	name        string
+	size         int64
+	offset       int64
+	isDir        bool
+	children     []os.FileInfo
+	reader       io.ReadCloser
+	seekPending  bool
+	content      []byte
+	name         string
+	metadataOnly bool
 
 	downloadLink string
 	link         string
@@ -49,11 +51,12 @@ func (f *File) Close() error {
 
 func (f *File) GetDownloadLink() string {
 	// Check if we already have a final URL cached
-	if f.downloadLink != "" {
+
+	if f.downloadLink != "" && isValidURL(f.downloadLink) {
 		return f.downloadLink
 	}
 	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link)
-	if downloadLink != "" {
+	if downloadLink != "" && isValidURL(downloadLink) {
 		f.downloadLink = downloadLink
 		return downloadLink
 	}
@@ -64,6 +67,9 @@ func (f *File) GetDownloadLink() string {
 func (f *File) Read(p []byte) (n int, err error) {
 	if f.isDir {
 		return 0, os.ErrInvalid
+	}
+	if f.metadataOnly {
+		return 0, io.EOF
 	}
 
 	// If file content is preloaded, read from memory.

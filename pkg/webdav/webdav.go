@@ -20,9 +20,7 @@ func New() *WebDav {
 	w := &WebDav{
 		Handlers: make([]*Handler, 0),
 	}
-	debrids := svc.Debrid.GetDebrids()
-	cacheManager := NewCacheManager(debrids)
-	for name, c := range cacheManager.GetCaches() {
+	for name, c := range svc.Debrid.Caches {
 		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name)))
 		w.Handlers = append(w.Handlers, h)
 	}

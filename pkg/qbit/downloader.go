@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"io"
 	"net/http"
 	"os"
@@ -154,8 +154,13 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 		torrentFolder = utils.RemoveExtension(torrentFolder)
 		torrentRclonePath = rCloneBase // /mnt/rclone/magnets/  // Remove the filename since it's in the root folder
 	}
-	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
-	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
+	return q.createSymlinks(debridTorrent, torrentRclonePath, torrentFolder) // verify cos we're using external webdav
+}
+
+func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrentFolder string) (string, error) {
+	files := debridTorrent.Files
+	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder)
+	err := os.MkdirAll(torrentSymlinkPath, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("failed to create directory: %s: %v", torrentSymlinkPath, err)
 	}
@@ -164,16 +169,16 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	for _, file := range files {
 		pending[file.Path] = file
 	}
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for len(pending) > 0 {
 		<-ticker.C
 		for path, file := range pending {
-			fullFilePath := filepath.Join(torrentRclonePath, file.Path)
+			fullFilePath := filepath.Join(rclonePath, file.Path)
 			if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
 				q.logger.Info().Msgf("File is ready: %s", file.Path)
-				q.createSymLink(torrentSymlinkPath, torrentRclonePath, file)
+				q.createSymLink(torrentSymlinkPath, rclonePath, file)
 				delete(pending, path)
 			}
 		}

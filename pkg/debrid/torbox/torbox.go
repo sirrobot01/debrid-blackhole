@@ -9,7 +9,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"time"
 
 	"mime/multipart"
@@ -93,7 +93,7 @@ func (tb *Torbox) IsAvailable(hashes []string) map[string]bool {
 	return result
 }
 
-func (tb *Torbox) SubmitMagnet(torrent *torrent.Torrent) (*torrent.Torrent, error) {
+func (tb *Torbox) SubmitMagnet(torrent *types.Torrent) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/api/torrents/createtorrent", tb.Host)
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
@@ -141,7 +141,7 @@ func getTorboxStatus(status string, finished bool) string {
 	}
 }
 
-func (tb *Torbox) UpdateTorrent(t *torrent.Torrent) error {
+func (tb *Torbox) UpdateTorrent(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/api/torrents/mylist/?id=%s", tb.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
@@ -180,7 +180,7 @@ func (tb *Torbox) UpdateTorrent(t *torrent.Torrent) error {
 		if !cfg.IsSizeAllowed(f.Size) {
 			continue
 		}
-		file := torrent.File{
+		file := types.File{
 			Id:   strconv.Itoa(f.Id),
 			Name: fileName,
 			Size: f.Size,
@@ -200,7 +200,7 @@ func (tb *Torbox) UpdateTorrent(t *torrent.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
+func (tb *Torbox) CheckStatus(torrent *types.Torrent, isSymlink bool) (*types.Torrent, error) {
 	for {
 		err := tb.UpdateTorrent(torrent)
 
@@ -232,7 +232,7 @@ func (tb *Torbox) CheckStatus(torrent *torrent.Torrent, isSymlink bool) (*torren
 	return torrent, nil
 }
 
-func (tb *Torbox) DeleteTorrent(torrent *torrent.Torrent) {
+func (tb *Torbox) DeleteTorrent(torrent *types.Torrent) {
 	url := fmt.Sprintf("%s/api/torrents/controltorrent/%s", tb.Host, torrent.Id)
 	payload := map[string]string{"torrent_id": torrent.Id, "action": "Delete"}
 	jsonPayload, _ := json.Marshal(payload)
@@ -245,7 +245,7 @@ func (tb *Torbox) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (tb *Torbox) GenerateDownloadLinks(t *torrent.Torrent) error {
+func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 		query := gourl.Values{}
@@ -273,7 +273,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *torrent.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -306,7 +306,7 @@ func (tb *Torbox) GetCheckCached() bool {
 	return tb.CheckCached
 }
 
-func (tb *Torbox) GetTorrents() ([]*torrent.Torrent, error) {
+func (tb *Torbox) GetTorrents() ([]*types.Torrent, error) {
 	return nil, nil
 }
 
@@ -336,10 +336,10 @@ func New(dc config.Debrid) *Torbox {
 	}
 }
 
-func (tb *Torbox) ConvertLinksToFiles(links []string) []torrent.File {
+func (tb *Torbox) ConvertLinksToFiles(links []string) []types.File {
 	return nil
 }
 
-func (tb *Torbox) GetDownloads() (map[string]torrent.DownloadLinks, error) {
+func (tb *Torbox) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }

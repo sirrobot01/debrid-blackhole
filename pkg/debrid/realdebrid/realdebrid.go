@@ -8,7 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"io"
 	"net/http"
 	gourl "net/url"
@@ -43,8 +43,8 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 // getTorrentFiles returns a list of torrent files from the torrent info
 // validate is used to determine if the files should be validated
 // if validate is false, selected files will be returned
-func getTorrentFiles(t *torrent.Torrent, data TorrentInfo, validate bool) map[string]torrent.File {
-	files := make(map[string]torrent.File)
+func getTorrentFiles(t *types.Torrent, data TorrentInfo, validate bool) map[string]types.File {
+	files := make(map[string]types.File)
 	cfg := config.GetConfig()
 	idx := 0
 	for _, f := range data.Files {
@@ -80,7 +80,7 @@ func getTorrentFiles(t *torrent.Torrent, data TorrentInfo, validate bool) map[st
 			continue
 		}
 
-		file := torrent.File{
+		file := types.File{
 			Name: name,
 			Path: name,
 			Size: f.Bytes,
@@ -141,7 +141,7 @@ func (r *RealDebrid) IsAvailable(hashes []string) map[string]bool {
 	return result
 }
 
-func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) {
+func (r *RealDebrid) SubmitMagnet(t *types.Torrent) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/addMagnet", r.Host)
 	payload := gourl.Values{
 		"magnet": {t.Magnet.Link},
@@ -161,7 +161,7 @@ func (r *RealDebrid) SubmitMagnet(t *torrent.Torrent) (*torrent.Torrent, error) 
 	return t, nil
 }
 
-func (r *RealDebrid) UpdateTorrent(t *torrent.Torrent) error {
+func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := r.client.MakeRequest(req)
@@ -173,7 +173,7 @@ func (r *RealDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	if err != nil {
 		return err
 	}
-	name := utils.RemoveExtension(data.OriginalFilename)
+	name := utils.RemoveInvalidChars(data.OriginalFilename)
 	t.Name = name
 	t.Bytes = data.Bytes
 	t.Folder = name
@@ -190,7 +190,7 @@ func (r *RealDebrid) UpdateTorrent(t *torrent.Torrent) error {
 	return nil
 }
 
-func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.Torrent, error) {
+func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/info/%s", r.Host, t.Id)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	for {
@@ -204,7 +204,7 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 			return t, err
 		}
 		status := data.Status
-		name := utils.RemoveInvalidChars(data.OriginalFilename)
+		name := utils.RemoveExtension(data.OriginalFilename)
 		t.Name = name // Important because some magnet changes the name
 		t.Folder = name
 		t.Filename = data.Filename
@@ -257,7 +257,7 @@ func (r *RealDebrid) CheckStatus(t *torrent.Torrent, isSymlink bool) (*torrent.T
 	return t, nil
 }
 
-func (r *RealDebrid) DeleteTorrent(torrent *torrent.Torrent) {
+func (r *RealDebrid) DeleteTorrent(torrent *types.Torrent) {
 	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrent.Id)
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := r.client.MakeRequest(req)
@@ -268,7 +268,7 @@ func (r *RealDebrid) DeleteTorrent(torrent *torrent.Torrent) {
 	}
 }
 
-func (r *RealDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
+func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	for _, f := range t.Files {
 		if f.DownloadLink != "" {
@@ -294,8 +294,8 @@ func (r *RealDebrid) GenerateDownloadLinks(t *torrent.Torrent) error {
 	return nil
 }
 
-func (r *RealDebrid) ConvertLinksToFiles(links []string) []torrent.File {
-	files := make([]torrent.File, 0)
+func (r *RealDebrid) ConvertLinksToFiles(links []string) []types.File {
+	files := make([]types.File, 0)
 	for _, l := range links {
 		url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 		payload := gourl.Values{
@@ -310,7 +310,7 @@ func (r *RealDebrid) ConvertLinksToFiles(links []string) []torrent.File {
 		if err = json.Unmarshal(resp, &data); err != nil {
 			continue
 		}
-		files = append(files, torrent.File{
+		files = append(files, types.File{
 			Name:         data.Filename,
 			Size:         data.Filesize,
 			Link:         l,
@@ -321,7 +321,7 @@ func (r *RealDebrid) ConvertLinksToFiles(links []string) []torrent.File {
 	return files
 }
 
-func (r *RealDebrid) GetDownloadLink(t *torrent.Torrent, file *torrent.File) *torrent.File {
+func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	payload := gourl.Values{
 		"link": {file.Link},
@@ -344,9 +344,9 @@ func (r *RealDebrid) GetCheckCached() bool {
 	return r.CheckCached
 }
 
-func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent, error) {
+func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, error) {
 	url := fmt.Sprintf("%s/torrents?limit=%d", r.Host, limit)
-	torrents := make([]*torrent.Torrent, 0)
+	torrents := make([]*types.Torrent, 0)
 	if offset > 0 {
 		url = fmt.Sprintf("%s&offset=%d", url, offset)
 	}
@@ -374,10 +374,13 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent
 	}
 	filenames := map[string]bool{}
 	for _, t := range data {
+		if t.Status != "downloaded" {
+			continue
+		}
 		if _, exists := filenames[t.Filename]; exists {
 			continue
 		}
-		torrents = append(torrents, &torrent.Torrent{
+		torrents = append(torrents, &types.Torrent{
 			Id:               t.Id,
 			Name:             utils.RemoveInvalidChars(t.Filename),
 			Bytes:            t.Bytes,
@@ -386,7 +389,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent
 			Filename:         t.Filename,
 			OriginalFilename: t.Filename,
 			Links:            t.Links,
-			Files:            make(map[string]torrent.File),
+			Files:            make(map[string]types.File),
 			InfoHash:         t.Hash,
 			Debrid:           r.Name,
 			MountPath:        r.MountPath,
@@ -395,7 +398,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*torrent.Torrent
 	return totalItems, torrents, nil
 }
 
-func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
+func (r *RealDebrid) GetTorrents() ([]*types.Torrent, error) {
 	limit := 5000
 
 	// Get first batch and total count
@@ -449,8 +452,8 @@ func (r *RealDebrid) GetTorrents() ([]*torrent.Torrent, error) {
 	return allTorrents, nil
 }
 
-func (r *RealDebrid) GetDownloads() (map[string]torrent.DownloadLinks, error) {
-	links := make(map[string]torrent.DownloadLinks)
+func (r *RealDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
+	links := make(map[string]types.DownloadLinks)
 	offset := 0
 	limit := 5000
 	for {
@@ -475,7 +478,7 @@ func (r *RealDebrid) GetDownloads() (map[string]torrent.DownloadLinks, error) {
 	return links, nil
 }
 
-func (r *RealDebrid) _getDownloads(offset int, limit int) ([]torrent.DownloadLinks, error) {
+func (r *RealDebrid) _getDownloads(offset int, limit int) ([]types.DownloadLinks, error) {
 	url := fmt.Sprintf("%s/downloads?limit=%d", r.Host, limit)
 	if offset > 0 {
 		url = fmt.Sprintf("%s&offset=%d", url, offset)
@@ -489,9 +492,9 @@ func (r *RealDebrid) _getDownloads(offset int, limit int) ([]torrent.DownloadLin
 	if err = json.Unmarshal(resp, &data); err != nil {
 		return nil, err
 	}
-	links := make([]torrent.DownloadLinks, 0)
+	links := make([]types.DownloadLinks, 0)
 	for _, d := range data {
-		links = append(links, torrent.DownloadLinks{
+		links = append(links, types.DownloadLinks{
 			Filename:     d.Filename,
 			Size:         d.Filesize,
 			Link:         d.Link,

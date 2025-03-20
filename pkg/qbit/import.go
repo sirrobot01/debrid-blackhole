@@ -3,12 +3,12 @@ package qbit
 import (
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
+	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid"
 )
 
 type ImportRequest struct {

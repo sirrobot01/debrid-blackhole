@@ -23,6 +23,7 @@ type Debrid struct {
 	DownloadUncached bool   `json:"download_uncached"`
 	CheckCached      bool   `json:"check_cached"`
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
+	EnableWebDav     bool   `json:"enable_webdav"`
 }
 
 type Proxy struct {
@@ -174,7 +175,7 @@ func validateQbitTorrent(config *QBitTorrent) error {
 		return errors.New("qbittorent download folder is required")
 	}
 	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
-		return errors.New("qbittorent download folder does not exist")
+		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
 	}
 	return nil
 }
