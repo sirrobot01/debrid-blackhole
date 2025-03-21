@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	VIDEOMATCH = "(?i)(\\.)(YUV|WMV|WEBM|VOB|VIV|SVI|ROQ|RMVB|RM|OGV|OGG|NSV|MXF|MPG|MPEG|M2V|MP2|MPE|MPV|MP4|M4P|M4V|MOV|QT|MNG|MKV|FLV|DRC|AVI|ASF|AMV|MKA|F4V|3GP|3G2|DIVX|X264|X265)$"
-	MUSICMATCH = "(?i)(\\.)(?:MP3|WAV|FLAC|AAC|OGG|WMA|AIFF|ALAC|M4A|APE|AC3|DTS|M4P|MID|MIDI|MKA|MP2|MPA|RA|VOC|WV|AMR)$"
+	VIDEOMATCH = "(?i)(\\.)(webm|m4v|3gp|nsv|ty|strm|rm|rmvb|m3u|ifo|mov|qt|divx|xvid|bivx|nrg|pva|wmv|asf|asx|ogm|ogv|m2v|avi|bin|dat|dvr-ms|mpg|mpeg|mp4|avc|vp3|svq3|nuv|viv|dv|fli|flv|wpl|img|iso|vob|mkv|mk3d|ts|wtv|m2ts)$"
+	MUSICMATCH = "(?i)(\\.)(mp2|mp3|m4a|m4b|m4p|ogg|oga|opus|wma|wav|wv|flac|ape|aif|aiff|aifc)$"
 )
 
 var SAMPLEMATCH = `(?i)(^|[\\/]|[._-])(sample|trailer|thumb)s?([._-]|$)`
@@ -38,7 +38,7 @@ func RemoveInvalidChars(value string) string {
 
 func RemoveExtension(value string) string {
 	value = RemoveInvalidChars(value)
-	re := regexp.MustCompile(VIDEOMATCH + "|" + SAMPLEMATCH + "|" + MUSICMATCH)
+	re := regexp.MustCompile(VIDEOMATCH + "|" + MUSICMATCH)
 
 	// Find the last index of the matched extension
 	loc := re.FindStringIndex(value)
