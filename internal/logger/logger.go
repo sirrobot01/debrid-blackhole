@@ -73,6 +73,7 @@ func NewLogger(prefix string) zerolog.Logger {
 		Level(zerolog.InfoLevel)
 
 	// Set the log level
+	level = strings.ToLower(level)
 	switch level {
 	case "debug":
 		logger = logger.Level(zerolog.DebugLevel)
@@ -82,6 +83,8 @@ func NewLogger(prefix string) zerolog.Logger {
 		logger = logger.Level(zerolog.WarnLevel)
 	case "error":
 		logger = logger.Level(zerolog.ErrorLevel)
+	case "trace":
+		logger = logger.Level(zerolog.TraceLevel)
 	}
 	return logger
 }

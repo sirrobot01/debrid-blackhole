@@ -2,6 +2,7 @@ package request
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -287,4 +288,22 @@ func JSONResponse(w http.ResponseWriter, data interface{}, code int) {
 	if err != nil {
 		return
 	}
+}
+
+func Gzip(body []byte) []byte {
+
+	var b bytes.Buffer
+	if len(body) == 0 {
+		return nil
+	}
+	gz := gzip.NewWriter(&b)
+	_, err := gz.Write(body)
+	if err != nil {
+		return nil
+	}
+	err = gz.Close()
+	if err != nil {
+		return nil
+	}
+	return b.Bytes()
 }

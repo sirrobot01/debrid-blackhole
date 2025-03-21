@@ -223,12 +223,12 @@ func (dl *DebridLink) CheckStatus(torrent *types.Torrent, isSymlink bool) (*type
 	return torrent, nil
 }
 
-func (dl *DebridLink) DeleteTorrent(torrent *types.Torrent) {
-	url := fmt.Sprintf("%s/seedbox/%s/remove", dl.Host, torrent.Id)
+func (dl *DebridLink) DeleteTorrent(torrentId string) {
+	url := fmt.Sprintf("%s/seedbox/%s/remove", dl.Host, torrentId)
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := dl.client.MakeRequest(req)
 	if err == nil {
-		dl.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
+		dl.logger.Info().Msgf("Torrent: %s deleted", torrentId)
 	} else {
 		dl.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}

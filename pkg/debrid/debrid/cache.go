@@ -208,7 +208,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		if len(ct.Files) != 0 {
 			// We can assume the torrent is complete
 			ct.IsComplete = true
-			ct.Torrent.Name = utils.RemoveExtension(ct.Torrent.Filename) // Update the name
+			ct.Torrent.Name = utils.RemoveExtension(ct.Torrent.OriginalFilename) // Update the name
 			torrents[ct.Id] = &ct
 		}
 	}
@@ -403,9 +403,6 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 		IsComplete: len(t.Files) > 0,
 	}
 	c.setTorrent(ct)
-	if err := c.RefreshRclone(); err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
-	}
 	return nil
 }
 

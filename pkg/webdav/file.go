@@ -1,6 +1,7 @@
 package webdav
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
@@ -11,11 +12,11 @@ import (
 
 var sharedClient = &http.Client{
 	Transport: &http.Transport{
-		// These settings help maintain persistent connections.
 		MaxIdleConns:       100,
 		IdleConnTimeout:    90 * time.Second,
 		DisableCompression: false,
 		DisableKeepAlives:  false,
+		Proxy:              http.ProxyFromEnvironment,
 	},
 	Timeout: 0,
 }
@@ -37,6 +38,24 @@ type File struct {
 
 	downloadLink string
 	link         string
+}
+
+type bufferedReadCloser struct {
+	*bufio.Reader
+	closer io.Closer
+}
+
+// Create a new bufferedReadCloser with a larger buffer
+func newBufferedReadCloser(rc io.ReadCloser) *bufferedReadCloser {
+	return &bufferedReadCloser{
+		Reader: bufio.NewReaderSize(rc, 64*1024), // Increase to 1MB buffer
+		closer: rc,
+	}
+}
+
+// Close implements ReadCloser interface
+func (brc *bufferedReadCloser) Close() error {
+	return brc.closer.Close()
 }
 
 // File interface implementations for File
@@ -82,40 +101,48 @@ func (f *File) Read(p []byte) (n int, err error) {
 		return n, nil
 	}
 
-	// If we haven't started streaming or a seek was requested,
-	// close the existing stream and start a new HTTP GET request.
+	// If we haven't started streaming the file yet or need to reposition
 	if f.reader == nil || f.seekPending {
+		// Close existing reader if we're repositioning
 		if f.reader != nil && f.seekPending {
 			f.reader.Close()
 			f.reader = nil
 		}
 
-		// Create a new HTTP GET request for the file's URL.
-		req, err := http.NewRequest("GET", f.GetDownloadLink(), nil)
+		downloadLink := f.GetDownloadLink()
+		if downloadLink == "" {
+			return 0, fmt.Errorf("failed to get download link for file")
+		}
+
+		// Create an HTTP GET request to the file's URL.
+		req, err := http.NewRequest("GET", downloadLink, nil)
 		if err != nil {
 			return 0, fmt.Errorf("failed to create HTTP request: %w", err)
 		}
 
-		// If we've already read some data, request only the remaining bytes.
+		// Request only the bytes starting from our current offset
 		if f.offset > 0 {
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
 		}
 
-		// Execute the HTTP request.
+		// Add important headers for streaming
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Accept", "*/*")
+		req.Header.Set("User-Agent", "Infuse/7.0.2 (iOS)")
+		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+
 		resp, err := sharedClient.Do(req)
 		if err != nil {
 			return 0, fmt.Errorf("HTTP request error: %w", err)
 		}
 
-		// Accept a 200 (OK) or 206 (Partial Content) status.
+		// Check response codes more carefully
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			resp.Body.Close()
 			return 0, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
 		}
 
-		// Store the response body as our reader.
-		f.reader = resp.Body
-		// Reset the seek pending flag now that we've reinitialized the reader.
+		f.reader = newBufferedReadCloser(resp.Body)
 		f.seekPending = false
 	}
 
@@ -123,8 +150,10 @@ func (f *File) Read(p []byte) (n int, err error) {
 	n, err = f.reader.Read(p)
 	f.offset += int64(n)
 
-	// When we reach the end of the stream, close the reader.
 	if err == io.EOF {
+		f.reader.Close()
+		f.reader = nil
+	} else if err != nil {
 		f.reader.Close()
 		f.reader = nil
 	}
@@ -137,12 +166,12 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 		return 0, os.ErrInvalid
 	}
 
-	var newOffset int64
+	newOffset := f.offset
 	switch whence {
 	case io.SeekStart:
 		newOffset = offset
 	case io.SeekCurrent:
-		newOffset = f.offset + offset
+		newOffset += offset
 	case io.SeekEnd:
 		newOffset = f.size + offset
 	default:
@@ -156,7 +185,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 		newOffset = f.size
 	}
 
-	// If we're seeking to a new position, mark the reader for reset.
+	// Only mark seek as pending if position actually changed
 	if newOffset != f.offset {
 		f.offset = newOffset
 		f.seekPending = true
@@ -182,6 +211,24 @@ func (f *File) Stat() (os.FileInfo, error) {
 		modTime: time.Now(),
 		isDir:   false,
 	}, nil
+}
+
+func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
+	// Save current position
+
+	// Seek to requested position
+	_, err = f.Seek(off, io.SeekStart)
+	if err != nil {
+		return 0, err
+	}
+
+	// Read the data
+	n, err = f.Read(p)
+
+	// Don't restore position for Infuse compatibility
+	// Infuse expects sequential reads after the initial seek
+
+	return n, err
 }
 
 func (f *File) Write(p []byte) (n int, err error) {

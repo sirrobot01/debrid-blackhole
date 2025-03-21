@@ -375,15 +375,20 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 	svc := service.GetService()
 
-	_arr := svc.Arr.Get(req.ArrName)
-	if _arr == nil {
-		http.Error(w, "No Arrs found to repair", http.StatusNotFound)
-		return
+	var arrs []string
+
+	if req.ArrName != "" {
+		_arr := svc.Arr.Get(req.ArrName)
+		if _arr == nil {
+			http.Error(w, "No Arrs found to repair", http.StatusNotFound)
+			return
+		}
+		arrs = append(arrs, req.ArrName)
 	}
 
 	if req.Async {
 		go func() {
-			if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess, false); err != nil {
+			if err := svc.Repair.AddJob(arrs, req.MediaIds, req.AutoProcess, false); err != nil {
 				ui.logger.Error().Err(err).Msg("Failed to repair media")
 			}
 		}()
@@ -459,12 +464,10 @@ func (ui *Handler) handleProcessRepairJob(w http.ResponseWriter, r *http.Request
 		http.Error(w, "No job ID provided", http.StatusBadRequest)
 		return
 	}
-	go func() {
-		svc := service.GetService()
-		if err := svc.Repair.ProcessJob(id); err != nil {
-			ui.logger.Error().Err(err).Msg("Failed to process repair job")
-		}
-	}()
+	svc := service.GetService()
+	if err := svc.Repair.ProcessJob(id); err != nil {
+		ui.logger.Error().Err(err).Msg("Failed to process repair job")
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

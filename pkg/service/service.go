@@ -23,7 +23,7 @@ func New() *Service {
 		arrs := arr.NewStorage()
 		deb := debrid.NewEngine()
 		instance = &Service{
-			Repair: repair.New(arrs),
+			Repair: repair.New(arrs, deb),
 			Arr:    arrs,
 			Debrid: deb,
 		}
@@ -43,7 +43,7 @@ func Update() *Service {
 	arrs := arr.NewStorage()
 	deb := debrid.NewEngine()
 	instance = &Service{
-		Repair: repair.New(arrs),
+		Repair: repair.New(arrs, deb),
 		Arr:    arrs,
 		Debrid: deb,
 	}

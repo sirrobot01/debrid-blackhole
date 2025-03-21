@@ -173,7 +173,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	if err != nil {
 		return err
 	}
-	name := utils.RemoveInvalidChars(data.OriginalFilename)
+	name := utils.RemoveExtension(data.OriginalFilename)
 	t.Name = name
 	t.Bytes = data.Bytes
 	t.Folder = name
@@ -182,7 +182,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	t.Speed = data.Speed
 	t.Seeders = data.Seeders
 	t.Filename = data.Filename
-	t.OriginalFilename = data.OriginalFilename
+	t.OriginalFilename = name
 	t.Links = data.Links
 	t.MountPath = r.MountPath
 	t.Debrid = r.Name
@@ -208,7 +208,7 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 		t.Name = name // Important because some magnet changes the name
 		t.Folder = name
 		t.Filename = data.Filename
-		t.OriginalFilename = data.OriginalFilename
+		t.OriginalFilename = name
 		t.Bytes = data.Bytes
 		t.Progress = data.Progress
 		t.Speed = data.Speed
@@ -257,12 +257,12 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 	return t, nil
 }
 
-func (r *RealDebrid) DeleteTorrent(torrent *types.Torrent) {
-	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrent.Id)
+func (r *RealDebrid) DeleteTorrent(torrentId string) {
+	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrentId)
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
 	_, err := r.client.MakeRequest(req)
 	if err == nil {
-		r.logger.Info().Msgf("Torrent: %s deleted", torrent.Name)
+		r.logger.Info().Msgf("Torrent: %s deleted", torrentId)
 	} else {
 		r.logger.Info().Msgf("Error deleting torrent: %s", err)
 	}
@@ -382,7 +382,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 		}
 		torrents = append(torrents, &types.Torrent{
 			Id:               t.Id,
-			Name:             utils.RemoveInvalidChars(t.Filename),
+			Name:             utils.RemoveInvalidChars(t.Filename), // This changes when we get the files
 			Bytes:            t.Bytes,
 			Progress:         t.Progress,
 			Status:           t.Status,

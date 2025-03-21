@@ -2,7 +2,6 @@ package webdav
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -68,7 +67,7 @@ func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 	}
 
 	if filename == "" {
-		h.cache.GetClient().DeleteTorrent(cachedTorrent.Torrent)
+		h.cache.GetClient().DeleteTorrent(cachedTorrent.Torrent.Id)
 		h.cache.OnRemove(cachedTorrent.Id)
 		return nil
 	}
@@ -259,7 +258,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
 		ttl := 30 * time.Minute
 		if h.isParentPath(r.URL.Path) {
-			ttl = 20 * time.Second
+			ttl = 30 * time.Second
 		}
 
 		if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {
@@ -281,22 +280,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		responseData := responseRecorder.Body.Bytes()
 
 		// Create compressed version
-		var gzippedData []byte
-		if len(responseData) > 0 {
-			var buf bytes.Buffer
-			gzw := gzip.NewWriter(&buf)
-			if _, err := gzw.Write(responseData); err == nil {
-				if err := gzw.Close(); err == nil {
-					gzippedData = buf.Bytes()
-				}
-			}
-		}
 
-		h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
-			Data:        responseData,
-			GzippedData: gzippedData,
-			Ts:          time.Now(),
-		})
+		//h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
+		//	Data:        responseData,
+		//	GzippedData: request.Gzip(responseData),
+		//	Ts:          time.Now(),
+		//})
 
 		// Forward the captured response to the client.
 		for k, v := range responseRecorder.Header() {
@@ -417,7 +406,6 @@ func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, 
 
 	if time.Since(respCache.Ts) >= ttl {
 		// Remove expired cache entry
-		h.cache.PropfindResp.Delete(cacheKey)
 		return false
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")

@@ -60,7 +60,7 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
-			go dbClient.DeleteTorrent(debridTorrent)
+			go dbClient.DeleteTorrent(debridTorrent.Id)
 		}
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")
@@ -81,7 +81,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		dbT, err := client.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Error().Msgf("Error checking status: %v", err)
-			go client.DeleteTorrent(debridTorrent)
+			go client.DeleteTorrent(debridTorrent.Id)
 			q.MarkAsFailed(torrent)
 			if err := arr.Refresh(); err != nil {
 				q.logger.Error().Msgf("Error refreshing arr: %v", err)
@@ -116,26 +116,10 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 			if err != nil {
 				return
 			}
-			rclonePath := filepath.Join(debridTorrent.MountPath, debridTorrent.Name)
-
-			// Check if folder exists here
-			if _, err := os.Stat(rclonePath); os.IsNotExist(err) {
-				q.logger.Debug().Msgf("Folder does not exist: %s", rclonePath)
-
-				// Check if torrent is in the listing
-				listing := cache.GetListing()
-				for _, t := range listing {
-					if t.Name() == debridTorrent.Name {
-						q.logger.Debug().Msgf("Torrent found in listing: %s", debridTorrent.Name)
-					}
-				}
-
-				// Check if torrent is in the webdav
-				if t := cache.GetTorrentByName(debridTorrent.Name); t == nil {
-					q.logger.Debug().Msgf("Torrent not found in webdav: %s", debridTorrent.Name)
-				}
+			if err := cache.RefreshRclone(); err != nil {
+				q.logger.Trace().Msgf("Error refreshing rclone: %v", err)
 			}
-
+			rclonePath := filepath.Join(debridTorrent.MountPath, debridTorrent.Name)
 			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, debridTorrent.Name)
 
 		} else {
@@ -147,7 +131,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 	}
 	if err != nil {
 		q.MarkAsFailed(torrent)
-		go client.DeleteTorrent(debridTorrent)
+		go client.DeleteTorrent(debridTorrent.Id)
 		q.logger.Info().Msgf("Error: %v", err)
 		return
 	}

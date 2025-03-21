@@ -7,8 +7,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"net/http"
 	"os"
-	"path"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -42,7 +40,7 @@ func (c *Cache) refreshListings() {
 	}
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
-	c.resetPropfindResponse()
+	_ = c.RefreshXml()
 	if err := c.RefreshRclone(); err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
 	}
@@ -177,29 +175,5 @@ func (c *Cache) refreshDownloadLinks() {
 	}
 	for k, v := range downloadLinks {
 		c.downloadLinks[k] = v.DownloadLink
-	}
-}
-
-func (c *Cache) resetPropfindResponse() {
-	// Right now, parents are hardcoded
-	parents := []string{"__all__", "torrents"}
-	// Reset only the parent directories
-	// Convert the parents to a keys
-	// This is a bit hacky, but it works
-	// Instead of deleting all the keys, we only delete the parent keys, e.g __all__/ or torrents/
-	keys := make([]string, 0, len(parents))
-	for _, p := range parents {
-		// Construct the key
-		// construct url
-		url := filepath.Join("/webdav", c.client.GetName(), p)
-		url = path.Clean(url)
-		key0 := fmt.Sprintf("propfind:%s:0", url)
-		key1 := fmt.Sprintf("propfind:%s:1", url)
-		keys = append(keys, key0, key1)
-	}
-
-	// Delete the keys
-	for _, k := range keys {
-		c.PropfindResp.Delete(k)
 	}
 }

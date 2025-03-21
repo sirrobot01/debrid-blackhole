@@ -8,7 +8,7 @@
             <form id="repairForm">
                 <div class="mb-3">
                     <label for="arrSelect" class="form-label">Select Arr Instance</label>
-                    <select class="form-select" id="arrSelect" required>
+                    <select class="form-select" id="arrSelect">
                         <option value="">Select an Arr instance</option>
                     </select>
                 </div>
@@ -174,12 +174,6 @@
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Repairing...';
             let mediaIds = document.getElementById('mediaIds').value.split(',').map(id => id.trim());
             let arr = document.getElementById('arrSelect').value;
-            if (!arr) {
-                createToast('Please select an Arr instance', 'warning');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-                return;
-            }
             try {
                 const response = await fetch('/internal/repair', {
                     method: 'POST',
@@ -187,7 +181,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        arr: document.getElementById('arrSelect').value,
+                        arr: arr,
                         mediaIds: mediaIds,
                         async: document.getElementById('isAsync').checked,
                         autoProcess: document.getElementById('autoProcess').checked,
@@ -262,17 +256,15 @@
                 // Determine status
                 let status = 'In Progress';
                 let statusClass = 'text-primary';
-                let canDelete = false;
+                let canDelete = job.status !== "started";
                 let totalItems = job.broken_items ? Object.values(job.broken_items).reduce((sum, arr) => sum + arr.length, 0) : 0;
 
                 if (job.status === 'failed') {
                     status = 'Failed';
                     statusClass = 'text-danger';
-                    canDelete = true;
                 } else if (job.status === 'completed') {
                     status = 'Completed';
                     statusClass = 'text-success';
-                    canDelete = true;
                 } else if (job.status === 'pending') {
                     status = 'Pending';
                     statusClass = 'text-warning';

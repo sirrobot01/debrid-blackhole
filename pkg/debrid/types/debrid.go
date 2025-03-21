@@ -10,7 +10,7 @@ type Client interface {
 	GenerateDownloadLinks(tr *Torrent) error
 	GetDownloadLink(tr *Torrent, file *File) *File
 	ConvertLinksToFiles(links []string) []File
-	DeleteTorrent(tr *Torrent)
+	DeleteTorrent(torrentId string)
 	IsAvailable(infohashes []string) map[string]bool
 	GetCheckCached() bool
 	GetDownloadUncached() bool
