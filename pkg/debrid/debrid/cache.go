@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
@@ -44,16 +45,17 @@ type Cache struct {
 	torrentsNames map[string]*CachedTorrent // key: torrent.Name, value: torrent
 	listings      atomic.Value
 	downloadLinks map[string]string // key: file.Link, value: download link
-	PropfindResp  sync.Map
+	PropfindResp  *xsync.MapOf[string, PropfindResponse]
 
-	workers int
-
-	LastUpdated time.Time `json:"last_updated"`
+	// config
+	workers                      int
+	torrentRefreshInterval       time.Duration
+	downloadLinksRefreshInterval time.Duration
 
 	// refresh mutex
-	listingRefreshMu       sync.Mutex // for refreshing torrents
-	downloadLinksRefreshMu sync.Mutex // for refreshing download links
-	torrentsRefreshMu      sync.Mutex // for refreshing torrents
+	listingRefreshMu       sync.RWMutex // for refreshing torrents
+	downloadLinksRefreshMu sync.RWMutex // for refreshing download links
+	torrentsRefreshMu      sync.RWMutex // for refreshing torrents
 
 	// Data Mutexes
 	torrentsMutex      sync.RWMutex // for torrents and torrentsNames
@@ -81,7 +83,7 @@ func (c *Cache) setTorrent(t *CachedTorrent) {
 	c.torrentsNames[t.Name] = t
 	c.torrentsMutex.Unlock()
 
-	tryLock(&c.listingRefreshMu, c.refreshListings)
+	c.refreshListings()
 
 	go func() {
 		if err := c.SaveTorrent(t); err != nil {
@@ -106,7 +108,7 @@ func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
 
 	c.torrentsMutex.Unlock()
 
-	tryLock(&c.listingRefreshMu, c.refreshListings)
+	c.refreshListings()
 
 	go func() {
 		if err := c.SaveTorrents(); err != nil {
@@ -131,17 +133,27 @@ func (c *Cache) GetTorrentNames() map[string]*CachedTorrent {
 	return c.torrentsNames
 }
 
-func NewCache(client types.Client) *Cache {
+func NewCache(dc config.Debrid, client types.Client) *Cache {
 	cfg := config.GetConfig()
-	dbPath := filepath.Join(cfg.Path, "cache", client.GetName())
+	torrentRefreshInterval, err := time.ParseDuration(dc.TorrentRefreshInterval)
+	if err != nil {
+		torrentRefreshInterval = time.Second * 15
+	}
+	downloadLinksRefreshInterval, err := time.ParseDuration(dc.DownloadLinksRefreshInterval)
+	if err != nil {
+		downloadLinksRefreshInterval = time.Minute * 40
+	}
 	return &Cache{
-		dir:           dbPath,
-		torrents:      make(map[string]*CachedTorrent),
-		torrentsNames: make(map[string]*CachedTorrent),
-		client:        client,
-		logger:        logger.NewLogger(fmt.Sprintf("%s-cache", client.GetName())),
-		workers:       200,
-		downloadLinks: make(map[string]string),
+		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
+		torrents:                     make(map[string]*CachedTorrent),
+		torrentsNames:                make(map[string]*CachedTorrent),
+		client:                       client,
+		logger:                       logger.NewLogger(fmt.Sprintf("%s-cache", client.GetName())),
+		workers:                      200,
+		downloadLinks:                make(map[string]string),
+		torrentRefreshInterval:       torrentRefreshInterval,
+		downloadLinksRefreshInterval: downloadLinksRefreshInterval,
+		PropfindResp:                 xsync.NewMapOf[string, PropfindResponse](),
 	}
 }
 
@@ -160,7 +172,7 @@ func (c *Cache) Start() error {
 		c.downloadLinksRefreshMu.Lock()
 		defer c.downloadLinksRefreshMu.Unlock()
 		// This prevents the download links from being refreshed twice
-		tryLock(&c.downloadLinksRefreshMu, c.refreshDownloadLinks)
+		c.refreshDownloadLinks()
 	}()
 
 	go func() {
@@ -462,7 +474,19 @@ func (c *Cache) GetClient() types.Client {
 	return c.client
 }
 
-func (c *Cache) DeleteTorrent(ids []string) {
+func (c *Cache) DeleteTorrent(id string) {
+	c.logger.Info().Msgf("Deleting torrent %s", id)
+	c.torrentsMutex.Lock()
+	defer c.torrentsMutex.Unlock()
+	if t, ok := c.torrents[id]; ok {
+		delete(c.torrents, id)
+		delete(c.torrentsNames, t.Name)
+
+		c.removeFromDB(id)
+	}
+}
+
+func (c *Cache) DeleteTorrents(ids []string) {
 	c.logger.Info().Msgf("Deleting %d torrents", len(ids))
 	c.torrentsMutex.Lock()
 	defer c.torrentsMutex.Unlock()
@@ -483,6 +507,6 @@ func (c *Cache) removeFromDB(torrentId string) {
 }
 
 func (c *Cache) OnRemove(torrentId string) {
-	go c.DeleteTorrent([]string{torrentId})
-	go tryLock(&c.listingRefreshMu, c.refreshListings)
+	go c.DeleteTorrent(torrentId)
+	go c.refreshListings()
 }

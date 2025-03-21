@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"golang.org/x/net/webdav"
@@ -23,15 +24,12 @@ import (
 )
 
 type Handler struct {
-	Name          string
-	logger        zerolog.Logger
-	cache         *debrid.Cache
-	lastRefresh   time.Time
-	refreshMutex  sync.Mutex
-	RootPath      string
-	responseCache sync.Map
-	cacheTTL      time.Duration
-	ctx           context.Context
+	Name         string
+	logger       zerolog.Logger
+	cache        *debrid.Cache
+	lastRefresh  time.Time
+	refreshMutex sync.Mutex
+	RootPath     string
 }
 
 func NewHandler(name string, cache *debrid.Cache, logger zerolog.Logger) *Handler {
@@ -40,7 +38,6 @@ func NewHandler(name string, cache *debrid.Cache, logger zerolog.Logger) *Handle
 		cache:    cache,
 		logger:   logger,
 		RootPath: fmt.Sprintf("/%s", name),
-		ctx:      context.Background(),
 	}
 	return h
 }
@@ -278,21 +275,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		handler.ServeHTTP(responseRecorder, r)
 		responseData := responseRecorder.Body.Bytes()
+		gzippedData := request.Gzip(responseData)
 
 		// Create compressed version
 
-		//h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
-		//	Data:        responseData,
-		//	GzippedData: request.Gzip(responseData),
-		//	Ts:          time.Now(),
-		//})
+		h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
+			Data:        responseData,
+			GzippedData: gzippedData,
+			Ts:          time.Now(),
+		})
 
 		// Forward the captured response to the client.
 		for k, v := range responseRecorder.Header() {
 			w.Header()[k] = v
 		}
 		w.WriteHeader(responseRecorder.Code)
-		w.Write(responseData)
+
+		if acceptsGzip(r) {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(gzippedData)))
+			w.Write(gzippedData)
+		} else {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(responseData)))
+			w.Write(responseData)
+		}
 		return
 	}
 
@@ -394,12 +401,7 @@ func (h *Handler) isParentPath(_path string) bool {
 }
 
 func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, cacheKey string, ttl time.Duration) bool {
-	cached, ok := h.cache.PropfindResp.Load(cacheKey)
-	if !ok {
-		return false
-	}
-
-	respCache, ok := cached.(debrid.PropfindResponse)
+	respCache, ok := h.cache.PropfindResp.Load(cacheKey)
 	if !ok {
 		return false
 	}

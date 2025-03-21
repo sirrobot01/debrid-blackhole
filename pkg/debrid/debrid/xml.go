@@ -6,14 +6,16 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"net/http"
 	"net/url"
+	"os"
 	path "path/filepath"
 	"time"
 )
 
 func (c *Cache) RefreshXml() error {
 	parents := []string{"__all__", "torrents"}
+	torrents := c.GetListing()
 	for _, parent := range parents {
-		if err := c.refreshParentXml(parent); err != nil {
+		if err := c.refreshParentXml(torrents, parent); err != nil {
 			return fmt.Errorf("failed to refresh XML for %s: %v", parent, err)
 		}
 	}
@@ -22,7 +24,7 @@ func (c *Cache) RefreshXml() error {
 	return nil
 }
 
-func (c *Cache) refreshParentXml(parent string) error {
+func (c *Cache) refreshParentXml(torrents []os.FileInfo, parent string) error {
 	// Define the WebDAV namespace
 	davNS := "DAV:"
 
@@ -37,20 +39,21 @@ func (c *Cache) refreshParentXml(parent string) error {
 	currentTime := time.Now().UTC().Format(http.TimeFormat)
 
 	// Add the parent directory
-	parentPath := fmt.Sprintf("/webdav/%s/%s/", c.client.GetName(), parent)
+	baseUrl := path.Clean(fmt.Sprintf("/webdav/%s/%s", c.client.GetName(), parent))
+	parentPath := fmt.Sprintf("%s/", baseUrl)
 	addDirectoryResponse(multistatus, parentPath, parent, currentTime)
 
 	// Add torrents to the XML
-	torrents := c.GetListing()
 	for _, torrent := range torrents {
-		torrentName := torrent.Name()
+		name := torrent.Name()
+		// Note the path structure change - parent first, then torrent name
 		torrentPath := fmt.Sprintf("/webdav/%s/%s/%s/",
 			c.client.GetName(),
-			url.PathEscape(torrentName),
 			parent,
+			url.PathEscape(name),
 		)
 
-		addDirectoryResponse(multistatus, torrentPath, torrentName, currentTime)
+		addDirectoryResponse(multistatus, torrentPath, name, currentTime)
 	}
 
 	// Convert to XML string
@@ -60,8 +63,6 @@ func (c *Cache) refreshParentXml(parent string) error {
 	}
 
 	// Store in cache
-	// Construct the keys
-	baseUrl := path.Clean(fmt.Sprintf("/webdav/%s/%s", c.client.GetName()))
 	key0 := fmt.Sprintf("propfind:%s:0", baseUrl)
 	key1 := fmt.Sprintf("propfind:%s:1", baseUrl)
 
@@ -78,7 +79,7 @@ func (c *Cache) refreshParentXml(parent string) error {
 func addDirectoryResponse(multistatus *etree.Element, href, displayName, modTime string) *etree.Element {
 	responseElem := multistatus.CreateElement("D:response")
 
-	// Add href
+	// Add href - ensure it's properly formatted
 	hrefElem := responseElem.CreateElement("D:href")
 	hrefElem.SetText(href)
 
@@ -99,6 +100,14 @@ func addDirectoryResponse(multistatus *etree.Element, href, displayName, modTime
 	// Add last modified time
 	lastModElem := propElem.CreateElement("D:getlastmodified")
 	lastModElem.SetText(modTime)
+
+	// Add content type for directories
+	contentTypeElem := propElem.CreateElement("D:getcontenttype")
+	contentTypeElem.SetText("httpd/unix-directory")
+
+	// Add length (size) - directories typically have zero size
+	contentLengthElem := propElem.CreateElement("D:getcontentlength")
+	contentLengthElem.SetText("0")
 
 	// Add supported lock
 	lockElem := propElem.CreateElement("D:supportedlock")

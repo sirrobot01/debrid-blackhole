@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +40,11 @@ func JoinURL(base string, paths ...string) (string, error) {
 
 	return joined, nil
 }
+
+var (
+	once     sync.Once
+	instance *Client
+)
 
 type ClientOption func(*Client)
 
@@ -80,6 +86,11 @@ func (c *Client) WithHeaders(headers map[string]string) *Client {
 
 func (c *Client) WithLogger(logger zerolog.Logger) *Client {
 	c.logger = logger
+	return c
+}
+
+func (c *Client) WithTransport(transport *http.Transport) *Client {
+	c.client.Transport = transport
 	return c
 }
 
@@ -306,4 +317,11 @@ func Gzip(body []byte) []byte {
 		return nil
 	}
 	return b.Bytes()
+}
+
+func Default() *Client {
+	once.Do(func() {
+		instance = New()
+	})
+	return instance
 }

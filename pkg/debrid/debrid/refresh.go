@@ -1,18 +1,26 @@
 package debrid
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/goccy/go-json"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 func (c *Cache) refreshListings() {
+	if c.listingRefreshMu.TryLock() {
+		defer c.listingRefreshMu.Unlock()
+	} else {
+		return
+	}
 	// Copy the current torrents to avoid concurrent issues
 	c.torrentsMutex.RLock()
 	torrents := make([]string, 0, len(c.torrents))
@@ -47,6 +55,11 @@ func (c *Cache) refreshListings() {
 }
 
 func (c *Cache) refreshTorrents() {
+	if c.torrentsRefreshMu.TryLock() {
+		defer c.torrentsRefreshMu.Unlock()
+	} else {
+		return
+	}
 	c.torrentsMutex.RLock()
 	currentTorrents := c.torrents //
 	// Create a copy of the current torrents to avoid concurrent issues
@@ -69,12 +82,12 @@ func (c *Cache) refreshTorrents() {
 	}
 
 	// Get the newly added torrents only
-	newTorrents := make([]*types.Torrent, 0)
+	_newTorrents := make([]*types.Torrent, 0)
 	idStore := make(map[string]bool, len(debTorrents))
 	for _, t := range debTorrents {
 		idStore[t.Id] = true
 		if _, ok := torrents[t.Id]; !ok {
-			newTorrents = append(newTorrents, t)
+			_newTorrents = append(_newTorrents, t)
 		}
 	}
 
@@ -85,9 +98,15 @@ func (c *Cache) refreshTorrents() {
 			deletedTorrents = append(deletedTorrents, id)
 		}
 	}
+	newTorrents := make([]*types.Torrent, 0)
+	for _, t := range _newTorrents {
+		if !slices.Contains(deletedTorrents, t.Id) {
+			_newTorrents = append(_newTorrents, t)
+		}
+	}
 
 	if len(deletedTorrents) > 0 {
-		c.DeleteTorrent(deletedTorrents)
+		c.DeleteTorrents(deletedTorrents)
 	}
 
 	if len(newTorrents) == 0 {
@@ -112,34 +131,37 @@ func (c *Cache) refreshTorrents() {
 }
 
 func (c *Cache) RefreshRclone() error {
-	params := map[string]interface{}{
-		"recursive": "false",
-	}
+	client := request.Default()
+	cfg := config.GetConfig().WebDav
 
-	// Convert parameters to JSON
-	jsonParams, err := json.Marshal(params)
+	if cfg.RcUrl == "" {
+		return nil
+	}
+	// Create form data
+	data := "dir=__all__&dir2=torrents"
+
+	// Create a POST request with form URL-encoded content
+	forgetReq, err := http.NewRequest("POST", fmt.Sprintf("%s/vfs/forget", cfg.RcUrl), strings.NewReader(data))
 	if err != nil {
 		return err
 	}
-
-	// Create HTTP request
-	url := "http://192.168.0.219:9990/vfs/refresh" // Switch to config
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonParams))
-	if err != nil {
-		return err
+	if cfg.RcUser != "" && cfg.RcPass != "" {
+		forgetReq.SetBasicAuth(cfg.RcUser, cfg.RcPass)
 	}
 
-	// Set the appropriate headers
-	req.Header.Set("Content-Type", "application/json")
+	// Set the appropriate content type for form data
+	forgetReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	forgetResp, err := client.Do(forgetReq)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to refresh rclone: %s", resp.Status)
+	defer forgetResp.Body.Close()
+
+	if forgetResp.StatusCode != 200 {
+		body, _ := io.ReadAll(forgetResp.Body)
+		return fmt.Errorf("failed to forget rclone: %s - %s", forgetResp.Status, string(body))
 	}
 	return nil
 }
@@ -166,6 +188,11 @@ func (c *Cache) refreshTorrent(t *CachedTorrent) *CachedTorrent {
 }
 
 func (c *Cache) refreshDownloadLinks() {
+	if c.downloadLinksRefreshMu.TryLock() {
+		defer c.downloadLinksRefreshMu.Unlock()
+	} else {
+		return
+	}
 	c.downloadLinksMutex.Lock()
 	defer c.downloadLinksMutex.Unlock()
 

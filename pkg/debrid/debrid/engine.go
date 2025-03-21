@@ -18,11 +18,16 @@ func NewEngine() *Engine {
 	caches := make(map[string]*Cache)
 
 	for _, dc := range cfg.Debrids {
+		dc = cfg.GetDebridWebDav(dc)
 		client := createDebridClient(dc)
 		logger := client.GetLogger()
-		logger.Info().Msg("Debrid Service started")
+		if dc.UseWebdav {
+			caches[dc.Name] = NewCache(dc, client)
+			logger.Info().Msg("Debrid Service started with WebDAV")
+		} else {
+			logger.Info().Msg("Debrid Service started")
+		}
 		clients[dc.Name] = client
-		caches[dc.Name] = NewCache(client)
 	}
 
 	d := &Engine{

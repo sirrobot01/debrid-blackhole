@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
@@ -23,7 +24,12 @@ type Debrid struct {
 	DownloadUncached bool   `json:"download_uncached"`
 	CheckCached      bool   `json:"check_cached"`
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
-	EnableWebDav     bool   `json:"enable_webdav"`
+
+	// Webdav
+	UseWebdav                    bool   `json:"use_webdav"`
+	TorrentRefreshInterval       string `json:"torrent_refresh_interval"`
+	DownloadLinksRefreshInterval string `json:"downloads_refresh_interval"`
+	TorrentRefreshWorkers        int    `json:"torrent_refresh_workers"`
 }
 
 type Proxy struct {
@@ -67,6 +73,16 @@ type Auth struct {
 	Password string `json:"password"`
 }
 
+type WebDav struct {
+	TorrentsRefreshInterval      string `json:"torrents_refresh_interval"`
+	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval"`
+	Workers                      int    `json:"workers"`
+
+	RcUrl  string `json:"rc_url"`
+	RcUser string `json:"rc_user"`
+	RcPass string `json:"rc_pass"`
+}
+
 type Config struct {
 	LogLevel       string      `json:"log_level"`
 	Debrid         Debrid      `json:"debrid"`
@@ -76,6 +92,7 @@ type Config struct {
 	QBitTorrent    QBitTorrent `json:"qbittorrent"`
 	Arrs           []Arr       `json:"arrs"`
 	Repair         Repair      `json:"repair"`
+	WebDav         WebDav      `json:"webdav"`
 	AllowedExt     []string    `json:"allowed_file_types"`
 	MinFileSize    string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
 	MaxFileSize    string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
@@ -285,4 +302,17 @@ func (c *Config) NeedsSetup() bool {
 		return c.GetAuth().Username == ""
 	}
 	return false
+}
+
+func (c *Config) GetDebridWebDav(d Debrid) Debrid {
+	if d.TorrentRefreshInterval == "" {
+		d.TorrentRefreshInterval = cmp.Or(c.WebDav.TorrentsRefreshInterval, "15s") // 15 seconds
+	}
+	if d.DownloadLinksRefreshInterval == "" {
+		d.DownloadLinksRefreshInterval = cmp.Or(c.WebDav.DownloadLinksRefreshInterval, "40m") // 40 minutes
+	}
+	if d.TorrentRefreshWorkers == 0 {
+		d.TorrentRefreshWorkers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
+	}
+	return d
 }

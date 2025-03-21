@@ -116,9 +116,6 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 			if err != nil {
 				return
 			}
-			if err := cache.RefreshRclone(); err != nil {
-				q.logger.Trace().Msgf("Error refreshing rclone: %v", err)
-			}
 			rclonePath := filepath.Join(debridTorrent.MountPath, debridTorrent.Name)
 			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, debridTorrent.Name)
 

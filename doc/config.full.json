@@ -16,7 +16,8 @@
       "folder": "/mnt/remote/realdebrid/__all__/",
       "rate_limit": "250/minute",
       "download_uncached": false,
-      "check_cached": false
+      "check_cached": false,
+      "use_webdav": true
     },
     {
       "name": "debridlink",
@@ -91,4 +92,8 @@
   "allowed_file_types": [],
   "use_auth": false,
   "discord_webhook_url": "https://discord.com/api/webhooks/...",
+  "webdav": {
+    "torrents_refresh_interval": "5m",
+    "download_links_refresh_interval": "1h"
+  }
 }
