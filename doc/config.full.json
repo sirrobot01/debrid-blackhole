@@ -94,6 +94,7 @@
   "discord_webhook_url": "https://discord.com/api/webhooks/...",
   "webdav": {
     "torrents_refresh_interval": "5m",
-    "download_links_refresh_interval": "1h"
+    "download_links_refresh_interval": "1h",
+    "rc_url": "http://192.168.0.219:9990"
   }
 }

@@ -289,15 +289,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for k, v := range responseRecorder.Header() {
 			w.Header()[k] = v
 		}
-		w.WriteHeader(responseRecorder.Code)
 
 		if acceptsGzip(r) {
 			w.Header().Set("Content-Encoding", "gzip")
 			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(gzippedData)))
+			w.WriteHeader(responseRecorder.Code)
 			w.Write(gzippedData)
 		} else {
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(responseData)))
+			w.WriteHeader(responseRecorder.Code)
 			w.Write(responseData)
 		}
 		return
@@ -416,9 +417,11 @@ func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, 
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Vary", "Accept-Encoding")
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.GzippedData)))
+		w.WriteHeader(http.StatusOK)
 		w.Write(respCache.GzippedData)
 	} else {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.Data)))
+		w.WriteHeader(http.StatusOK)
 		w.Write(respCache.Data)
 	}
 	return true
