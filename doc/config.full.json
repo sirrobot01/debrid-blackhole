@@ -93,8 +93,10 @@
   "use_auth": false,
   "discord_webhook_url": "https://discord.com/api/webhooks/...",
   "webdav": {
-    "torrents_refresh_interval": "5m",
+    "torrents_refresh_interval": "15s",
     "download_links_refresh_interval": "1h",
-    "rc_url": "http://192.168.0.219:9990"
+    "rc_url": "http://192.168.0.219:9990",
+    "rc_user": "your_rclone_rc_user",
+    "rc_pass": "your_rclone_rc_pass"
   }
 }
