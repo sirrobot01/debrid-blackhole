@@ -164,3 +164,9 @@
   - Arr specific uncached downloading option
   - Option to download uncached torrents from UI
 - Remove QbitTorrent Log level(Use the global log level)
+
+#### 0.5.1
+
+- Faster import by prefetching newly downloaded torrents
+- Fix UMASK issue due to the docker container
+- Arr-Selective uncached downloading
