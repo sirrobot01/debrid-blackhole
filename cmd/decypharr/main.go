@@ -16,7 +16,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"sync"
-	"syscall"
 )
 
 func Start(ctx context.Context) error {
@@ -26,8 +25,7 @@ func Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("invalid UMASK value: %s", umaskStr)
 		}
-		// Set umask
-		syscall.Umask(int(umask))
+		SetUmask(int(umask))
 	}
 
 	cfg := config.GetConfig()
