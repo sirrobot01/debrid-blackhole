@@ -1,7 +1,6 @@
 package webdav
 
 import (
-	"bufio"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
@@ -12,11 +11,13 @@ import (
 
 var sharedClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:       100,
-		IdleConnTimeout:    90 * time.Second,
-		DisableCompression: false,
-		DisableKeepAlives:  false,
-		Proxy:              http.ProxyFromEnvironment,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableCompression:    false, // Enable compression for faster transfers
+		DisableKeepAlives:     false,
+		Proxy:                 http.ProxyFromEnvironment,
 	},
 	Timeout: 0,
 }
@@ -38,24 +39,6 @@ type File struct {
 
 	downloadLink string
 	link         string
-}
-
-type bufferedReadCloser struct {
-	*bufio.Reader
-	closer io.Closer
-}
-
-// Create a new bufferedReadCloser with a larger buffer
-func newBufferedReadCloser(rc io.ReadCloser) *bufferedReadCloser {
-	return &bufferedReadCloser{
-		Reader: bufio.NewReaderSize(rc, 64*1024), // Increase to 1MB buffer
-		closer: rc,
-	}
-}
-
-// Close implements ReadCloser interface
-func (brc *bufferedReadCloser) Close() error {
-	return brc.closer.Close()
 }
 
 // File interface implementations for File
@@ -103,7 +86,6 @@ func (f *File) Read(p []byte) (n int, err error) {
 
 	// If we haven't started streaming the file yet or need to reposition
 	if f.reader == nil || f.seekPending {
-		// Close existing reader if we're repositioning
 		if f.reader != nil && f.seekPending {
 			f.reader.Close()
 			f.reader = nil
@@ -114,39 +96,31 @@ func (f *File) Read(p []byte) (n int, err error) {
 			return 0, fmt.Errorf("failed to get download link for file")
 		}
 
-		// Create an HTTP GET request to the file's URL.
 		req, err := http.NewRequest("GET", downloadLink, nil)
 		if err != nil {
 			return 0, fmt.Errorf("failed to create HTTP request: %w", err)
 		}
 
-		// Request only the bytes starting from our current offset
 		if f.offset > 0 {
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
 		}
 
-		// Add important headers for streaming
+		// Set headers as needed
 		req.Header.Set("Connection", "keep-alive")
 		req.Header.Set("Accept", "*/*")
-		req.Header.Set("User-Agent", "Infuse/7.0.2 (iOS)")
-		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 
 		resp, err := sharedClient.Do(req)
 		if err != nil {
 			return 0, fmt.Errorf("HTTP request error: %w", err)
 		}
-
-		// Check response codes more carefully
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			resp.Body.Close()
 			return 0, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
 		}
-
-		f.reader = newBufferedReadCloser(resp.Body)
+		f.reader = resp.Body
 		f.seekPending = false
 	}
 
-	// Read data from the HTTP stream.
 	n, err = f.reader.Read(p)
 	f.offset += int64(n)
 

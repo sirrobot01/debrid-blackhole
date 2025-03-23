@@ -357,6 +357,10 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 		return 0, torrents, err
 	}
 
+	if resp.StatusCode == http.StatusNoContent {
+		return 0, torrents, nil
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return 0, torrents, fmt.Errorf("realdebrid API error: %d", resp.StatusCode)
