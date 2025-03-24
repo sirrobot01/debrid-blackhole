@@ -128,6 +128,7 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]
 				Name: fileName,
 				Size: f.Size,
 				Path: currentPath,
+				Link: f.Link,
 			}
 			result[file.Name] = file
 		}
@@ -239,7 +240,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
+func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -247,16 +248,17 @@ func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := ad.client.MakeRequest(req)
 	if err != nil {
-		return nil
+		return "", err
 	}
 	var data DownloadLink
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return nil
+		return "", err
 	}
 	link := data.Data.Link
-	file.DownloadLink = link
-	file.Generated = time.Now()
-	return file
+	if link == "" {
+		return "", fmt.Errorf("error getting download links %s", data.Error.Message)
+	}
+	return link, nil
 }
 
 func (ad *AllDebrid) GetCheckCached() bool {
@@ -264,7 +266,35 @@ func (ad *AllDebrid) GetCheckCached() bool {
 }
 
 func (ad *AllDebrid) GetTorrents() ([]*types.Torrent, error) {
-	return nil, nil
+	url := fmt.Sprintf("%s/magnet/status?status=ready", ad.Host)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := ad.client.MakeRequest(req)
+	torrents := make([]*types.Torrent, 0)
+	if err != nil {
+		return torrents, err
+	}
+	var res TorrentsListResponse
+	err = json.Unmarshal(resp, &res)
+	if err != nil {
+		ad.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)
+		return torrents, err
+	}
+	for _, magnet := range res.Data.Magnets {
+		torrents = append(torrents, &types.Torrent{
+			Id:               strconv.Itoa(magnet.Id),
+			Name:             magnet.Filename,
+			Bytes:            magnet.Size,
+			Status:           getAlldebridStatus(magnet.StatusCode),
+			Filename:         magnet.Filename,
+			OriginalFilename: magnet.Filename,
+			Files:            make(map[string]types.File),
+			InfoHash:         magnet.Hash,
+			Debrid:           ad.Name,
+			MountPath:        ad.MountPath,
+		})
+	}
+
+	return torrents, nil
 }
 
 func (ad *AllDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
@@ -277,10 +307,6 @@ func (ad *AllDebrid) GetDownloadingStatus() []string {
 
 func (ad *AllDebrid) GetDownloadUncached() bool {
 	return ad.DownloadUncached
-}
-
-func (ad *AllDebrid) ConvertLinksToFiles(links []string) []types.File {
-	return nil
 }
 
 func New(dc config.Debrid) *AllDebrid {

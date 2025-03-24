@@ -30,6 +30,7 @@ type Debrid struct {
 	TorrentRefreshInterval       string `json:"torrent_refresh_interval"`
 	DownloadLinksRefreshInterval string `json:"downloads_refresh_interval"`
 	TorrentRefreshWorkers        int    `json:"torrent_refresh_workers"`
+	WebDavFolderNaming           string `json:"webdav_folder_naming"`
 }
 
 type Proxy struct {
@@ -78,6 +79,10 @@ type WebDav struct {
 	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval"`
 	Workers                      int    `json:"workers"`
 
+	// Folder
+	FolderNaming string `json:"folder_naming"`
+
+	// Rclone
 	RcUrl  string `json:"rc_url"`
 	RcUser string `json:"rc_user"`
 	RcPass string `json:"rc_pass"`
@@ -313,6 +318,9 @@ func (c *Config) GetDebridWebDav(d Debrid) Debrid {
 	}
 	if d.TorrentRefreshWorkers == 0 {
 		d.TorrentRefreshWorkers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
+	}
+	if d.WebDavFolderNaming == "" {
+		d.WebDavFolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
 	}
 	return d
 }

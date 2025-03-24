@@ -73,7 +73,6 @@ func (f *File) Read(p []byte) (n int, err error) {
 	if f.metadataOnly {
 		return 0, io.EOF
 	}
-
 	// If file content is preloaded, read from memory.
 	if f.content != nil {
 		if f.offset >= int64(len(f.content)) {

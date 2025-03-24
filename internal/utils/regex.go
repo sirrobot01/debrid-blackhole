@@ -37,7 +37,6 @@ func RemoveInvalidChars(value string) string {
 }
 
 func RemoveExtension(value string) string {
-	value = RemoveInvalidChars(value)
 	re := regexp.MustCompile(VIDEOMATCH + "|" + MUSICMATCH)
 
 	// Find the last index of the matched extension

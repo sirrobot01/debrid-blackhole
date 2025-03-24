@@ -5,7 +5,6 @@ import (
 	"github.com/beevik/etree"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"net/http"
-	"net/url"
 	"os"
 	path "path/filepath"
 	"time"
@@ -19,7 +18,7 @@ func (c *Cache) RefreshXml() error {
 			return fmt.Errorf("failed to refresh XML for %s: %v", parent, err)
 		}
 	}
-	c.logger.Debug().Msgf("Refreshed XML cache for %s", c.client.GetName())
+	c.logger.Trace().Msgf("Refreshed XML cache for %s", c.client.GetName())
 	return nil
 }
 
@@ -49,7 +48,7 @@ func (c *Cache) refreshParentXml(torrents []os.FileInfo, parent string) error {
 		torrentPath := fmt.Sprintf("/webdav/%s/%s/%s/",
 			c.client.GetName(),
 			parent,
-			url.PathEscape(name),
+			name,
 		)
 
 		addDirectoryResponse(multistatus, torrentPath, name, currentTime)

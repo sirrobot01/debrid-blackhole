@@ -15,6 +15,21 @@ import (
 	"time"
 )
 
+type fileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+}
+
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
+func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *fileInfo) IsDir() bool        { return fi.isDir }
+func (fi *fileInfo) Sys() interface{}   { return nil }
+
 func (c *Cache) refreshListings() {
 	if c.listingRefreshMu.TryLock() {
 		defer c.listingRefreshMu.Unlock()
@@ -23,11 +38,9 @@ func (c *Cache) refreshListings() {
 	}
 	// Copy the current torrents to avoid concurrent issues
 	c.torrentsMutex.RLock()
-	torrents := make([]string, 0, len(c.torrents))
-	for _, t := range c.torrents {
-		if t != nil && t.Torrent != nil {
-			torrents = append(torrents, t.Name)
-		}
+	torrents := make([]string, 0, len(c.torrentsNames))
+	for k, _ := range c.torrentsNames {
+		torrents = append(torrents, k)
 	}
 	c.torrentsMutex.RUnlock()
 

@@ -40,6 +40,14 @@ type TorrentInfoResponse struct {
 	Error *errorResponse `json:"error"`
 }
 
+type TorrentsListResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Magnets []magnetInfo `json:"magnets"`
+	} `json:"data"`
+	Error *errorResponse `json:"error"`
+}
+
 type UploadMagnetResponse struct {
 	Status string `json:"status"`
 	Data   struct {

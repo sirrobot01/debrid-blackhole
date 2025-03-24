@@ -273,7 +273,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -283,19 +283,17 @@ func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) *types.Fil
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
 	if err != nil {
-		return nil
+		return "", err
 	}
 	var data DownloadLinksResponse
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return nil
+		return "", err
 	}
 	if data.Data == nil {
-		return nil
+		return "", fmt.Errorf("error getting download links")
 	}
 	link := *data.Data
-	file.DownloadLink = link
-	file.Generated = time.Now()
-	return file
+	return link, nil
 }
 
 func (tb *Torbox) GetDownloadingStatus() []string {
@@ -334,10 +332,6 @@ func New(dc config.Debrid) *Torbox {
 		logger:           _log,
 		CheckCached:      dc.CheckCached,
 	}
-}
-
-func (tb *Torbox) ConvertLinksToFiles(links []string) []types.File {
-	return nil
 }
 
 func (tb *Torbox) GetDownloads() (map[string]types.DownloadLinks, error) {

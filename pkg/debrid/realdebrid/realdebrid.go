@@ -173,16 +173,15 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	if err != nil {
 		return err
 	}
-	name := utils.RemoveExtension(data.OriginalFilename)
-	t.Name = name
+	t.Name = data.OriginalFilename
 	t.Bytes = data.Bytes
-	t.Folder = name
+	t.Folder = data.OriginalFilename
 	t.Progress = data.Progress
 	t.Status = data.Status
 	t.Speed = data.Speed
 	t.Seeders = data.Seeders
 	t.Filename = data.Filename
-	t.OriginalFilename = name
+	t.OriginalFilename = data.OriginalFilename
 	t.Links = data.Links
 	t.MountPath = r.MountPath
 	t.Debrid = r.Name
@@ -204,11 +203,10 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 			return t, err
 		}
 		status := data.Status
-		name := utils.RemoveExtension(data.OriginalFilename)
-		t.Name = name // Important because some magnet changes the name
-		t.Folder = name
+		t.Name = data.Filename // Important because some magnet changes the name
+		t.Folder = data.OriginalFilename
 		t.Filename = data.Filename
-		t.OriginalFilename = name
+		t.OriginalFilename = data.OriginalFilename
 		t.Bytes = data.Bytes
 		t.Progress = data.Progress
 		t.Speed = data.Speed
@@ -294,34 +292,7 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (r *RealDebrid) ConvertLinksToFiles(links []string) []types.File {
-	files := make([]types.File, 0)
-	for _, l := range links {
-		url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
-		payload := gourl.Values{
-			"link": {l},
-		}
-		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
-		resp, err := r.client.MakeRequest(req)
-		if err != nil {
-			continue
-		}
-		var data UnrestrictResponse
-		if err = json.Unmarshal(resp, &data); err != nil {
-			continue
-		}
-		files = append(files, types.File{
-			Name:         data.Filename,
-			Size:         data.Filesize,
-			Link:         l,
-			DownloadLink: data.Download,
-			Generated:    time.Now(),
-		})
-	}
-	return files
-}
-
-func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
+func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	payload := gourl.Values{
 		"link": {file.Link},
@@ -329,15 +300,13 @@ func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) *types.
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
 	resp, err := r.client.MakeRequest(req)
 	if err != nil {
-		return nil
+		return "", err
 	}
 	var data UnrestrictResponse
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return nil
+		return "", err
 	}
-	file.DownloadLink = data.Download
-	file.Generated = time.Now()
-	return file
+	return data.Download, nil
 }
 
 func (r *RealDebrid) GetCheckCached() bool {

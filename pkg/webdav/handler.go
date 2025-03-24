@@ -3,7 +3,6 @@ package webdav
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
@@ -12,7 +11,6 @@ import (
 	"golang.org/x/net/webdav"
 	"html/template"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -229,6 +227,7 @@ func (h *Handler) getFileInfos(torrent *types.Torrent) []os.FileInfo {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
 	// Handle OPTIONS
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -472,51 +471,4 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-}
-
-func (h *Handler) ioCopy(reader io.Reader, w io.Writer) (int64, error) {
-	// Start with a smaller buffer for faster first byte delivery.
-	buf := make([]byte, 4*1024) // 8KB initial buffer
-	totalWritten := int64(0)
-	firstChunk := true
-
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
-			nw, ew := w.Write(buf[:n])
-			if ew != nil {
-				var opErr *net.OpError
-				if errors.As(ew, &opErr) && opErr.Err.Error() == "write: broken pipe" {
-					h.logger.Debug().Msg("Client closed connection (normal for streaming)")
-					return totalWritten, ew
-				}
-				return totalWritten, ew
-			}
-			totalWritten += int64(nw)
-
-			// Flush immediately after the first chunk.
-			if firstChunk {
-				if flusher, ok := w.(http.Flusher); ok {
-					flusher.Flush()
-				}
-				firstChunk = false
-				// Increase buffer size for subsequent reads.
-				buf = make([]byte, 512*1024) // 64KB buffer after first chunk
-			} else if totalWritten%(2*1024*1024) < int64(n) {
-				// Flush roughly every 2MB of data transferred.
-				if flusher, ok := w.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
-
-		if err != nil {
-			if err != io.EOF {
-				h.logger.Error().Err(err).Msg("Error reading from file")
-			}
-			break
-		}
-	}
-
-	return totalWritten, nil
 }

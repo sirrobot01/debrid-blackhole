@@ -116,7 +116,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 			if err != nil {
 				return
 			}
-			rclonePath := filepath.Join(debridTorrent.MountPath, debridTorrent.Name)
+			rclonePath := filepath.Join(debridTorrent.MountPath, cache.GetTorrentFolder(debridTorrent))
 			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, debridTorrent.Name)
 
 		} else {

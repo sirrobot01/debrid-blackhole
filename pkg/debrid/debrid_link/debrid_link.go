@@ -242,8 +242,8 @@ func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) *types.File {
-	return file
+func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+	return file.DownloadLink, nil
 }
 
 func (dl *DebridLink) GetDownloadingStatus() []string {
@@ -281,9 +281,75 @@ func New(dc config.Debrid) *DebridLink {
 }
 
 func (dl *DebridLink) GetTorrents() ([]*types.Torrent, error) {
-	return nil, nil
+	page := 0
+	perPage := 100
+	torrents := make([]*types.Torrent, 0)
+	for {
+		t, err := dl.getTorrents(page, perPage)
+		if err != nil {
+			break
+		}
+		if len(t) == 0 {
+			break
+		}
+		torrents = append(torrents, t...)
+		page++
+	}
+	return torrents, nil
 }
 
-func (dl *DebridLink) ConvertLinksToFiles(links []string) []types.File {
-	return nil
+func (dl *DebridLink) getTorrents(page, perPage int) ([]*types.Torrent, error) {
+	url := fmt.Sprintf("%s/seedbox/list?page=%d&perPage=%d", dl.Host, page, perPage)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := dl.client.MakeRequest(req)
+	torrents := make([]*types.Torrent, 0)
+	if err != nil {
+		return torrents, err
+	}
+	var res TorrentInfo
+	err = json.Unmarshal(resp, &res)
+	if err != nil {
+		dl.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)
+		return torrents, err
+	}
+
+	data := *res.Value
+
+	if len(data) == 0 {
+		return torrents, nil
+	}
+	for _, t := range data {
+		if t.Status != 100 {
+			continue
+		}
+		torrent := &types.Torrent{
+			Id:               t.ID,
+			Name:             t.Name,
+			Bytes:            t.TotalSize,
+			Status:           "downloaded",
+			Filename:         t.Name,
+			OriginalFilename: t.Name,
+			InfoHash:         t.HashString,
+			Files:            make(map[string]types.File),
+			Debrid:           dl.Name,
+			MountPath:        dl.MountPath,
+		}
+		cfg := config.GetConfig()
+		for _, f := range t.Files {
+			if !cfg.IsSizeAllowed(f.Size) {
+				continue
+			}
+			file := types.File{
+				Id:           f.ID,
+				Name:         f.Name,
+				Size:         f.Size,
+				Path:         f.Name,
+				DownloadLink: f.DownloadURL,
+				Link:         f.DownloadURL,
+			}
+			torrent.Files[f.Name] = file
+		}
+		torrents = append(torrents, torrent)
+	}
+	return torrents, nil
 }
