@@ -74,12 +74,6 @@ func getTorrentFiles(t *types.Torrent, data TorrentInfo, validate bool) map[stri
 			_link = data.Links[idx]
 		}
 
-		if a, ok := t.Files[name]; ok {
-			a.Link = _link
-			files[name] = a
-			continue
-		}
-
 		file := types.File{
 			Name: name,
 			Path: name,
@@ -268,17 +262,15 @@ func (r *RealDebrid) DeleteTorrent(torrentId string) {
 
 func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
+	files := make(map[string]types.File)
 	for _, f := range t.Files {
-		if f.DownloadLink != "" {
-			// Or check the generated link
-			continue
-		}
 		payload := gourl.Values{
 			"link": {f.Link},
 		}
 		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
 		resp, err := r.client.MakeRequest(req)
 		if err != nil {
+			fmt.Println(err)
 			return err
 		}
 		var data UnrestrictResponse
@@ -287,8 +279,9 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 		}
 		f.DownloadLink = data.Download
 		f.Generated = time.Now()
-		t.Files[f.Name] = f
+		files[f.Name] = f
 	}
+	t.Files = files
 	return nil
 }
 

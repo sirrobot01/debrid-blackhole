@@ -13,12 +13,14 @@ import (
 
 type WebDav struct {
 	Handlers []*Handler
+	ready    chan struct{}
 }
 
 func New() *WebDav {
 	svc := service.GetService()
 	w := &WebDav{
 		Handlers: make([]*Handler, 0),
+		ready:    make(chan struct{}),
 	}
 	for name, c := range svc.Debrid.Caches {
 		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name)))
@@ -37,6 +39,22 @@ func (wd *WebDav) Routes() http.Handler {
 	chi.RegisterMethod("UNLOCK")
 	wr := chi.NewRouter()
 	wr.Use(wd.commonMiddleware)
+
+	// Create a readiness check middleware
+	readinessMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-wd.ready:
+				// WebDAV is ready, proceed
+				next.ServeHTTP(w, r)
+			default:
+				// WebDAV is still initializing
+				w.Header().Set("Retry-After", "10")
+				http.Error(w, "WebDAV service is initializing, please try again shortly", http.StatusServiceUnavailable)
+			}
+		})
+	}
+	wr.Use(readinessMiddleware)
 
 	wd.setupRootHandler(wr)
 	wd.mountHandlers(wr)
@@ -65,6 +83,9 @@ func (wd *WebDav) Start(ctx context.Context) error {
 	go func() {
 		wg.Wait()
 		close(errChan)
+
+		// Signal that WebDAV is ready
+		close(wd.ready)
 	}()
 
 	// Collect all errors

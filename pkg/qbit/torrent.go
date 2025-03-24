@@ -112,7 +112,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		if ok {
 			q.logger.Info().Msgf("Using internal webdav for %s", debridTorrent.Debrid)
 			// Use webdav to download the file
-			err := cache.ProcessTorrent(debridTorrent, true)
+			err := cache.AddTorrent(debridTorrent)
 			if err != nil {
 				return
 			}

@@ -27,10 +27,6 @@ const (
 	WebDavUseOriginalNameNoExt WebDavFolderNaming = "original_no_ext"
 )
 
-type DownloadLinkCache struct {
-	Link string `json:"download_link"`
-}
-
 type PropfindResponse struct {
 	Data        []byte
 	GzippedData []byte
@@ -111,8 +107,6 @@ func (c *Cache) setTorrent(t *CachedTorrent) {
 
 	c.torrentsNames[c.GetTorrentFolder(t.Torrent)] = t
 	c.torrentsMutex.Unlock()
-
-	c.refreshListings()
 
 	go func() {
 		if err := c.SaveTorrent(t); err != nil {
@@ -224,6 +218,19 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		}
 		if len(ct.Files) != 0 {
 			// We can assume the torrent is complete
+
+			// Make sure no file has a duplicate link
+			linkStore := make(map[string]bool)
+			for _, f := range ct.Files {
+				if _, ok := linkStore[f.Link]; ok {
+					// Duplicate link, refresh the torrent
+					ct = *c.refreshTorrent(&ct)
+					break
+				} else {
+					linkStore[f.Link] = true
+				}
+			}
+
 			ct.IsComplete = true
 			torrents[ct.Id] = &ct
 		}
@@ -369,7 +376,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 						return // Channel closed, exit goroutine
 					}
 
-					if err := c.ProcessTorrent(t, true); err != nil {
+					if err := c.ProcessTorrent(t, false); err != nil {
 						c.logger.Error().Err(err).Str("torrent", t.Name).Msg("sync error")
 						atomic.AddInt64(&errorCount, 1)
 					}
@@ -402,6 +409,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 	// Wait for all workers to complete
 	wg.Wait()
 
+	c.refreshListings()
 	c.logger.Info().Msgf("Sync complete: %d torrents processed, %d errors", len(torrents), errorCount)
 	return nil
 }
@@ -412,13 +420,16 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 			return fmt.Errorf("failed to update torrent: %w", err)
 		}
 	}
-
 	ct := &CachedTorrent{
 		Torrent:    t,
 		LastRead:   time.Now(),
 		IsComplete: len(t.Files) > 0,
 	}
 	c.setTorrent(ct)
+
+	if refreshRclone {
+		c.refreshListings()
+	}
 	return nil
 }
 
@@ -447,7 +458,6 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 			file = ct.Files[filename]
 		}
 	}
-
 	c.logger.Trace().Msgf("Getting download link for %s", ct.Name)
 	link, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
@@ -461,6 +471,39 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	go c.updateDownloadLink(file)
 	go c.setTorrent(ct)
 	return file.DownloadLink
+}
+
+func (c *Cache) GenerateDownloadLinks(t *CachedTorrent) {
+	if err := c.client.GenerateDownloadLinks(t.Torrent); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to generate download links")
+	}
+	for _, file := range t.Files {
+		c.updateDownloadLink(file)
+	}
+
+	go func() {
+		if err := c.SaveTorrent(t); err != nil {
+			c.logger.Debug().Err(err).Msgf("Failed to save torrent %s", t.Id)
+		}
+	}()
+}
+
+func (c *Cache) AddTorrent(t *types.Torrent) error {
+	if len(t.Files) == 0 {
+		if err := c.client.UpdateTorrent(t); err != nil {
+			return fmt.Errorf("failed to update torrent: %w", err)
+		}
+	}
+	ct := &CachedTorrent{
+		Torrent:    t,
+		LastRead:   time.Now(),
+		IsComplete: len(t.Files) > 0,
+	}
+	c.setTorrent(ct)
+	c.refreshListings()
+	go c.GenerateDownloadLinks(ct)
+	return nil
+
 }
 
 func (c *Cache) updateDownloadLink(file types.File) {
@@ -489,6 +532,8 @@ func (c *Cache) DeleteTorrent(id string) {
 		delete(c.torrentsNames, t.Name)
 
 		c.removeFromDB(id)
+
+		c.refreshListings()
 	}
 }
 
@@ -500,9 +545,10 @@ func (c *Cache) DeleteTorrents(ids []string) {
 		if t, ok := c.torrents[id]; ok {
 			delete(c.torrents, id)
 			delete(c.torrentsNames, c.GetTorrentFolder(t.Torrent))
-			c.removeFromDB(id)
+			go c.removeFromDB(id)
 		}
 	}
+	c.refreshListings()
 }
 
 func (c *Cache) removeFromDB(torrentId string) {
