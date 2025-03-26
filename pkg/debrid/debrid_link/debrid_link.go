@@ -353,3 +353,11 @@ func (dl *DebridLink) getTorrents(page, perPage int) ([]*types.Torrent, error) {
 	}
 	return torrents, nil
 }
+
+func (dl *DebridLink) CheckLink(link string) error {
+	return nil
+}
+
+func (dl *DebridLink) GetMountPath() string {
+	return dl.MountPath
+}

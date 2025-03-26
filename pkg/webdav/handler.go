@@ -191,7 +191,6 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 				name:         file.Name,
 				size:         file.Size,
 				link:         file.Link,
-				downloadLink: file.DownloadLink,
 				metadataOnly: metadataOnly,
 			}
 			return fi, nil

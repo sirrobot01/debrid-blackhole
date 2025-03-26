@@ -233,3 +233,15 @@ func GetInfohashFromURL(url string) (string, error) {
 	infoHash := hash.HexString()
 	return infoHash, nil
 }
+
+func ConstructMagnet(infoHash, name string) *Magnet {
+	// Create a magnet link from the infohash and name
+	name = url.QueryEscape(strings.TrimSpace(name))
+	magnetUri := fmt.Sprintf("magnet:?xt=urn:btih:%s&dn=%s", infoHash, name)
+	return &Magnet{
+		InfoHash: infoHash,
+		Name:     name,
+		Size:     0,
+		Link:     magnetUri,
+	}
+}

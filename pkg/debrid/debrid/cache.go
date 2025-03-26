@@ -3,12 +3,14 @@ package debrid
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"os"
@@ -39,31 +41,43 @@ type CachedTorrent struct {
 	IsComplete bool      `json:"is_complete"`
 }
 
+type downloadLinkCache struct {
+	Link      string
+	ExpiresAt time.Time
+}
+
+type RepairRequest struct {
+	TorrentID string
+	Priority  int
+	FileName  string
+}
+
 type Cache struct {
 	dir    string
 	client types.Client
 	logger zerolog.Logger
 
-	torrents      map[string]*CachedTorrent // key: torrent.Id, value: *CachedTorrent
-	torrentsNames map[string]*CachedTorrent // key: torrent.Name, value: torrent
+	torrents      *xsync.MapOf[string, *CachedTorrent] // key: torrent.Id, value: *CachedTorrent
+	torrentsNames *xsync.MapOf[string, *CachedTorrent] // key: torrent.Name, value: torrent
 	listings      atomic.Value
-	downloadLinks map[string]string // key: file.Link, value: download link
+	downloadLinks *xsync.MapOf[string, downloadLinkCache]
 	PropfindResp  *xsync.MapOf[string, PropfindResponse]
 	folderNaming  WebDavFolderNaming
+
+	// repair
+	repairChan        chan RepairRequest
+	repairsInProgress *xsync.MapOf[string, bool]
 
 	// config
 	workers                      int
 	torrentRefreshInterval       time.Duration
 	downloadLinksRefreshInterval time.Duration
+	autoExpiresLinksAfter        time.Duration
 
 	// refresh mutex
 	listingRefreshMu       sync.RWMutex // for refreshing torrents
 	downloadLinksRefreshMu sync.RWMutex // for refreshing download links
 	torrentsRefreshMu      sync.RWMutex // for refreshing torrents
-
-	// Data Mutexes
-	torrentsMutex      sync.RWMutex // for torrents and torrentsNames
-	downloadLinksMutex sync.Mutex   // for downloadLinks
 }
 
 func NewCache(dc config.Debrid, client types.Client) *Cache {
@@ -76,37 +90,41 @@ func NewCache(dc config.Debrid, client types.Client) *Cache {
 	if err != nil {
 		downloadLinksRefreshInterval = time.Minute * 40
 	}
+	autoExpiresLinksAfter, err := time.ParseDuration(dc.AutoExpireLinksAfter)
+	if err != nil {
+		autoExpiresLinksAfter = time.Hour * 24
+	}
 	return &Cache{
 		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
-		torrents:                     make(map[string]*CachedTorrent),
-		torrentsNames:                make(map[string]*CachedTorrent),
+		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
+		torrentsNames:                xsync.NewMapOf[string, *CachedTorrent](),
 		client:                       client,
 		logger:                       logger.NewLogger(fmt.Sprintf("%s-cache", client.GetName())),
 		workers:                      200,
-		downloadLinks:                make(map[string]string),
+		downloadLinks:                xsync.NewMapOf[string, downloadLinkCache](),
 		torrentRefreshInterval:       torrentRefreshInterval,
 		downloadLinksRefreshInterval: downloadLinksRefreshInterval,
 		PropfindResp:                 xsync.NewMapOf[string, PropfindResponse](),
 		folderNaming:                 WebDavFolderNaming(dc.WebDavFolderNaming),
+		autoExpiresLinksAfter:        autoExpiresLinksAfter,
+		repairsInProgress:            xsync.NewMapOf[string, bool](),
 	}
 }
 
 func (c *Cache) GetTorrentFolder(torrent *types.Torrent) string {
-	folderName := torrent.Name
+	folderName := torrent.Filename
 	if c.folderNaming == WebDavUseID {
 		folderName = torrent.Id
 	} else if c.folderNaming == WebDavUseOriginalNameNoExt {
-		folderName = utils.RemoveExtension(torrent.Name)
+		folderName = utils.RemoveExtension(folderName)
 	}
 	return folderName
 }
 
 func (c *Cache) setTorrent(t *CachedTorrent) {
-	c.torrentsMutex.Lock()
-	c.torrents[t.Id] = t
+	c.torrents.Store(t.Id, t)
 
-	c.torrentsNames[c.GetTorrentFolder(t.Torrent)] = t
-	c.torrentsMutex.Unlock()
+	c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
 
 	go func() {
 		if err := c.SaveTorrent(t); err != nil {
@@ -116,13 +134,10 @@ func (c *Cache) setTorrent(t *CachedTorrent) {
 }
 
 func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
-	c.torrentsMutex.Lock()
 	for _, t := range torrents {
-		c.torrents[t.Id] = t
-		c.torrentsNames[c.GetTorrentFolder(t.Torrent)] = t
+		c.torrents.Store(t.Id, t)
+		c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
 	}
-
-	c.torrentsMutex.Unlock()
 
 	c.refreshListings()
 
@@ -140,22 +155,6 @@ func (c *Cache) GetListing() []os.FileInfo {
 	return nil
 }
 
-func (c *Cache) GetTorrents() map[string]*CachedTorrent {
-	c.torrentsMutex.RLock()
-	defer c.torrentsMutex.RUnlock()
-	result := make(map[string]*CachedTorrent, len(c.torrents))
-	for k, v := range c.torrents {
-		result[k] = v
-	}
-	return result
-}
-
-func (c *Cache) GetTorrentNames() map[string]*CachedTorrent {
-	c.torrentsMutex.RLock()
-	defer c.torrentsMutex.RUnlock()
-	return c.torrentsNames
-}
-
 func (c *Cache) Start() error {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
@@ -167,10 +166,6 @@ func (c *Cache) Start() error {
 
 	// initial download links
 	go func() {
-		// lock download refresh mutex
-		c.downloadLinksRefreshMu.Lock()
-		defer c.downloadLinksRefreshMu.Unlock()
-		// This prevents the download links from being refreshed twice
 		c.refreshDownloadLinks()
 	}()
 
@@ -180,6 +175,9 @@ func (c *Cache) Start() error {
 			c.logger.Error().Err(err).Msg("Failed to start cache refresh worker")
 		}
 	}()
+
+	c.repairChan = make(chan RepairRequest, 100)
+	go c.repairWorker()
 
 	return nil
 }
@@ -239,28 +237,36 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 	return torrents, nil
 }
 
+func (c *Cache) GetTorrents() map[string]*CachedTorrent {
+	torrents := make(map[string]*CachedTorrent)
+	c.torrents.Range(func(key string, value *CachedTorrent) bool {
+		torrents[key] = value
+		return true
+	})
+	return torrents
+}
+
 func (c *Cache) GetTorrent(id string) *CachedTorrent {
-	c.torrentsMutex.RLock()
-	defer c.torrentsMutex.RUnlock()
-	if t, ok := c.torrents[id]; ok {
+	if t, ok := c.torrents.Load(id); ok {
 		return t
 	}
 	return nil
 }
 
 func (c *Cache) GetTorrentByName(name string) *CachedTorrent {
-	if t, ok := c.GetTorrentNames()[name]; ok {
+	if t, ok := c.torrentsNames.Load(name); ok {
 		return t
 	}
 	return nil
 }
 
 func (c *Cache) SaveTorrents() error {
-	for _, ct := range c.GetTorrents() {
-		if err := c.SaveTorrent(ct); err != nil {
-			return err
+	c.torrents.Range(func(key string, value *CachedTorrent) bool {
+		if err := c.SaveTorrent(value); err != nil {
+			c.logger.Debug().Err(err).Msgf("Failed to save torrent %s", key)
 		}
-	}
+		return true
+	})
 	return nil
 }
 
@@ -383,6 +389,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 
 					count := atomic.AddInt64(&processed, 1)
 					if count%1000 == 0 {
+						c.refreshListings()
 						c.logger.Info().Msgf("Progress: %d/%d torrents processed", count, len(torrents))
 					}
 
@@ -448,9 +455,6 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 
 	if file.Link == "" {
 		// file link is empty, refresh the torrent to get restricted links
-		if ct.IsComplete {
-			return ""
-		}
 		ct = c.refreshTorrent(ct) // Refresh the torrent from the debrid
 		if ct == nil {
 			return ""
@@ -458,17 +462,40 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 			file = ct.Files[filename]
 		}
 	}
-	c.logger.Trace().Msgf("Getting download link for %s", ct.Name)
-	link, err := c.client.GetDownloadLink(ct.Torrent, &file)
+
+	c.logger.Trace().Msgf("Getting download link for %s", filename)
+	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
-		c.logger.Error().Err(err).Msg("Failed to get download link")
+		if errors.Is(err, request.HosterUnavailableError) {
+			// Check link here??
+			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
+			if err := c.repairTorrent(ct); err != nil {
+				c.logger.Error().Err(err).Msgf("Failed to trigger repair for %s", ct.Name)
+				return ""
+			}
+			// Generate download link for the file then
+			f := ct.Files[filename]
+			downloadLink, _ = c.client.GetDownloadLink(ct.Torrent, &f)
+			f.DownloadLink = downloadLink
+			file.Generated = time.Now()
+			ct.Files[filename] = f
+			c.updateDownloadLink(file.Link, downloadLink)
+
+			go func() {
+				go c.setTorrent(ct)
+			}()
+
+			return downloadLink // Gets download link in the next pass
+		}
+
+		c.logger.Debug().Err(err).Msgf("Failed to get download link for :%s", file.Link)
 		return ""
 	}
-	file.DownloadLink = link
+	file.DownloadLink = downloadLink
 	file.Generated = time.Now()
 	ct.Files[filename] = file
 
-	go c.updateDownloadLink(file)
+	go c.updateDownloadLink(file.Link, downloadLink)
 	go c.setTorrent(ct)
 	return file.DownloadLink
 }
@@ -478,7 +505,7 @@ func (c *Cache) GenerateDownloadLinks(t *CachedTorrent) {
 		c.logger.Error().Err(err).Msg("Failed to generate download links")
 	}
 	for _, file := range t.Files {
-		c.updateDownloadLink(file)
+		c.updateDownloadLink(file.Link, file.DownloadLink)
 	}
 
 	go func() {
@@ -506,15 +533,18 @@ func (c *Cache) AddTorrent(t *types.Torrent) error {
 
 }
 
-func (c *Cache) updateDownloadLink(file types.File) {
-	c.downloadLinksMutex.Lock()
-	defer c.downloadLinksMutex.Unlock()
-	c.downloadLinks[file.Link] = file.DownloadLink
+func (c *Cache) updateDownloadLink(link, downloadLink string) {
+	c.downloadLinks.Store(link, downloadLinkCache{
+		Link:      downloadLink,
+		ExpiresAt: time.Now().Add(c.autoExpiresLinksAfter), // Expires in 24 hours
+	})
 }
 
 func (c *Cache) checkDownloadLink(link string) string {
-	if dl, ok := c.downloadLinks[link]; ok {
-		return dl
+	if dl, ok := c.downloadLinks.Load(link); ok {
+		if dl.ExpiresAt.After(time.Now()) {
+			return dl.Link
+		}
 	}
 	return ""
 }
@@ -525,26 +555,21 @@ func (c *Cache) GetClient() types.Client {
 
 func (c *Cache) DeleteTorrent(id string) {
 	c.logger.Info().Msgf("Deleting torrent %s", id)
-	c.torrentsMutex.Lock()
-	defer c.torrentsMutex.Unlock()
-	if t, ok := c.torrents[id]; ok {
-		delete(c.torrents, id)
-		delete(c.torrentsNames, t.Name)
 
-		c.removeFromDB(id)
-
+	if t, ok := c.torrents.Load(id); ok {
+		c.torrents.Delete(id)
+		c.torrentsNames.Delete(c.GetTorrentFolder(t.Torrent))
+		go c.removeFromDB(id)
 		c.refreshListings()
 	}
 }
 
 func (c *Cache) DeleteTorrents(ids []string) {
 	c.logger.Info().Msgf("Deleting %d torrents", len(ids))
-	c.torrentsMutex.Lock()
-	defer c.torrentsMutex.Unlock()
 	for _, id := range ids {
-		if t, ok := c.torrents[id]; ok {
-			delete(c.torrents, id)
-			delete(c.torrentsNames, c.GetTorrentFolder(t.Torrent))
+		if t, ok := c.torrents.Load(id); ok {
+			c.torrents.Delete(id)
+			c.torrentsNames.Delete(c.GetTorrentFolder(t.Torrent))
 			go c.removeFromDB(id)
 		}
 	}

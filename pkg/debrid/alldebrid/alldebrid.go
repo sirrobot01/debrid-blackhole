@@ -309,6 +309,14 @@ func (ad *AllDebrid) GetDownloadUncached() bool {
 	return ad.DownloadUncached
 }
 
+func (ad *AllDebrid) CheckLink(link string) error {
+	return nil
+}
+
+func (ad *AllDebrid) GetMountPath() string {
+	return ad.MountPath
+}
+
 func New(dc config.Debrid) *AllDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -37,12 +38,11 @@ func (c *Cache) refreshListings() {
 		return
 	}
 	// Copy the current torrents to avoid concurrent issues
-	c.torrentsMutex.RLock()
-	torrents := make([]string, 0, len(c.torrentsNames))
-	for k, _ := range c.torrentsNames {
-		torrents = append(torrents, k)
-	}
-	c.torrentsMutex.RUnlock()
+	torrents := make([]string, 0, c.torrentsNames.Size())
+	c.torrentsNames.Range(func(key string, value *CachedTorrent) bool {
+		torrents = append(torrents, key)
+		return true
+	})
 
 	sort.Slice(torrents, func(i, j int) bool {
 		return torrents[i] < torrents[j]
@@ -61,9 +61,32 @@ func (c *Cache) refreshListings() {
 	}
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
-	_ = c.RefreshXml()
+	c.resetPropfindResponse()
 	if err := c.RefreshRclone(); err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
+	}
+}
+
+func (c *Cache) resetPropfindResponse() {
+	// Right now, parents are hardcoded
+	parents := []string{"__all__", "torrents"}
+	// Reset only the parent directories
+	// Convert the parents to a keys
+	// This is a bit hacky, but it works
+	// Instead of deleting all the keys, we only delete the parent keys, e.g __all__/ or torrents/
+	keys := make([]string, 0, len(parents))
+	for _, p := range parents {
+		// Construct the key
+		// construct url
+		url := filepath.Clean(filepath.Join("/webdav", c.client.GetName(), p))
+		key0 := fmt.Sprintf("propfind:%s:0", url)
+		key1 := fmt.Sprintf("propfind:%s:1", url)
+		keys = append(keys, key0, key1)
+	}
+
+	// Delete the keys
+	for _, k := range keys {
+		c.PropfindResp.Delete(k)
 	}
 }
 
@@ -73,14 +96,12 @@ func (c *Cache) refreshTorrents() {
 	} else {
 		return
 	}
-	c.torrentsMutex.RLock()
-	currentTorrents := c.torrents //
 	// Create a copy of the current torrents to avoid concurrent issues
-	torrents := make(map[string]string, len(currentTorrents)) // a mpa of id and name
-	for _, v := range currentTorrents {
-		torrents[v.Id] = v.Name
-	}
-	c.torrentsMutex.RUnlock()
+	torrents := make(map[string]string, c.torrents.Size()) // a mpa of id and name
+	c.torrents.Range(func(key string, t *CachedTorrent) bool {
+		torrents[t.Id] = t.Name
+		return true
+	})
 
 	// Get new torrents from the debrid service
 	debTorrents, err := c.client.GetTorrents()
@@ -206,14 +227,25 @@ func (c *Cache) refreshDownloadLinks() {
 	} else {
 		return
 	}
-	c.downloadLinksMutex.Lock()
-	defer c.downloadLinksMutex.Unlock()
 
 	downloadLinks, err := c.client.GetDownloads()
 	if err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to get download links")
 	}
 	for k, v := range downloadLinks {
-		c.downloadLinks[k] = v.DownloadLink
+		// if link is generated in the last 24 hours, add it to cache
+		timeSince := time.Since(v.Generated)
+		if timeSince < c.autoExpiresLinksAfter {
+			c.downloadLinks.Store(k, downloadLinkCache{
+				Link:      v.DownloadLink,
+				ExpiresAt: v.Generated.Add(c.autoExpiresLinksAfter - timeSince),
+			})
+		} else {
+			//c.downloadLinks.Delete(k) don't delete, just log
+			c.logger.Trace().Msgf("Download link for %s expired", k)
+		}
 	}
+
+	c.logger.Debug().Msgf("Refreshed %d download links", len(downloadLinks))
+
 }

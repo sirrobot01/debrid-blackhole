@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 type RealDebrid struct {
@@ -167,7 +166,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	if err != nil {
 		return err
 	}
-	t.Name = data.OriginalFilename
+	t.Name = data.Filename
 	t.Bytes = data.Bytes
 	t.Folder = data.OriginalFilename
 	t.Progress = data.Progress
@@ -262,26 +261,82 @@ func (r *RealDebrid) DeleteTorrent(torrentId string) {
 
 func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
-	files := make(map[string]types.File)
+	filesCh := make(chan types.File, len(t.Files))
+	errCh := make(chan error, len(t.Files))
+
+	var wg sync.WaitGroup
+
 	for _, f := range t.Files {
-		payload := gourl.Values{
-			"link": {f.Link},
-		}
-		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
-		resp, err := r.client.MakeRequest(req)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-		var data UnrestrictResponse
-		if err = json.Unmarshal(resp, &data); err != nil {
-			return err
-		}
-		f.DownloadLink = data.Download
-		f.Generated = time.Now()
-		files[f.Name] = f
+		wg.Add(1)
+		go func(file types.File) {
+			defer wg.Done()
+
+			payload := gourl.Values{"link": {file.Link}}
+			req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			resp, err := r.client.Do(req)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if resp.StatusCode == http.StatusServiceUnavailable {
+				errCh <- request.HosterUnavailableError
+				return
+			}
+			defer resp.Body.Close()
+			b, err := io.ReadAll(resp.Body)
+
+			var data UnrestrictResponse
+			if err = json.Unmarshal(b, &data); err != nil {
+				errCh <- err
+				return
+			}
+
+			file.DownloadLink = data.Download
+			filesCh <- file
+		}(f)
 	}
+
+	go func() {
+		wg.Wait()
+		close(filesCh)
+		close(errCh)
+	}()
+
+	// Collect results
+	files := make(map[string]types.File, len(t.Files))
+	for file := range filesCh {
+		files[file.Name] = file
+	}
+
+	// Check for errors
+	for err := range errCh {
+		if err != nil {
+			return err // Return the first error encountered
+		}
+	}
+
 	t.Files = files
+	return nil
+}
+
+func (r *RealDebrid) CheckLink(link string) error {
+	url := fmt.Sprintf("%s/unrestrict/check", r.Host)
+	payload := gourl.Values{
+		"link": {link},
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return request.ErrLinkBroken // File has been removed
+	}
 	return nil
 }
 
@@ -291,12 +346,20 @@ func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string
 		"link": {file.Link},
 	}
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
-	resp, err := r.client.MakeRequest(req)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		return "", request.HosterUnavailableError
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 	var data UnrestrictResponse
-	if err = json.Unmarshal(resp, &data); err != nil {
+	if err = json.Unmarshal(b, &data); err != nil {
 		return "", err
 	}
 	return data.Download, nil
@@ -348,7 +411,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 		}
 		torrents = append(torrents, &types.Torrent{
 			Id:               t.Id,
-			Name:             utils.RemoveInvalidChars(t.Filename), // This changes when we get the files
+			Name:             t.Filename,
 			Bytes:            t.Bytes,
 			Progress:         t.Progress,
 			Status:           t.Status,
@@ -481,6 +544,10 @@ func (r *RealDebrid) GetDownloadUncached() bool {
 	return r.DownloadUncached
 }
 
+func (r *RealDebrid) GetMountPath() string {
+	return r.MountPath
+}
+
 func New(dc config.Debrid) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
 	headers := map[string]string{
@@ -489,7 +556,9 @@ func New(dc config.Debrid) *RealDebrid {
 	_log := logger.NewLogger(dc.Name)
 	client := request.New().
 		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log)
+		WithRateLimiter(rl).WithLogger(_log).
+		WithMaxRetries(5).
+		WithRetryableStatus(429)
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,

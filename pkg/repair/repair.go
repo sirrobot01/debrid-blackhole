@@ -34,6 +34,7 @@ type Repair struct {
 	runOnStart  bool
 	ZurgURL     string
 	IsZurg      bool
+	useWebdav   bool
 	autoProcess bool
 	logger      zerolog.Logger
 	filename    string
@@ -51,6 +52,7 @@ func New(arrs *arr.Storage, engine *debrid.Engine) *Repair {
 		duration:    duration,
 		runOnStart:  cfg.Repair.RunOnStart,
 		ZurgURL:     cfg.Repair.ZurgURL,
+		useWebdav:   cfg.Repair.UseWebDav,
 		autoProcess: cfg.Repair.AutoProcess,
 		filename:    filepath.Join(cfg.Path, "repair.json"),
 		deb:         engine,
@@ -157,6 +159,13 @@ func (r *Repair) newJob(arrsNames []string, mediaIDs []string) *Job {
 }
 
 func (r *Repair) preRunChecks() error {
+
+	if r.useWebdav {
+		if len(r.deb.Caches) == 0 {
+			return fmt.Errorf("no caches found")
+		}
+	}
+
 	// Check if zurg url is reachable
 	if !r.IsZurg {
 		return nil
@@ -362,141 +371,6 @@ func (r *Repair) getUniquePaths(media arr.Content) map[string]string {
 	return uniqueParents
 }
 
-func (r *Repair) clean(job *Job) error {
-	// Create a new error group
-	g, ctx := errgroup.WithContext(context.Background())
-
-	uniqueItems := make(map[string]string)
-	mu := sync.Mutex{}
-
-	// Limit concurrent goroutines
-	g.SetLimit(runtime.NumCPU() * 4)
-
-	for _, a := range job.Arrs {
-		a := a // Capture range variable
-		g.Go(func() error {
-			// Check if context was canceled
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			items, err := r.cleanArr(job, a, "")
-			if err != nil {
-				r.logger.Error().Err(err).Msgf("Error cleaning %s", a)
-				return err
-			}
-
-			// Safely append the found items to the shared slice
-			if len(items) > 0 {
-				mu.Lock()
-				for k, v := range items {
-					uniqueItems[k] = v
-				}
-				mu.Unlock()
-			}
-
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	if len(uniqueItems) == 0 {
-		job.CompletedAt = time.Now()
-		job.Status = JobCompleted
-
-		go func() {
-			if err := request.SendDiscordMessage("repair_clean_complete", "success", job.discordContext()); err != nil {
-				r.logger.Error().Msgf("Error sending discord message: %v", err)
-			}
-		}()
-
-		return nil
-	}
-
-	cache := r.deb.Caches["realdebrid"]
-	if cache == nil {
-		return fmt.Errorf("cache not found")
-	}
-	torrents := cache.GetTorrents()
-
-	dangling := make([]string, 0)
-	for _, t := range torrents {
-		if _, ok := uniqueItems[t.Name]; !ok {
-			dangling = append(dangling, t.Id)
-		}
-	}
-
-	r.logger.Info().Msgf("Found %d delapitated items", len(dangling))
-
-	if len(dangling) == 0 {
-		job.CompletedAt = time.Now()
-		job.Status = JobCompleted
-		return nil
-	}
-
-	client := r.deb.Clients["realdebrid"]
-	if client == nil {
-		return fmt.Errorf("client not found")
-	}
-	for _, id := range dangling {
-		client.DeleteTorrent(id)
-	}
-
-	return nil
-}
-
-func (r *Repair) cleanArr(j *Job, _arr string, tmdbId string) (map[string]string, error) {
-	uniqueItems := make(map[string]string)
-	a := r.arrs.Get(_arr)
-
-	r.logger.Info().Msgf("Starting repair for %s", a.Name)
-	media, err := a.GetMedia(tmdbId)
-	if err != nil {
-		r.logger.Info().Msgf("Failed to get %s media: %v", a.Name, err)
-		return uniqueItems, err
-	}
-
-	// Create a new error group
-	g, ctx := errgroup.WithContext(context.Background())
-
-	mu := sync.Mutex{}
-
-	// Limit concurrent goroutines
-	g.SetLimit(runtime.NumCPU() * 4)
-
-	for _, m := range media {
-		m := m // Create a new variable scoped to the loop iteration
-		g.Go(func() error {
-			// Check if context was canceled
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			u := r.getUniquePaths(m)
-			for k, v := range u {
-				mu.Lock()
-				uniqueItems[k] = v
-				mu.Unlock()
-			}
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return uniqueItems, err
-	}
-
-	r.logger.Info().Msgf("Repair completed for %s. %d unique items", a.Name, len(uniqueItems))
-	return uniqueItems, nil
-}
-
 func (r *Repair) repairArr(j *Job, _arr string, tmdbId string) ([]arr.ContentFile, error) {
 	brokenItems := make([]arr.ContentFile, 0)
 	a := r.arrs.Get(_arr)
@@ -598,7 +472,9 @@ func (r *Repair) isMediaAccessible(m arr.Content) bool {
 
 func (r *Repair) getBrokenFiles(media arr.Content) []arr.ContentFile {
 
-	if r.IsZurg {
+	if r.useWebdav {
+		return r.getWebdavBrokenFiles(media)
+	} else if r.IsZurg {
 		return r.getZurgBrokenFiles(media)
 	} else {
 		return r.getFileBrokenFiles(media)
@@ -610,17 +486,7 @@ func (r *Repair) getFileBrokenFiles(media arr.Content) []arr.ContentFile {
 
 	brokenFiles := make([]arr.ContentFile, 0)
 
-	uniqueParents := make(map[string][]arr.ContentFile)
-	files := media.Files
-	for _, file := range files {
-		target := getSymlinkTarget(file.Path)
-		if target != "" {
-			file.IsSymlink = true
-			dir, _ := filepath.Split(target)
-			parent := filepath.Base(filepath.Clean(dir))
-			uniqueParents[parent] = append(uniqueParents[parent], file)
-		}
-	}
+	uniqueParents := collectFiles(media)
 
 	for parent, f := range uniqueParents {
 		// Check stat
@@ -646,19 +512,7 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 	// This reduces bandwidth usage significantly
 
 	brokenFiles := make([]arr.ContentFile, 0)
-	uniqueParents := make(map[string][]arr.ContentFile)
-	files := media.Files
-	for _, file := range files {
-		target := getSymlinkTarget(file.Path)
-		if target != "" {
-			file.IsSymlink = true
-			dir, f := filepath.Split(target)
-			parent := filepath.Base(filepath.Clean(dir))
-			// Set target path folder/file.mkv
-			file.TargetPath = f
-			uniqueParents[parent] = append(uniqueParents[parent], file)
-		}
-	}
+	uniqueParents := collectFiles(media)
 	client := &http.Client{
 		Timeout: 0,
 		Transport: &http.Transport{
@@ -672,9 +526,9 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 	// Access zurg url + symlink folder + first file(encoded)
 	for parent, f := range uniqueParents {
 		r.logger.Debug().Msgf("Checking %s", parent)
-		encodedParent := url.PathEscape(parent)
+		torrentName := url.PathEscape(filepath.Base(parent))
 		encodedFile := url.PathEscape(f[0].TargetPath)
-		fullURL := fmt.Sprintf("%s/http/__all__/%s/%s", r.ZurgURL, encodedParent, encodedFile)
+		fullURL := fmt.Sprintf("%s/http/__all__/%s/%s", r.ZurgURL, torrentName, encodedFile)
 		// Check file stat first
 		if _, err := os.Stat(f[0].Path); os.IsNotExist(err) {
 			r.logger.Debug().Msgf("Broken symlink found: %s", fullURL)
@@ -706,6 +560,76 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
+	}
+	if len(brokenFiles) == 0 {
+		r.logger.Debug().Msgf("No broken files found for %s", media.Title)
+		return nil
+	}
+	r.logger.Debug().Msgf("%d broken files found for %s", len(brokenFiles), media.Title)
+	return brokenFiles
+}
+
+func (r *Repair) getWebdavBrokenFiles(media arr.Content) []arr.ContentFile {
+	// Use internal webdav setup to check file availability
+
+	caches := r.deb.Caches
+	if len(caches) == 0 {
+		r.logger.Info().Msg("No caches found. Can't use webdav")
+		return nil
+	}
+
+	clients := r.deb.Clients
+	if len(clients) == 0 {
+		r.logger.Info().Msg("No clients found. Can't use webdav")
+		return nil
+	}
+
+	brokenFiles := make([]arr.ContentFile, 0)
+	uniqueParents := collectFiles(media)
+	// Access zurg url + symlink folder + first file(encoded)
+	for torrentPath, f := range uniqueParents {
+		r.logger.Debug().Msgf("Checking %s", torrentPath)
+		// Get the debrid first
+		dir := filepath.Dir(torrentPath)
+		debridName := ""
+		for _, client := range clients {
+			mountPath := client.GetMountPath()
+			if mountPath == "" {
+				continue
+			}
+			if filepath.Clean(mountPath) == filepath.Clean(dir) {
+				debridName = client.GetName()
+				break
+			}
+		}
+		if debridName == "" {
+			r.logger.Debug().Msgf("No debrid found for %s. Skipping", torrentPath)
+			continue
+		}
+		cache, ok := caches[debridName]
+		if !ok {
+			r.logger.Debug().Msgf("No cache found for %s. Skipping", debridName)
+			continue
+		}
+		// Check if torrent exists
+		torrentName := filepath.Clean(filepath.Base(torrentPath))
+		torrent := cache.GetTorrentByName(torrentName)
+		if torrent == nil {
+			r.logger.Debug().Msgf("No torrent found for %s. Skipping", torrentName)
+			continue
+		}
+		files := make([]string, 0)
+		for _, file := range f {
+			files = append(files, file.TargetPath)
+		}
+
+		if cache.IsTorrentBroken(torrent, files) {
+			r.logger.Debug().Msgf("[webdav] Broken symlink found: %s", torrentPath)
+			// Delete the torrent?
+			brokenFiles = append(brokenFiles, f...)
+			continue
+		}
+
 	}
 	if len(brokenFiles) == 0 {
 		r.logger.Debug().Msgf("No broken files found for %s", media.Title)

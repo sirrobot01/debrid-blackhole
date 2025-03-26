@@ -337,3 +337,11 @@ func New(dc config.Debrid) *Torbox {
 func (tb *Torbox) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
+
+func (tb *Torbox) CheckLink(link string) error {
+	return nil
+}
+
+func (tb *Torbox) GetMountPath() string {
+	return tb.MountPath
+}

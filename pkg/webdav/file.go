@@ -1,6 +1,7 @@
 package webdav
 
 import (
+	"crypto/tls"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
@@ -11,13 +12,8 @@ import (
 
 var sharedClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		DisableCompression:    false, // Enable compression for faster transfers
-		DisableKeepAlives:     false,
-		Proxy:                 http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           http.ProxyFromEnvironment,
 	},
 	Timeout: 0,
 }
@@ -92,7 +88,7 @@ func (f *File) Read(p []byte) (n int, err error) {
 
 		downloadLink := f.GetDownloadLink()
 		if downloadLink == "" {
-			return 0, fmt.Errorf("failed to get download link for file")
+			return 0, io.EOF
 		}
 
 		req, err := http.NewRequest("GET", downloadLink, nil)

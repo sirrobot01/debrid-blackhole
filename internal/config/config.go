@@ -31,6 +31,7 @@ type Debrid struct {
 	DownloadLinksRefreshInterval string `json:"downloads_refresh_interval"`
 	TorrentRefreshWorkers        int    `json:"torrent_refresh_workers"`
 	WebDavFolderNaming           string `json:"webdav_folder_naming"`
+	AutoExpireLinksAfter         string `json:"auto_expire_links_after"`
 }
 
 type Proxy struct {
@@ -67,6 +68,7 @@ type Repair struct {
 	RunOnStart  bool   `json:"run_on_start"`
 	ZurgURL     string `json:"zurg_url"`
 	AutoProcess bool   `json:"auto_process"`
+	UseWebDav   bool   `json:"use_webdav"`
 }
 
 type Auth struct {
@@ -78,6 +80,7 @@ type WebDav struct {
 	TorrentsRefreshInterval      string `json:"torrents_refresh_interval"`
 	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval"`
 	Workers                      int    `json:"workers"`
+	AutoExpireLinksAfter         string `json:"auto_expire_links_after"`
 
 	// Folder
 	FolderNaming string `json:"folder_naming"`
@@ -321,6 +324,9 @@ func (c *Config) GetDebridWebDav(d Debrid) Debrid {
 	}
 	if d.WebDavFolderNaming == "" {
 		d.WebDavFolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
+	}
+	if d.AutoExpireLinksAfter == "" {
+		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "24h")
 	}
 	return d
 }

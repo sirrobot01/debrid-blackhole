@@ -19,4 +19,6 @@ type Client interface {
 	GetLogger() zerolog.Logger
 	GetDownloadingStatus() []string
 	GetDownloads() (map[string]DownloadLinks, error)
+	CheckLink(link string) error
+	GetMountPath() string
 }
