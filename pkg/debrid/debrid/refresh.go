@@ -136,7 +136,7 @@ func (c *Cache) refreshTorrents() {
 	newTorrents := make([]*types.Torrent, 0)
 	for _, t := range _newTorrents {
 		if !slices.Contains(deletedTorrents, t.Id) {
-			_newTorrents = append(_newTorrents, t)
+			newTorrents = append(newTorrents, t) // <-- FIXED: Use newTorrents
 		}
 	}
 
