@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/service"
 	"html/template"
 	"net/http"
@@ -23,7 +22,7 @@ func New() *WebDav {
 		ready:    make(chan struct{}),
 	}
 	for name, c := range svc.Debrid.Caches {
-		h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name)))
+		h := NewHandler(name, c, c.GetLogger())
 		w.Handlers = append(w.Handlers, h)
 	}
 	return w

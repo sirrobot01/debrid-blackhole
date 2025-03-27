@@ -164,6 +164,7 @@ func (r *Repair) preRunChecks() error {
 		if len(r.deb.Caches) == 0 {
 			return fmt.Errorf("no caches found")
 		}
+		return nil
 	}
 
 	// Check if zurg url is reachable
@@ -195,10 +196,9 @@ func (r *Repair) AddJob(arrsNames []string, mediaIDs []string, autoProcess, recu
 	job.Recurrent = recurrent
 	r.reset(job)
 	r.Jobs[key] = job
-	go r.saveToFile()
+	r.saveToFile()
 	go func() {
 		if err := r.repair(job); err != nil {
-			r.logger.Error().Err(err).Msg("Error running repair")
 			r.logger.Error().Err(err).Msg("Error running repair")
 			job.FailedAt = time.Now()
 			job.Error = err.Error()
@@ -453,9 +453,10 @@ func (r *Repair) isMediaAccessible(m arr.Content) bool {
 	}
 	firstFile := files[0]
 	r.logger.Debug().Msgf("Checking parent directory for %s", firstFile.Path)
-	if _, err := os.Stat(firstFile.Path); os.IsNotExist(err) {
-		return false
-	}
+	//if _, err := os.Stat(firstFile.Path); os.IsNotExist(err) {
+	//	r.logger.Debug().Msgf("Parent directory not accessible for %s", firstFile.Path)
+	//	return false
+	//}
 	// Check symlink parent directory
 	symlinkPath := getSymlinkTarget(firstFile.Path)
 
@@ -597,6 +598,7 @@ func (r *Repair) getWebdavBrokenFiles(media arr.Content) []arr.ContentFile {
 			if mountPath == "" {
 				continue
 			}
+
 			if filepath.Clean(mountPath) == filepath.Clean(dir) {
 				debridName = client.GetName()
 				break
@@ -615,7 +617,8 @@ func (r *Repair) getWebdavBrokenFiles(media arr.Content) []arr.ContentFile {
 		torrentName := filepath.Clean(filepath.Base(torrentPath))
 		torrent := cache.GetTorrentByName(torrentName)
 		if torrent == nil {
-			r.logger.Debug().Msgf("No torrent found for %s. Skipping", torrentName)
+			r.logger.Debug().Msgf("Torrent not found for %s. Marking as broken", torrentName)
+			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
 		files := make([]string, 0)
@@ -774,5 +777,5 @@ func (r *Repair) DeleteJobs(ids []string) {
 			}
 		}
 	}
-	go r.saveToFile()
+	r.saveToFile()
 }

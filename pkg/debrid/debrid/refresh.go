@@ -1,10 +1,12 @@
 package debrid
 
 import (
+	"context"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
 	"os"
@@ -12,7 +14,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -148,20 +149,28 @@ func (c *Cache) refreshTorrents() {
 	}
 	c.logger.Info().Msgf("Found %d new torrents", len(newTorrents))
 
-	// No need for a complex sync process, just add the new torrents
-	wg := sync.WaitGroup{}
-	wg.Add(len(newTorrents))
+	g, ctx := errgroup.WithContext(context.Background())
 	for _, t := range newTorrents {
-		// ProcessTorrent is concurrent safe
-		go func() {
-			defer wg.Done()
-			if err := c.ProcessTorrent(t, true); err != nil {
-				c.logger.Info().Err(err).Msg("Failed to process torrent")
+		t := t
+		g.Go(func() error {
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
 
-		}()
+			if err := c.ProcessTorrent(t, true); err != nil {
+				return err
+			}
+			return nil
+		})
 	}
-	wg.Wait()
+
+	if err := g.Wait(); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to process new torrents")
+	}
+
 }
 
 func (c *Cache) RefreshRclone() error {

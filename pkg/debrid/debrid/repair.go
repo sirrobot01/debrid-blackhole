@@ -41,22 +41,15 @@ func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
 			break
 		} else {
 			// Check if file.Link not in the downloadLink Cache
-			if _, ok := c.downloadLinks.Load(f.Link); !ok {
-				// File not in cache
-				// Check link
-				if err := c.client.CheckLink(f.Link); err != nil {
-					if errors.Is(err, request.ErrLinkBroken) {
-						isBroken = true
-						break
-					} else {
-						// This might just be a temporary error
-					}
+			if err := c.client.CheckLink(f.Link); err != nil {
+				if errors.Is(err, request.ErrLinkBroken) {
+					isBroken = true
+					break
 				} else {
-					// Generate a new download link?
+					// This might just be a temporary error
 				}
 			} else {
-				// Link is in cache
-				// We might skip checking for now, it seems rd removes uncached links
+				// Generate a new download link?
 			}
 		}
 	}

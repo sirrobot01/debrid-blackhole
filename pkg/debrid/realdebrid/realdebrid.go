@@ -445,34 +445,19 @@ func (r *RealDebrid) GetTorrents() ([]*types.Torrent, error) {
 	}
 
 	// Prepare for concurrent fetching
-	var wg sync.WaitGroup
-	var mu sync.Mutex
 	var fetchError error
 
 	// Calculate how many more requests we need
 	batchCount := (remaining + limit - 1) / limit // ceiling division
 
 	for i := 1; i <= batchCount; i++ {
-		wg.Add(1)
-		go func(batchOffset int) {
-			defer wg.Done()
-
-			_, batch, err := r.getTorrents(batchOffset, limit)
-			if err != nil {
-				mu.Lock()
-				fetchError = err
-				mu.Unlock()
-				return
-			}
-
-			mu.Lock()
-			allTorrents = append(allTorrents, batch...)
-			mu.Unlock()
-		}(i * limit)
+		_, batch, err := r.getTorrents(i*limit, limit)
+		if err != nil {
+			fetchError = err
+			continue
+		}
+		allTorrents = append(allTorrents, batch...)
 	}
-
-	// Wait for all fetches to complete
-	wg.Wait()
 
 	if fetchError != nil {
 		return nil, fetchError
