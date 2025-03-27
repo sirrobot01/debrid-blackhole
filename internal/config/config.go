@@ -25,13 +25,8 @@ type Debrid struct {
 	CheckCached      bool   `json:"check_cached"`
 	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
 
-	// Webdav
-	UseWebdav                    bool   `json:"use_webdav"`
-	TorrentRefreshInterval       string `json:"torrent_refresh_interval"`
-	DownloadLinksRefreshInterval string `json:"downloads_refresh_interval"`
-	TorrentRefreshWorkers        int    `json:"torrent_refresh_workers"`
-	WebDavFolderNaming           string `json:"webdav_folder_naming"`
-	AutoExpireLinksAfter         string `json:"auto_expire_links_after"`
+	UseWebDav bool `json:"use_webdav"`
+	WebDav
 }
 
 type Proxy struct {
@@ -134,6 +129,10 @@ func (c *Config) loadConfig() error {
 
 	if c.Debrid.Name != "" {
 		c.Debrids = append(c.Debrids, c.Debrid)
+	}
+
+	for i, debrid := range c.Debrids {
+		c.Debrids[i] = c.GetDebridWebDav(debrid)
 	}
 
 	if len(c.AllowedExt) == 0 {
@@ -313,17 +312,22 @@ func (c *Config) NeedsSetup() bool {
 }
 
 func (c *Config) GetDebridWebDav(d Debrid) Debrid {
-	if d.TorrentRefreshInterval == "" {
-		d.TorrentRefreshInterval = cmp.Or(c.WebDav.TorrentsRefreshInterval, "15s") // 15 seconds
+
+	if !d.UseWebDav {
+		return d
 	}
-	if d.DownloadLinksRefreshInterval == "" {
+
+	if d.TorrentsRefreshInterval == "" {
+		d.TorrentsRefreshInterval = cmp.Or(c.WebDav.TorrentsRefreshInterval, "15s") // 15 seconds
+	}
+	if d.WebDav.DownloadLinksRefreshInterval == "" {
 		d.DownloadLinksRefreshInterval = cmp.Or(c.WebDav.DownloadLinksRefreshInterval, "40m") // 40 minutes
 	}
-	if d.TorrentRefreshWorkers == 0 {
-		d.TorrentRefreshWorkers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
+	if d.Workers == 0 {
+		d.Workers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
 	}
-	if d.WebDavFolderNaming == "" {
-		d.WebDavFolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
+	if d.FolderNaming == "" {
+		d.FolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
 	}
 	if d.AutoExpireLinksAfter == "" {
 		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "24h")

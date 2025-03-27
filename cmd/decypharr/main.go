@@ -3,7 +3,6 @@ package decypharr
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
@@ -15,25 +14,11 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/pkg/webdav"
 	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
 	"os"
-	"runtime"
 	"runtime/debug"
 	"strconv"
 	"sync"
 	"syscall"
-	"time"
 )
-
-func monitorGoroutines(interval time.Duration, _log zerolog.Logger) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			_log.Debug().Msgf("Current goroutines: %d", runtime.NumGoroutine())
-		}
-	}
-}
 
 func Start(ctx context.Context) error {
 
@@ -120,11 +105,6 @@ func Start(ctx context.Context) error {
 			return nil // Not propagating repair errors to terminate the app
 		})
 	}
-
-	safeGo(func() error {
-		monitorGoroutines(1*time.Minute, _log)
-		return nil
-	})
 
 	go func() {
 		wg.Wait()

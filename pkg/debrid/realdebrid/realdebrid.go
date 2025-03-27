@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type RealDebrid struct {
@@ -178,6 +179,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	t.Links = data.Links
 	t.MountPath = r.MountPath
 	t.Debrid = r.Name
+	t.Added = data.Added
 	t.Files = getTorrentFiles(t, data, false) // Get selected files
 	return nil
 }
@@ -422,6 +424,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 			InfoHash:         t.Hash,
 			Debrid:           r.Name,
 			MountPath:        r.MountPath,
+			Added:            t.Added.Format(time.RFC3339),
 		})
 	}
 	return totalItems, torrents, nil

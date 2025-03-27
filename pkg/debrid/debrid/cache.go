@@ -39,7 +39,7 @@ type PropfindResponse struct {
 
 type CachedTorrent struct {
 	*types.Torrent
-	LastRead   time.Time `json:"last_read"`
+	AddedOn    time.Time `json:"added_on"`
 	IsComplete bool      `json:"is_complete"`
 }
 
@@ -86,7 +86,7 @@ type Cache struct {
 
 func NewCache(dc config.Debrid, client types.Client) *Cache {
 	cfg := config.GetConfig()
-	torrentRefreshInterval, err := time.ParseDuration(dc.TorrentRefreshInterval)
+	torrentRefreshInterval, err := time.ParseDuration(dc.TorrentsRefreshInterval)
 	if err != nil {
 		torrentRefreshInterval = time.Second * 15
 	}
@@ -109,7 +109,7 @@ func NewCache(dc config.Debrid, client types.Client) *Cache {
 		torrentRefreshInterval:       torrentRefreshInterval,
 		downloadLinksRefreshInterval: downloadLinksRefreshInterval,
 		PropfindResp:                 xsync.NewMapOf[string, PropfindResponse](),
-		folderNaming:                 WebDavFolderNaming(dc.WebDavFolderNaming),
+		folderNaming:                 WebDavFolderNaming(dc.FolderNaming),
 		autoExpiresLinksAfter:        autoExpiresLinksAfter,
 		repairsInProgress:            xsync.NewMapOf[string, bool](),
 		saveSemaphore:                make(chan struct{}, 10),
@@ -201,6 +201,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		return torrents, fmt.Errorf("failed to read cache directory: %w", err)
 	}
 
+	now := time.Now()
 	for _, file := range files {
 		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
 			continue
@@ -232,7 +233,11 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 					linkStore[f.Link] = true
 				}
 			}
-
+			addedOn, err := time.Parse(time.RFC3339, ct.Added)
+			if err != nil {
+				addedOn = now
+			}
+			ct.AddedOn = addedOn
 			ct.IsComplete = true
 			torrents[ct.Id] = &ct
 		}
@@ -447,10 +452,15 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 			return fmt.Errorf("failed to update torrent: %w", err)
 		}
 	}
+
+	addedOn, err := time.Parse(time.RFC3339, t.Added)
+	if err != nil {
+		addedOn = time.Now()
+	}
 	ct := &CachedTorrent{
 		Torrent:    t,
-		LastRead:   time.Now(),
 		IsComplete: len(t.Files) > 0,
+		AddedOn:    addedOn,
 	}
 	c.setTorrent(ct)
 
@@ -487,25 +497,27 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
+			// This code is commented iut due to the fact that if a torrent link is uncached, it's likely that we can't redownload it again
+			// Do not attempt to repair the torrent if the hoster is unavailable
 			// Check link here??
-			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
-			if err := c.repairTorrent(ct); err != nil {
-				c.logger.Error().Err(err).Msgf("Failed to trigger repair for %s", ct.Name)
-				return ""
-			}
-			// Generate download link for the file then
-			f := ct.Files[filename]
-			downloadLink, _ = c.client.GetDownloadLink(ct.Torrent, &f)
-			f.DownloadLink = downloadLink
-			file.Generated = time.Now()
-			ct.Files[filename] = f
-			c.updateDownloadLink(file.Link, downloadLink)
-
-			go func() {
-				go c.setTorrent(ct)
-			}()
-
-			return downloadLink // Gets download link in the next pass
+			//c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
+			//if err := c.repairTorrent(ct); err != nil {
+			//	c.logger.Error().Err(err).Msgf("Failed to trigger repair for %s", ct.Name)
+			//	return ""
+			//}
+			//// Generate download link for the file then
+			//f := ct.Files[filename]
+			//downloadLink, _ = c.client.GetDownloadLink(ct.Torrent, &f)
+			//f.DownloadLink = downloadLink
+			//file.Generated = time.Now()
+			//ct.Files[filename] = f
+			//c.updateDownloadLink(file.Link, downloadLink)
+			//
+			//go func() {
+			//	go c.setTorrent(ct)
+			//}()
+			//
+			//return downloadLink // Gets download link in the next pass
 		}
 
 		c.logger.Debug().Err(err).Msgf("Failed to get download link for :%s", file.Link)
@@ -537,10 +549,14 @@ func (c *Cache) AddTorrent(t *types.Torrent) error {
 			return fmt.Errorf("failed to update torrent: %w", err)
 		}
 	}
+	addedOn, err := time.Parse(time.RFC3339, t.Added)
+	if err != nil {
+		addedOn = time.Now()
+	}
 	ct := &CachedTorrent{
 		Torrent:    t,
-		LastRead:   time.Now(),
 		IsComplete: len(t.Files) > 0,
+		AddedOn:    addedOn,
 	}
 	c.setTorrent(ct)
 	c.refreshListings()

@@ -116,6 +116,8 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 		metadataOnly = true
 	}
 
+	now := time.Now()
+
 	// Fast path optimization with a map lookup instead of string comparisons
 	switch name {
 	case rootDir:
@@ -125,6 +127,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 			children:     h.getParentFiles(),
 			name:         "/",
 			metadataOnly: metadataOnly,
+			modTime:      now,
 		}, nil
 	case path.Join(rootDir, "version.txt"):
 		return &File{
@@ -134,6 +137,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 			name:         "version.txt",
 			size:         int64(len("v1.0.0")),
 			metadataOnly: metadataOnly,
+			modTime:      now,
 		}, nil
 	}
 
@@ -152,6 +156,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 			name:         folderName,
 			size:         0,
 			metadataOnly: metadataOnly,
+			modTime:      now,
 		}, nil
 	}
 
@@ -177,6 +182,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 				name:         cachedTorrent.Name,
 				size:         cachedTorrent.Size,
 				metadataOnly: metadataOnly,
+				modTime:      cachedTorrent.AddedOn,
 			}, nil
 		}
 
@@ -192,6 +198,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 				size:         file.Size,
 				link:         file.Link,
 				metadataOnly: metadataOnly,
+				modTime:      cachedTorrent.AddedOn,
 			}
 			return fi, nil
 		}
@@ -457,7 +464,12 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 	}
 
 	// Parse and execute template
-	tmpl, err := template.New("directory").Parse(directoryTemplate)
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int {
+			return a + b
+		},
+	}
+	tmpl, err := template.New("directory").Funcs(funcMap).Parse(directoryTemplate)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Failed to parse directory template")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

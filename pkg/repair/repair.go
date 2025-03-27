@@ -218,6 +218,8 @@ func (r *Repair) repair(job *Job) error {
 	// Create a new error group with context
 	g, ctx := errgroup.WithContext(context.Background())
 
+	g.SetLimit(4)
+
 	// Use a mutex to protect concurrent access to brokenItems
 	var mu sync.Mutex
 	brokenItems := map[string][]arr.ContentFile{}
@@ -397,7 +399,7 @@ func (r *Repair) repairArr(j *Job, _arr string, tmdbId string) ([]arr.ContentFil
 	g, ctx := errgroup.WithContext(context.Background())
 
 	// Limit concurrent goroutines
-	g.SetLimit(runtime.NumCPU() * 4)
+	g.SetLimit(10)
 
 	// Mutex for brokenItems
 	var mu sync.Mutex

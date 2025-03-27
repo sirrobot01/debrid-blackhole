@@ -38,25 +38,25 @@ func (c *Cache) refreshListings() {
 	} else {
 		return
 	}
-	// Copy the current torrents to avoid concurrent issues
-	torrents := make([]string, 0, c.torrentsNames.Size())
+	// COpy the torrents to a string|time map
+	torrentsTime := make(map[string]time.Time, c.torrents.Size())
+	torrents := make([]string, 0, c.torrents.Size())
 	c.torrentsNames.Range(func(key string, value *CachedTorrent) bool {
+		torrentsTime[key] = value.AddedOn
 		torrents = append(torrents, key)
 		return true
 	})
 
-	sort.Slice(torrents, func(i, j int) bool {
-		return torrents[i] < torrents[j]
-	})
+	// Sort the torrents by name
+	sort.Strings(torrents)
 
 	files := make([]os.FileInfo, 0, len(torrents))
-	now := time.Now()
 	for _, t := range torrents {
 		files = append(files, &fileInfo{
 			name:    t,
 			size:    0,
 			mode:    0755 | os.ModeDir,
-			modTime: now,
+			modTime: torrentsTime[t],
 			isDir:   true,
 		})
 	}
@@ -219,10 +219,13 @@ func (c *Cache) refreshTorrent(t *CachedTorrent) *CachedTorrent {
 	if len(t.Files) == 0 {
 		return nil
 	}
-
+	addedOn, err := time.Parse(time.RFC3339, _torrent.Added)
+	if err != nil {
+		addedOn = time.Now()
+	}
 	ct := &CachedTorrent{
 		Torrent:    _torrent,
-		LastRead:   time.Now(),
+		AddedOn:    addedOn,
 		IsComplete: len(t.Files) > 0,
 	}
 	c.setTorrent(ct)

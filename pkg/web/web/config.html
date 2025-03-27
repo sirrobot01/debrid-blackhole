@@ -11,7 +11,7 @@
                         <div class="row">
                             <div class="col-md-6">
                             <div class="form-group">
-                                <label for="qbitDebug">Log Level</label>
+                                <label for="log-level">Log Level</label>
                                 <select class="form-select" name="log_level" id="log-level" disabled>
                                     <option value="info">Info</option>
                                     <option value="debug">Debug</option>
@@ -86,13 +86,13 @@
                     </div>
                     <!-- Debrid Configuration -->
                     <div class="section mb-5">
-                        <h5 class="border-bottom pb-2">Debrid Configuration</h5>
+                        <h5 class="border-bottom pb-2">Debrids</h5>
                         <div id="debridConfigs"></div>
                     </div>
 
                     <!-- QBitTorrent Configuration -->
                     <div class="section mb-5">
-                        <h5 class="border-bottom pb-2">QBitTorrent Configuration</h5>
+                        <h5 class="border-bottom pb-2">QBitTorrent</h5>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Username</label>
@@ -114,12 +114,16 @@
                                 <label class="form-label">Refresh Interval (seconds)</label>
                                 <input type="number" class="form-control" name="qbit.refresh_interval">
                             </div>
+                            <div class="col-md-6 mb-3">
+                                <input type="checkbox" disabled class="form-check-input" name="qbit.skip_pre_cache">
+                                <label class="form-check-label">Skip Pre-Cache On Download(This caches a tiny part of your file to speed up import)</label>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Arr Configurations -->
                     <div class="section mb-5">
-                        <h5 class="border-bottom pb-2">Arr Configurations</h5>
+                        <h5 class="border-bottom pb-2">Arrs</h5>
                         <div id="arrConfigs"></div>
                     </div>
 
@@ -142,6 +146,10 @@
                                 <label class="form-check-label" for="repairEnabled">Enable Repair</label>
                             </div>
                             <div class="form-check me-3 d-inline-block">
+                                <input type="checkbox" disabled class="form-check-input" name="repair.use_webdav" id="repairUseWebdav">
+                                <label class="form-check-label" for="repairUseWebdav">Use Webdav</label>
+                            </div>
+                            <div class="form-check me-3 d-inline-block">
                                 <input type="checkbox" disabled class="form-check-input" name="repair.run_on_start" id="repairOnStart">
                                 <label class="form-check-label" for="repairOnStart">Run on Start</label>
                             </div>
@@ -159,7 +167,7 @@
         // Templates for dynamic elements
         const debridTemplate = (index) => `
         <div class="config-item position-relative mb-3 p-3 border rounded">
-            <div class="row">
+            <div class="row mb-2">
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Name</label>
                     <input type="text" disabled class="form-control" name="debrid[${index}].name" required>
@@ -189,6 +197,47 @@
                         <input type="checkbox" disabled class="form-check-input" name="debrid[${index}].check_cached">
                         <label class="form-check-label">Check Cached</label>
                     </div>
+                </div>
+            </div>
+            <div class="row mt-3 webdav-${index} d-none">
+                <h6 class="pb-2">Webdav</h6>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Torrents Refresh Interval</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].torrents_refresh_interval" placeholder="15s" required>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Download Links Refresh Interval</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].download_links_refresh_interval" placeholder="24h" required>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Expire Links After</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].auto_expire_links_after" placeholder="24h" required>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Folder Naming Structure</label>
+                    <select class="form-select" name="debrid[${index}].folder_naming"  disabled>
+                        <option value="filename">File name</option>
+                        <option value="filename_no_ext">File name with No Ext</option>
+                        <option value="original">Original name</option>
+                        <option value="original_no_ext">Original name with No Ext</option>
+                        <option value="id">Use ID</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Number of Workers</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].workers" required placeholder="e.g., 20">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Rclone RC URL</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].rc_url" placeholder="e.g., http://localhost:9990">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Rclone RC User</label>
+                    <input type="text" disabled class="form-control" name="debrid[${index}].rc_user">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Rclone RC Password</label>
+                    <input type="password" disabled class="form-control" name="debrid[${index}].rc_pass">
                 </div>
             </div>
         </div>
@@ -360,16 +409,37 @@
                 container.insertAdjacentHTML('beforeend', debridTemplate(debridCount));
 
                 if (data) {
-                    Object.entries(data).forEach(([key, value]) => {
-                        const input = container.querySelector(`[name="debrid[${debridCount}].${key}"]`);
-                        if (input) {
-                            if (input.type === 'checkbox') {
-                                input.checked = value;
-                            } else {
-                                input.value = value;
-                            }
+
+                    if (data.use_webdav) {
+                        let _webCfg = container.querySelector(`.webdav-${debridCount}`);
+                        if (_webCfg) {
+                            _webCfg.classList.remove('d-none');
                         }
-                    });
+                    }
+
+                    function setFieldValues(obj, prefix) {
+                        Object.entries(obj).forEach(([key, value]) => {
+                            const fieldName = prefix ? `${prefix}.${key}` : key;
+
+                            // If value is an object and not null, recursively process nested fields
+                            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                                setFieldValues(value, fieldName);
+                            } else {
+                                // Handle leaf values (actual form fields)
+                                const input = container.querySelector(`[name="debrid[${debridCount}].${fieldName}"]`);
+                                if (input) {
+                                    if (input.type === 'checkbox') {
+                                        input.checked = value;
+                                    } else {
+                                        input.value = value;
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Start processing with the root object
+                    setFieldValues(data, '');
                 }
 
                 debridCount++;

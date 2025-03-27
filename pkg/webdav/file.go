@@ -31,6 +31,8 @@ type File struct {
 	fileId    string
 	torrentId string
 
+	modTime time.Time
+
 	size         int64
 	offset       int64
 	isDir        bool
@@ -176,7 +178,7 @@ func (f *File) Stat() (os.FileInfo, error) {
 			name:    f.name,
 			size:    0,
 			mode:    0755 | os.ModeDir,
-			modTime: time.Now(),
+			modTime: f.modTime,
 			isDir:   true,
 		}, nil
 	}
@@ -185,7 +187,7 @@ func (f *File) Stat() (os.FileInfo, error) {
 		name:    f.name,
 		size:    f.size,
 		mode:    0644,
-		modTime: time.Now(),
+		modTime: f.modTime,
 		isDir:   false,
 	}, nil
 }

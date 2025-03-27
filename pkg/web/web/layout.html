@@ -117,6 +117,18 @@
             background-color: rgba(128, 128, 128, 0.2);
         }
     </style>
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-bs-theme', savedTheme);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-bs-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-bs-theme', 'light');
+            }
+        })();
+    </script>
 </head>
 <body>
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
@@ -149,7 +161,12 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {{if eq .Page "config"}}active{{end}}" href="/config">
-                    <i class="bi bi-gear me-1"></i>Config
+                    <i class="bi bi-gear me-1"></i>Settings
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/webdav" target="_blank">
+                        <i class="bi bi-cloud me-1"></i>WebDAV
                     </a>
                 </li>
                 <li class="nav-item">

@@ -18,7 +18,7 @@ func (r *Repair) clean(job *Job) error {
 	mu := sync.Mutex{}
 
 	// Limit concurrent goroutines
-	g.SetLimit(runtime.NumCPU() * 4)
+	g.SetLimit(10)
 
 	for _, a := range job.Arrs {
 		a := a // Capture range variable
