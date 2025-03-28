@@ -1,13 +1,12 @@
 package qbit
 
 import (
-	"crypto/tls"
 	"fmt"
 	"github.com/cavaliergopher/grab/v3"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -92,16 +91,9 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 		}
 		q.UpdateTorrentMin(torrent, debridTorrent)
 	}
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		Proxy:           http.ProxyFromEnvironment,
-	}
 	client := &grab.Client{
-		UserAgent: "qBitTorrent",
-		HTTPClient: &http.Client{
-			Transport: tr,
-		},
+		UserAgent:  "qBitTorrent",
+		HTTPClient: request.New(request.WithTimeout(0)),
 	}
 	for _, file := range debridTorrent.Files {
 		if file.DownloadLink == "" {

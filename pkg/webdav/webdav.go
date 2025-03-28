@@ -69,7 +69,7 @@ func (wd *WebDav) Start(ctx context.Context) error {
 		wg.Add(1)
 		go func(h *Handler) {
 			defer wg.Done()
-			if err := h.cache.Start(); err != nil {
+			if err := h.cache.Start(ctx); err != nil {
 				select {
 				case errChan <- err:
 				default:

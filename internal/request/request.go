@@ -3,7 +3,6 @@ package request
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/goccy/go-json"
@@ -67,9 +66,16 @@ func (c *Client) WithMaxRetries(retries int) *Client {
 }
 
 // WithTimeout sets the request timeout
-func (c *Client) WithTimeout(timeout time.Duration) *Client {
-	c.timeout = timeout
-	return c
+func WithTimeout(timeout time.Duration) ClientOption {
+	return func(c *Client) {
+		c.timeout = timeout
+	}
+}
+
+func WithRedirectPolicy(policy func(req *http.Request, via []*http.Request) error) ClientOption {
+	return func(c *Client) {
+		c.client.CheckRedirect = policy
+	}
 }
 
 // WithRateLimiter sets a rate limiter
@@ -84,14 +90,19 @@ func (c *Client) WithHeaders(headers map[string]string) *Client {
 	return c
 }
 
+func (c *Client) SetHeader(key, value string) {
+	c.headers[key] = value
+}
+
 func (c *Client) WithLogger(logger zerolog.Logger) *Client {
 	c.logger = logger
 	return c
 }
 
-func (c *Client) WithTransport(transport *http.Transport) *Client {
-	c.client.Transport = transport
-	return c
+func WithTransport(transport *http.Transport) ClientOption {
+	return func(c *Client) {
+		c.client.Transport = transport
+	}
 }
 
 // WithRetryableStatus adds status codes that should trigger a retry
@@ -126,15 +137,6 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("reading request body: %w", err)
 		}
 		req.Body.Close()
-	}
-
-	// Apply timeout to the request context if not already present
-	if c.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx := req.Context()
-		ctx, cancel = context.WithTimeout(ctx, c.timeout)
-		defer cancel()
-		req = req.WithContext(ctx)
 	}
 
 	backoff := time.Millisecond * 500
@@ -226,6 +228,15 @@ func (c *Client) MakeRequest(req *http.Request) ([]byte, error) {
 	return bodyBytes, nil
 }
 
+func (c *Client) Get(url string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating GET request: %w", err)
+	}
+
+	return c.Do(req)
+}
+
 // New creates a new HTTP client with the specified options
 func New(options ...ClientOption) *Client {
 	client := &Client{
@@ -238,7 +249,8 @@ func New(options ...ClientOption) *Client {
 			http.StatusServiceUnavailable:  true,
 			http.StatusGatewayTimeout:      true,
 		},
-		logger: logger.NewLogger("request"),
+		logger:  logger.NewLogger("request"),
+		timeout: 60 * time.Second,
 	}
 
 	// Apply options

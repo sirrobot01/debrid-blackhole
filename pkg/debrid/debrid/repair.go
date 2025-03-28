@@ -42,7 +42,7 @@ func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
 		} else {
 			// Check if file.Link not in the downloadLink Cache
 			if err := c.client.CheckLink(f.Link); err != nil {
-				if errors.Is(err, request.ErrLinkBroken) {
+				if errors.Is(err, request.HosterUnavailableError) {
 					isBroken = true
 					break
 				} else {

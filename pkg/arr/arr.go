@@ -2,13 +2,13 @@ package arr
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +32,7 @@ type Arr struct {
 	Cleanup          bool   `json:"cleanup"`
 	SkipRepair       bool   `json:"skip_repair"`
 	DownloadUncached *bool  `json:"download_uncached"`
-	client           *http.Client
+	client           *request.Client
 }
 
 func New(name, host, token string, cleanup, skipRepair bool, downloadUncached *bool) *Arr {
@@ -44,12 +44,7 @@ func New(name, host, token string, cleanup, skipRepair bool, downloadUncached *b
 		Cleanup:          cleanup,
 		SkipRepair:       skipRepair,
 		DownloadUncached: downloadUncached,
-		client: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				Proxy:           http.ProxyFromEnvironment,
-			},
-		},
+		client:           request.New(),
 	}
 }
 
@@ -77,12 +72,7 @@ func (a *Arr) Request(method, endpoint string, payload interface{}) (*http.Respo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-Key", a.Token)
 	if a.client == nil {
-		a.client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				Proxy:           http.ProxyFromEnvironment,
-			},
-		}
+		a.client = request.New()
 	}
 
 	var resp *http.Response
@@ -178,4 +168,22 @@ func (as *Storage) GetAll() []*Arr {
 		}
 	}
 	return arrs
+}
+
+func (a *Arr) Refresh() error {
+	payload := struct {
+		Name string `json:"name"`
+	}{
+		Name: "RefreshMonitoredDownloads",
+	}
+
+	resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
+	if err == nil && resp != nil {
+		statusOk := strconv.Itoa(resp.StatusCode)[0] == '2'
+		if statusOk {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("failed to refresh: %v", err)
 }

@@ -21,6 +21,7 @@ type DebridLink struct {
 	Name             string
 	Host             string `json:"host"`
 	APIKey           string
+	ExtraAPIKeys     []string
 	DownloadUncached bool
 	client           *request.Client
 
@@ -260,8 +261,14 @@ func (dl *DebridLink) GetDownloadUncached() bool {
 
 func New(dc config.Debrid) *DebridLink {
 	rl := request.ParseRateLimit(dc.RateLimit)
+	apiKeys := strings.Split(dc.APIKey, ",")
+	extraKeys := make([]string, 0)
+	if len(apiKeys) > 1 {
+		extraKeys = apiKeys[1:]
+	}
+	mainKey := apiKeys[0]
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
+		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
 		"Content-Type":  "application/json",
 	}
 	_log := logger.NewLogger(dc.Name)
@@ -271,7 +278,8 @@ func New(dc config.Debrid) *DebridLink {
 	return &DebridLink{
 		Name:             "debridlink",
 		Host:             dc.Host,
-		APIKey:           dc.APIKey,
+		APIKey:           mainKey,
+		ExtraAPIKeys:     extraKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,

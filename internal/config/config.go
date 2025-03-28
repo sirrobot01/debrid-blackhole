@@ -64,6 +64,7 @@ type Repair struct {
 	ZurgURL     string `json:"zurg_url"`
 	AutoProcess bool   `json:"auto_process"`
 	UseWebDav   bool   `json:"use_webdav"`
+	Workers     int    `json:"workers"`
 }
 
 type Auth struct {

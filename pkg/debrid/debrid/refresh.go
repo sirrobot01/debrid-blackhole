@@ -1,12 +1,10 @@
 package debrid
 
 import (
-	"context"
 	"fmt"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
 	"os"
@@ -14,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,7 +61,8 @@ func (c *Cache) refreshListings() {
 	}
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
-	c.resetPropfindResponse()
+	//c.resetPropfindResponse()
+	_ = c.RefreshXml()
 	if err := c.RefreshRclone(); err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
 	}
@@ -136,7 +136,7 @@ func (c *Cache) refreshTorrents() {
 	newTorrents := make([]*types.Torrent, 0)
 	for _, t := range _newTorrents {
 		if !slices.Contains(deletedTorrents, t.Id) {
-			newTorrents = append(newTorrents, t) // <-- FIXED: Use newTorrents
+			newTorrents = append(newTorrents, t)
 		}
 	}
 
@@ -149,28 +149,40 @@ func (c *Cache) refreshTorrents() {
 	}
 	c.logger.Info().Msgf("Found %d new torrents", len(newTorrents))
 
-	g, ctx := errgroup.WithContext(context.Background())
+	workChan := make(chan *types.Torrent, min(100, len(newTorrents)))
+	errChan := make(chan error, len(newTorrents))
+	var wg sync.WaitGroup
+
+	for i := 0; i < c.workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range workChan {
+				select {
+				case <-c.ctx.Done():
+					return
+				default:
+				}
+				if err := c.ProcessTorrent(t, true); err != nil {
+					c.logger.Debug().Err(err).Msgf("Failed to process new torrent %s", t.Id)
+					errChan <- err
+				}
+			}
+		}()
+	}
+
 	for _, t := range newTorrents {
-		t := t
-		g.Go(func() error {
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			if err := c.ProcessTorrent(t, true); err != nil {
-				return err
-			}
-			return nil
-		})
+		select {
+		case <-c.ctx.Done():
+			break
+		default:
+			workChan <- t
+		}
 	}
+	close(workChan)
+	wg.Wait()
 
-	if err := g.Wait(); err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to process new torrents")
-	}
-
+	c.logger.Debug().Msgf("Processed %d new torrents", len(newTorrents))
 }
 
 func (c *Cache) RefreshRclone() error {

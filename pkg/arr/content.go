@@ -61,28 +61,34 @@ func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
+		var ct Content
 		var seriesFiles []seriesFile
-		if err = json.NewDecoder(resp.Body).Decode(&seriesFiles); err != nil {
-			continue
-		}
-		ct := Content{
-			Title: d.Title,
-			Id:    d.Id,
-		}
+		episodeFileIDMap := make(map[int]int)
+		func() {
+			defer resp.Body.Close()
+			if err = json.NewDecoder(resp.Body).Decode(&seriesFiles); err != nil {
+				return
+			}
+			ct = Content{
+				Title: d.Title,
+				Id:    d.Id,
+			}
+		}()
 		resp, err = a.Request(http.MethodGet, fmt.Sprintf("api/v3/episode?seriesId=%d", d.Id), nil)
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
-		var episodes []episode
-		if err = json.NewDecoder(resp.Body).Decode(&episodes); err != nil {
-			continue
-		}
-		episodeFileIDMap := make(map[int]int)
-		for _, e := range episodes {
-			episodeFileIDMap[e.EpisodeFileID] = e.Id
-		}
+		func() {
+			defer resp.Body.Close()
+			var episodes []episode
+			if err = json.NewDecoder(resp.Body).Decode(&episodes); err != nil {
+				return
+			}
+
+			for _, e := range episodes {
+				episodeFileIDMap[e.EpisodeFileID] = e.Id
+			}
+		}()
 		files := make([]ContentFile, 0)
 		for _, file := range seriesFiles {
 			eId, ok := episodeFileIDMap[file.Id]
@@ -128,15 +134,16 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	}
 	contents := make([]Content, 0)
 	for _, movie := range movies {
+		if movie.MovieFile.Id == 0 || movie.MovieFile.Path == "" {
+			// Skip movies without files
+			continue
+		}
 		ct := Content{
 			Title: movie.Title,
 			Id:    movie.Id,
 		}
 		files := make([]ContentFile, 0)
-		if movie.MovieFile.Id == 0 || movie.MovieFile.Path == "" {
-			// Skip movies without files
-			continue
-		}
+
 		files = append(files, ContentFile{
 			FileId: movie.MovieFile.Id,
 			Id:     movie.Id,

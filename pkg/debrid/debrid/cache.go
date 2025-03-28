@@ -82,6 +82,7 @@ type Cache struct {
 	torrentsRefreshMu      sync.RWMutex // for refreshing torrents
 
 	saveSemaphore chan struct{}
+	ctx           context.Context
 }
 
 func NewCache(dc config.Debrid, client types.Client) *Cache {
@@ -98,13 +99,17 @@ func NewCache(dc config.Debrid, client types.Client) *Cache {
 	if err != nil {
 		autoExpiresLinksAfter = time.Hour * 24
 	}
+	workers := runtime.NumCPU() * 50
+	if dc.Workers > 0 {
+		workers = dc.Workers
+	}
 	return &Cache{
 		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
 		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
 		torrentsNames:                xsync.NewMapOf[string, *CachedTorrent](),
 		client:                       client,
 		logger:                       logger.NewLogger(fmt.Sprintf("%s-webdav", client.GetName())),
-		workers:                      200,
+		workers:                      workers,
 		downloadLinks:                xsync.NewMapOf[string, downloadLinkCache](),
 		torrentRefreshInterval:       torrentRefreshInterval,
 		downloadLinksRefreshInterval: downloadLinksRefreshInterval,
@@ -113,6 +118,7 @@ func NewCache(dc config.Debrid, client types.Client) *Cache {
 		autoExpiresLinksAfter:        autoExpiresLinksAfter,
 		repairsInProgress:            xsync.NewMapOf[string, bool](),
 		saveSemaphore:                make(chan struct{}, 10),
+		ctx:                          context.Background(),
 	}
 }
 
@@ -159,10 +165,11 @@ func (c *Cache) GetListing() []os.FileInfo {
 	return nil
 }
 
-func (c *Cache) Start() error {
+func (c *Cache) Start(ctx context.Context) error {
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
+	c.ctx = ctx
 
 	if err := c.Sync(); err != nil {
 		return fmt.Errorf("failed to sync cache: %w", err)
@@ -378,25 +385,19 @@ func (c *Cache) Sync() error {
 }
 
 func (c *Cache) sync(torrents []*types.Torrent) error {
-	// Calculate optimal workers - balance between CPU and IO
-	workers := runtime.NumCPU() * 50 // A more balanced multiplier for BadgerDB
 
 	// Create channels with appropriate buffering
-	workChan := make(chan *types.Torrent, workers*2)
+	workChan := make(chan *types.Torrent, min(1000, len(torrents)))
 
 	// Use an atomic counter for progress tracking
 	var processed int64
 	var errorCount int64
 
-	// Create a context with cancellation in case of critical errors
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// Create a wait group for workers
 	var wg sync.WaitGroup
 
 	// Start workers
-	for i := 0; i < workers; i++ {
+	for i := 0; i < c.workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -418,7 +419,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 						c.logger.Info().Msgf("Progress: %d/%d torrents processed", count, len(torrents))
 					}
 
-				case <-ctx.Done():
+				case <-c.ctx.Done():
 					return // Context cancelled, exit goroutine
 				}
 			}
@@ -430,7 +431,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 		select {
 		case workChan <- t:
 			// Work sent successfully
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			break // Context cancelled
 		}
 	}

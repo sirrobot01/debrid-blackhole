@@ -9,7 +9,10 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof" // registers pprof handlers
+	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 )
 
 func main() {
@@ -35,10 +38,14 @@ func main() {
 	if err := config.SetConfigPath(configPath); err != nil {
 		log.Fatal(err)
 	}
+
 	config.GetConfig()
-	ctx := context.Background()
+
+	// Create a context that's cancelled on SIGINT/SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	if err := decypharr.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
-
 }

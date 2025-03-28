@@ -16,6 +16,12 @@ var HosterUnavailableError = &HTTPError{
 	Code:       "hoster_unavailable",
 }
 
+var TrafficExceededError = &HTTPError{
+	StatusCode: 503,
+	Message:    "Traffic exceeded",
+	Code:       "traffic_exceeded",
+}
+
 var ErrLinkBroken = &HTTPError{
 	StatusCode: 404,
 	Message:    "File is unavailable",

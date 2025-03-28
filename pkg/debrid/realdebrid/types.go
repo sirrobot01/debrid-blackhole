@@ -134,3 +134,8 @@ type DownloadsResponse struct {
 	Streamable int       `json:"streamable"`
 	Generated  time.Time `json:"generated"`
 }
+
+type ErrorResponse struct {
+	Error     string `json:"error"`
+	ErrorCode int    `json:"error_code"`
+}

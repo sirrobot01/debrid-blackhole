@@ -21,9 +21,12 @@ import (
 )
 
 type RealDebrid struct {
-	Name             string
-	Host             string `json:"host"`
-	APIKey           string
+	Name string
+	Host string `json:"host"`
+
+	APIKey       string
+	ExtraAPIKeys []string // This is used for bandwidth
+
 	DownloadUncached bool
 	client           *request.Client
 
@@ -262,7 +265,6 @@ func (r *RealDebrid) DeleteTorrent(torrentId string) {
 }
 
 func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
-	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	filesCh := make(chan types.File, len(t.Files))
 	errCh := make(chan error, len(t.Files))
 
@@ -273,32 +275,13 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 		go func(file types.File) {
 			defer wg.Done()
 
-			payload := gourl.Values{"link": {file.Link}}
-			req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
+			link, err := r.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
 			}
 
-			resp, err := r.client.Do(req)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if resp.StatusCode == http.StatusServiceUnavailable {
-				errCh <- request.HosterUnavailableError
-				return
-			}
-			defer resp.Body.Close()
-			b, err := io.ReadAll(resp.Body)
-
-			var data UnrestrictResponse
-			if err = json.Unmarshal(b, &data); err != nil {
-				errCh <- err
-				return
-			}
-
-			file.DownloadLink = data.Download
+			file.DownloadLink = link
 			filesCh <- file
 		}(f)
 	}
@@ -337,12 +320,12 @@ func (r *RealDebrid) CheckLink(link string) error {
 		return err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return request.ErrLinkBroken // File has been removed
+		return request.HosterUnavailableError // File has been removed
 	}
 	return nil
 }
 
-func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/unrestrict/link/", r.Host)
 	payload := gourl.Values{
 		"link": {file.Link},
@@ -352,8 +335,25 @@ func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode == http.StatusServiceUnavailable {
-		return "", request.HosterUnavailableError
+	if resp.StatusCode != http.StatusOK {
+		// Read the response body to get the error message
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+		var data ErrorResponse
+		if err = json.Unmarshal(b, &data); err != nil {
+			return "", err
+		}
+		switch data.ErrorCode {
+		case 23:
+			return "", request.TrafficExceededError
+		case 24:
+			return "", request.HosterUnavailableError // Link has been nerfed
+		default:
+			return "", fmt.Errorf("realdebrid API error: %d", resp.StatusCode)
+		}
+
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -365,6 +365,23 @@ func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string
 		return "", err
 	}
 	return data.Download, nil
+
+}
+
+func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+	link, err := r._getDownloadLink(file)
+	if err == nil {
+		return link, nil
+	}
+	for _, key := range r.ExtraAPIKeys {
+		r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", key))
+		if link, err := r._getDownloadLink(file); err == nil {
+			return link, nil
+		}
+	}
+	// Reset to main API key
+	r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.APIKey))
+	return "", err
 }
 
 func (r *RealDebrid) GetCheckCached() bool {
@@ -431,7 +448,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 }
 
 func (r *RealDebrid) GetTorrents() ([]*types.Torrent, error) {
-	limit := 5000
+	limit := 1000
 
 	// Get first batch and total count
 	totalItems, firstBatch, err := r.getTorrents(0, limit)
@@ -472,7 +489,7 @@ func (r *RealDebrid) GetTorrents() ([]*types.Torrent, error) {
 func (r *RealDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
 	links := make(map[string]types.DownloadLinks)
 	offset := 0
-	limit := 5000
+	limit := 1000
 	for {
 		dl, err := r._getDownloads(offset, limit)
 		if err != nil {
@@ -538,8 +555,14 @@ func (r *RealDebrid) GetMountPath() string {
 
 func New(dc config.Debrid) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
+	apiKeys := strings.Split(dc.APIKey, ",")
+	extraKeys := make([]string, 0)
+	if len(apiKeys) > 1 {
+		extraKeys = apiKeys[1:]
+	}
+	mainKey := apiKeys[0]
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
+		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
 	}
 	_log := logger.NewLogger(dc.Name)
 	client := request.New().
@@ -550,7 +573,8 @@ func New(dc config.Debrid) *RealDebrid {
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,
-		APIKey:           dc.APIKey,
+		APIKey:           mainKey,
+		ExtraAPIKeys:     extraKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,

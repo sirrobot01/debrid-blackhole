@@ -10,6 +10,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"slices"
+	"strings"
 	"time"
 
 	"net/http"
@@ -22,6 +23,7 @@ type AllDebrid struct {
 	Name             string
 	Host             string `json:"host"`
 	APIKey           string
+	ExtraAPIKeys     []string
 	DownloadUncached bool
 	client           *request.Client
 
@@ -319,8 +321,14 @@ func (ad *AllDebrid) GetMountPath() string {
 
 func New(dc config.Debrid) *AllDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
+	apiKeys := strings.Split(dc.APIKey, ",")
+	extraKeys := make([]string, 0)
+	if len(apiKeys) > 1 {
+		extraKeys = apiKeys[1:]
+	}
+	mainKey := apiKeys[0]
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
+		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
 	}
 	_log := logger.NewLogger(dc.Name)
 	client := request.New().
@@ -329,7 +337,8 @@ func New(dc config.Debrid) *AllDebrid {
 	return &AllDebrid{
 		Name:             "alldebrid",
 		Host:             dc.Host,
-		APIKey:           dc.APIKey,
+		APIKey:           mainKey,
+		ExtraAPIKeys:     extraKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,

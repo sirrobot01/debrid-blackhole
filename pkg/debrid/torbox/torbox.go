@@ -26,12 +26,42 @@ type Torbox struct {
 	Name             string
 	Host             string `json:"host"`
 	APIKey           string
+	ExtraAPIKeys     []string
 	DownloadUncached bool
 	client           *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
 	CheckCached bool
+}
+
+func New(dc config.Debrid) *Torbox {
+	rl := request.ParseRateLimit(dc.RateLimit)
+	apiKeys := strings.Split(dc.APIKey, ",")
+	extraKeys := make([]string, 0)
+	if len(apiKeys) > 1 {
+		extraKeys = apiKeys[1:]
+	}
+	mainKey := apiKeys[0]
+	headers := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
+	}
+	_log := logger.NewLogger(dc.Name)
+	client := request.New().
+		WithHeaders(headers).
+		WithRateLimiter(rl).WithLogger(_log)
+
+	return &Torbox{
+		Name:             "torbox",
+		Host:             dc.Host,
+		APIKey:           mainKey,
+		ExtraAPIKeys:     extraKeys,
+		DownloadUncached: dc.DownloadUncached,
+		client:           client,
+		MountPath:        dc.Folder,
+		logger:           _log,
+		CheckCached:      dc.CheckCached,
+	}
 }
 
 func (tb *Torbox) GetName() string {
@@ -310,28 +340,6 @@ func (tb *Torbox) GetTorrents() ([]*types.Torrent, error) {
 
 func (tb *Torbox) GetDownloadUncached() bool {
 	return tb.DownloadUncached
-}
-
-func New(dc config.Debrid) *Torbox {
-	rl := request.ParseRateLimit(dc.RateLimit)
-	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
-	}
-	_log := logger.NewLogger(dc.Name)
-	client := request.New().
-		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log)
-
-	return &Torbox{
-		Name:             "torbox",
-		Host:             dc.Host,
-		APIKey:           dc.APIKey,
-		DownloadUncached: dc.DownloadUncached,
-		client:           client,
-		MountPath:        dc.Folder,
-		logger:           _log,
-		CheckCached:      dc.CheckCached,
-	}
 }
 
 func (tb *Torbox) GetDownloads() (map[string]types.DownloadLinks, error) {

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"io"
 	"log"
 	"net/http"
@@ -198,20 +199,21 @@ func GetInfohashFromURL(url string) (string, error) {
 	var magnetLink string
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 3 {
-				return fmt.Errorf("stopped after 3 redirects")
-			}
-			if strings.HasPrefix(req.URL.String(), "magnet:") {
-				// Stop the redirect chain
-				magnetLink = req.URL.String()
-				return http.ErrUseLastResponse
-			}
-			return nil
-		},
+	redirectFunc := func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("stopped after 3 redirects")
+		}
+		if strings.HasPrefix(req.URL.String(), "magnet:") {
+			// Stop the redirect chain
+			magnetLink = req.URL.String()
+			return http.ErrUseLastResponse
+		}
+		return nil
 	}
+	client := request.New(
+		request.WithTimeout(30*time.Second),
+		request.WithRedirectPolicy(redirectFunc),
+	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
