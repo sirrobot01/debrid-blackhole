@@ -1,0 +1,20 @@
+services:
+  decypharr:
+    image: cy01/blackhole:latest # or cy01/blackhole:beta
+    container_name: decypharr
+    ports:
+      - "8282:8282" # qBittorrent
+      - "8181:8181" # Proxy
+    user: "1000:1000"
+    volumes:
+      - /mnt/:/mnt
+      - ~/plex/configs/decypharr/:/app # config.json must be in this directory
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - QBIT_PORT=8282
+      - PORT=8181
+    restart: unless-stopped
+    depends_on:
+      - rclone # If you are using rclone with docker

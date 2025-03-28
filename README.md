@@ -15,7 +15,7 @@ This is an implementation of QbitTorrent with a **Multiple Debrid service suppor
 - [Connecting to Sonarr/Radarr](#connecting-to-sonarrradarr)
 - [Sample Config](#sample-config)
 - [Config Notes](#config-notes)
-  - [Log Level](#log-level)
+  - [Log Level]()
   - [Max Cache Size](#max-cache-size)
   - [Debrid Config](#debrid-config)
   - [Proxy Config](#proxy-config)
@@ -23,19 +23,19 @@ This is an implementation of QbitTorrent with a **Multiple Debrid service suppor
   - [Arrs Config](#arrs-config)
 - [Proxy](#proxy)
 - [Repair Worker](#repair-worker)
+- [WebDAV](#webdav)
+  - [WebDAV Config](#webdav-config)
 - [Changelog](#changelog)
 - [TODO](#todo)
 
 ### Features
 
-- Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, etc)
+- Mock Qbittorent API that supports the Arrs(Sonarr, Radarr, Lidarr etc)
 - A Full-fledged UI for managing torrents
 - Proxy support for the Arrs
-- Real Debrid Support
-- Torbox Support
-- Debrid Link Support
-- Multi-Debrid Providers support
-- Repair Worker for missing files (**BETA**)
+- Multiple Debrid providers
+- WebDAV server support for each debrid provider
+- Repair Worker for missing files
 
 The proxy is useful for filtering out un-cached Debrid torrents
 
@@ -61,7 +61,8 @@ You can use either hub.docker.com or ghcr.io to pull the image. The image is ava
 - `latest`: The latest stable release
 - `beta`: The latest beta release
 - `vX.Y.Z`: A specific version (e.g `v0.1.0`)
-- `nightly`: The latest nightly build. This is highly unstable
+- `nightly`: The latest nightly build. This is usually unstable
+- `experimental`: The latest experimental build. This is highly unstable!!
 
 
 ```yaml
@@ -139,7 +140,7 @@ This is the default config file. You can create a `config.json` file in the root
   "qbittorrent": {
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
-    "categories": ["sonarr", "radarr"],
+    "categories": ["sonarr", "radarr"]
   },
   "repair": {
     "enabled": false,
@@ -164,22 +165,27 @@ Full config are [here](doc/config.full.json)
 - The `allowed_file_types` key is an array of allowed file types that can be downloaded. By default, all movie, tv show and music file types are allowed
 - The `use_auth` is used to enable basic authentication for the UI. The default value is `false`
 - The `discord_webhook_url` is used to send notifications to discord
+- The `min_file_size` and `max_file_size` keys are used to set the minimum and maximum file size of the torrents that can be downloaded. The default value is `0` and `0` respectively. No min/max file size will be set
 
 ##### Debrid Config
 - The `debrids` key is an array of debrid providers
 - The `name` key is the name of the debrid provider
 - The `host` key is the API endpoint of the debrid provider
-- The `api_key` key is the API key of the debrid provider
+- The `api_key` key is the API key of the debrid provider. This can be comma separated for multiple API keys
 - The `folder` key is the folder where your debrid folder is mounted(webdav, rclone, zurg etc). e.g `data/realdebrid/torrents/`, `/media/remote/alldebrid/magnets/`
 - The `rate_limit` key is the rate limit of the debrid provider(null by default)
 - The `download_uncached` bool key is used to download uncached torrents(disabled by default)
 - The `check_cached` bool key is used to check if the torrent is cached(disabled by default)
+- The `use_webdav` is used to create a webdav server for the debrid Read the [webdav](#webdav) section for more information
 
-##### Repair Config (**BETA**)
+- The `use_webdav` bool key is used to create a webdav server for the debrid provider. The default value is `false`. Read the [webdav](#webdav) section for more information
+
+##### Repair Config
 The `repair` key is used to enable the repair worker
 - The `enabled` key is used to enable the repair worker
 - The `interval` key is the interval in either minutes, seconds, hours, days. Use any of this format, e.g 12:00, 5:00, 1h, 1d, 1m, 1s.
 - The `run_on_start` key is used to run the repair worker on start
+- The `use_webdav` key is used to enable the webdav server for the repair worker. The default value is `false`. Read the [webdav](#webdav) section for more information
 - The `zurg_url` is the url of the zurg server. Typically `http://localhost:9999` or `http://zurg:9999`
 - The `auto_process` is used to automatically process the repair worker. This will delete broken symlinks and re-search for missing files
 
@@ -217,6 +223,28 @@ The repair worker is a simple worker that checks for missing files in the Arrs(S
 - Search for broken symlinks/files
 - Search for missing files
 - Search for deleted/unreadable files
+
+
+### WebDAV
+
+URL: `http://localhost:8282/webdav` or `http://<ip>:8080/webdav`
+The webdav server is a simple webdav server that allows you to access your debrid files over the web.While most(if not all) debrid providers have their own webdav server, this is useful for fast access to your debrid files. The webdav server is disabled by default. You can disable it by setting the `use_webdav` key to `false` in the config file of the debrid provider. The webdav server listens on port `8080` by default.
+##### WebDAV Config
+You can set per-debrid provider webdav config in the debrid provider config or globally in the config file using "webdav" key
+
+You can use the webdav server with media players like Infuse, VidHub or mount it locally with Rclone(See [here](https://rclone.org/webdav/)). A sample rclone file is [here](doc/rclone.conf)
+
+- The `torrents_refresh_interval` key is used to set the interval in to refresh the torrents. The default value is `15s`. E,g `15s`, `1m`, `1h`, `1d`
+- The `download_links_refresh_interval` key is used to set the interval in to refresh the download links. The default value is `40m`. E,g `15s`, `1m`, `1h`, `1d`
+- The `workers` key is the maximum number of goroutines for the webdav server. The default value is your CPU cores x 50. This is useful for limiting the number of concurrent requests to the webdav server.
+  - The `folder_naming` key is used to set the folder naming convention. The default value is `original_no_ext`. The available options are:
+    - `original_no_ext`: The original file name without the extension
+    - `original`: The original file name with the extension
+    - `filename`: The torrent filename
+    - `filename_no_ext`: The torrent filename without the extension
+    - `id`: The torrent id
+- The `auto_expire_links_after` Download links are deemed old after this time. The default value is `3d`. E,g `15s`, `1m`, `1h`, `1d`
+- The `rc_url`, `rc_user`, `rc_pass` keys are used to trigger a vfs refresh on your rclone. This speeds up the process of getting the files. This is useful for rclone users. T
 
 
 ### Proxy

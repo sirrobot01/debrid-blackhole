@@ -1,15 +1,6 @@
 {
   "debrids": [
     {
-      "name": "torbox",
-      "host": "https://api.torbox.app/v1",
-      "api_key": "torbox_api_key",
-      "folder": "/mnt/remote/torbox/torrents/",
-      "rate_limit": "250/minute",
-      "download_uncached": false,
-      "check_cached": true
-    },
-    {
       "name": "realdebrid",
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
@@ -17,7 +8,19 @@
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false,
-      "use_webdav": true
+      "use_webdav": true,
+      "torrents_refresh_interval": "15s",
+      "folder_naming": "original_no_ext",
+      "auto_expire_links_after": "3d"
+    },
+    {
+      "name": "torbox",
+      "host": "https://api.torbox.app/v1",
+      "api_key": "torbox_api_key",
+      "folder": "/mnt/remote/torbox/torrents/",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": true
     },
     {
       "name": "debridlink",

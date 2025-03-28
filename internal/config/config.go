@@ -7,6 +7,7 @@ import (
 	"github.com/goccy/go-json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -89,7 +90,6 @@ type WebDav struct {
 
 type Config struct {
 	LogLevel       string      `json:"log_level"`
-	Debrid         Debrid      `json:"debrid"`
 	Debrids        []Debrid    `json:"debrids"`
 	Proxy          Proxy       `json:"proxy"`
 	MaxCacheSize   int         `json:"max_cache_size"`
@@ -128,12 +128,8 @@ func (c *Config) loadConfig() error {
 		return fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
-	if c.Debrid.Name != "" {
-		c.Debrids = append(c.Debrids, c.Debrid)
-	}
-
 	for i, debrid := range c.Debrids {
-		c.Debrids[i] = c.GetDebridWebDav(debrid)
+		c.Debrids[i] = c.updateDebrid(debrid)
 	}
 
 	if len(c.AllowedExt) == 0 {
@@ -312,7 +308,17 @@ func (c *Config) NeedsSetup() bool {
 	return false
 }
 
-func (c *Config) GetDebridWebDav(d Debrid) Debrid {
+func (c *Config) updateDebrid(d Debrid) Debrid {
+
+	apiKeys := strings.Split(d.APIKey, ",")
+	newApiKeys := make([]string, 0, len(apiKeys))
+	for _, key := range apiKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			newApiKeys = append(newApiKeys, key)
+		}
+	}
+	d.APIKey = strings.Join(newApiKeys, ",")
 
 	if !d.UseWebDav {
 		return d
@@ -331,7 +337,7 @@ func (c *Config) GetDebridWebDav(d Debrid) Debrid {
 		d.FolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
 	}
 	if d.AutoExpireLinksAfter == "" {
-		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "24h")
+		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "3d") // 2 days
 	}
 	return d
 }
