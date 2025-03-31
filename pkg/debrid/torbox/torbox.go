@@ -199,7 +199,7 @@ func (tb *Torbox) UpdateTorrent(t *types.Torrent) error {
 	cfg := config.GetConfig()
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
-		if utils.IsSampleFile(fileName) {
+		if utils.IsSampleFile(f.AbsolutePath) {
 			// Skip sample files
 			continue
 		}

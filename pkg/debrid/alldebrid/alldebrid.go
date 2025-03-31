@@ -113,7 +113,7 @@ func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]
 			fileName := filepath.Base(f.Name)
 
 			// Skip sample files
-			if utils.IsSampleFile(fileName) {
+			if utils.IsSampleFile(f.Name) {
 				continue
 			}
 			if !cfg.IsAllowedFile(fileName) {

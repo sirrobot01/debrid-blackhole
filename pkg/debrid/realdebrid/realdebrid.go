@@ -51,14 +51,13 @@ func getTorrentFiles(t *types.Torrent, data TorrentInfo, validate bool) map[stri
 	cfg := config.GetConfig()
 	idx := 0
 	for _, f := range data.Files {
-
 		name := filepath.Base(f.Path)
-
 		if validate {
-			if utils.RegexMatch(utils.SAMPLEMATCH, name) {
+			if utils.IsSampleFile(f.Path) {
 				// Skip sample files
 				continue
 			}
+
 			if !cfg.IsAllowedFile(name) {
 				continue
 			}
