@@ -119,7 +119,7 @@ func (c *Cache) submitForRepair(repairType RepairType, torrentId, fileName strin
 	}
 }
 
-func (c *Cache) reinsertTorrent(torrent *types.Torrent) error {
+func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	// Check if Magnet is not empty, if empty, reconstruct the magnet
 	if _, ok := c.repairsInProgress.Load(torrent.Id); ok {
 		return fmt.Errorf("repair already in progress for torrent %s", torrent.Id)

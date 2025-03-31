@@ -483,7 +483,10 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 	for _, file := range t.Files {
 		if file.Link == "" {
 			c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s. Triggering a reinsert", t.Id, file.Name)
-			c.reinsertTorrent(t)
+			if err := c.ReInsertTorrent(t); err != nil {
+				c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
+				return fmt.Errorf("failed to reinsert torrent: %w", err)
+			}
 		}
 	}
 
