@@ -92,7 +92,10 @@ func (r *Repair) clean(job *Job) error {
 		return fmt.Errorf("client not found")
 	}
 	for _, id := range dangling {
-		client.DeleteTorrent(id)
+		err := client.DeleteTorrent(id)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

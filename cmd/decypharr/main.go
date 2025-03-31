@@ -37,8 +37,7 @@ func Start(ctx context.Context) error {
 
 	_log := logger.GetDefaultLogger()
 
-	_log.Info().Msgf("Version: %s", version.GetInfo().String())
-	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())
+	_log.Info().Msgf("Starting Decypher (%s)", version.GetInfo().String())
 	_log.Info().Msgf("Default Log Level: %s", cfg.LogLevel)
 
 	svc := service.New()

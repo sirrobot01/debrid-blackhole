@@ -7,6 +7,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"slices"
+	"time"
 )
 
 func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
@@ -58,8 +59,6 @@ func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
 
 func (c *Cache) repairWorker() {
 	// This watches a channel for torrents to repair
-	c.logger.Info().Msg("Starting repair worker")
-
 	for {
 		select {
 		case req := <-c.repairChan:
@@ -80,24 +79,30 @@ func (c *Cache) repairWorker() {
 				continue
 			}
 
-			// Check if torrent is broken
-			if c.IsTorrentBroken(cachedTorrent, nil) {
-				c.logger.Info().Str("torrentId", torrentId).Msg("Repairing broken torrent")
-				// Repair torrent
-				if err := c.repairTorrent(cachedTorrent); err != nil {
-					c.logger.Error().Err(err).Str("torrentId", torrentId).Msg("Failed to repair torrent")
-				} else {
-					c.logger.Info().Str("torrentId", torrentId).Msg("Torrent repaired")
+			switch req.Type {
+			case RepairTypeReinsert:
+				c.logger.Debug().Str("torrentId", torrentId).Msg("Reinserting torrent")
+				c.reInsertTorrent(cachedTorrent)
+			case RepairTypeDelete:
+				c.logger.Debug().Str("torrentId", torrentId).Msg("Deleting torrent")
+				if err := c.DeleteTorrent(torrentId); err != nil {
+					c.logger.Error().Err(err).Str("torrentId", torrentId).Msg("Failed to delete torrent")
+					continue
 				}
-			} else {
-				c.logger.Debug().Str("torrentId", torrentId).Msg("Torrent is not broken")
+
 			}
 			c.repairsInProgress.Delete(torrentId)
 		}
 	}
 }
 
-func (c *Cache) SubmitForRepair(torrentId, fileName string) {
+func (c *Cache) reInsertTorrent(t *CachedTorrent) {
+	// Reinsert the torrent into the cache
+	c.torrents.Store(t.Id, t)
+	c.logger.Debug().Str("torrentId", t.Id).Msg("Reinserted torrent into cache")
+}
+
+func (c *Cache) submitForRepair(repairType RepairType, torrentId, fileName string) {
 	// Submitting a torrent for repair.Not used yet
 
 	// Check if already in progress before even submitting
@@ -114,17 +119,14 @@ func (c *Cache) SubmitForRepair(torrentId, fileName string) {
 	}
 }
 
-func (c *Cache) repairTorrent(t *CachedTorrent) error {
+func (c *Cache) reinsertTorrent(torrent *types.Torrent) error {
 	// Check if Magnet is not empty, if empty, reconstruct the magnet
-
-	if _, inProgress := c.repairsInProgress.Load(t.Id); inProgress {
-		c.logger.Debug().Str("torrentID", t.Id).Msg("Repair already in progress")
-		return nil
+	if _, ok := c.repairsInProgress.Load(torrent.Id); ok {
+		return fmt.Errorf("repair already in progress for torrent %s", torrent.Id)
 	}
 
-	torrent := t.Torrent
 	if torrent.Magnet == nil {
-		torrent.Magnet = utils.ConstructMagnet(t.InfoHash, t.Name)
+		torrent.Magnet = utils.ConstructMagnet(torrent.InfoHash, torrent.Name)
 	}
 
 	oldID := torrent.Id
@@ -146,12 +148,21 @@ func (c *Cache) repairTorrent(t *CachedTorrent) error {
 		return fmt.Errorf("failed to check status: %w", err)
 	}
 
-	c.client.DeleteTorrent(oldID) // delete the old torrent
-	c.DeleteTorrent(oldID)        // Remove from listings
+	if err := c.DeleteTorrent(oldID); err != nil {
+		return fmt.Errorf("failed to delete old torrent: %w", err)
+	}
 
 	// Update the torrent in the cache
-	t.Torrent = torrent
-	c.setTorrent(t)
+	addedOn, err := time.Parse(time.RFC3339, torrent.Added)
+	if err != nil {
+		addedOn = time.Now()
+	}
+	ct := &CachedTorrent{
+		Torrent:    torrent,
+		IsComplete: len(torrent.Files) > 0,
+		AddedOn:    addedOn,
+	}
+	c.setTorrent(ct)
 	c.refreshListings()
 
 	c.repairsInProgress.Delete(oldID)

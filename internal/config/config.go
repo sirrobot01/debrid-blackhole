@@ -21,6 +21,7 @@ type Debrid struct {
 	Name             string `json:"name"`
 	Host             string `json:"host"`
 	APIKey           string `json:"api_key"`
+	DownloadAPIKeys  string `json:"download_api_keys"`
 	Folder           string `json:"folder"`
 	DownloadUncached bool   `json:"download_uncached"`
 	CheckCached      bool   `json:"check_cached"`
@@ -167,7 +168,7 @@ func validateDebrids(debrids []Debrid) error {
 			return errors.New("debrid folder is required")
 		}
 
-		// Check folder existence concurrently
+		// Check folder existence
 		//wg.Add(1)
 		//go func(folder string) {
 		//	defer wg.Done()
@@ -203,21 +204,9 @@ func validateQbitTorrent(config *QBitTorrent) error {
 
 func validateConfig(config *Config) error {
 	// Run validations concurrently
-	errChan := make(chan error, 2)
 
-	go func() {
-		errChan <- validateDebrids(config.Debrids)
-	}()
-
-	go func() {
-		errChan <- validateQbitTorrent(&config.QBitTorrent)
-	}()
-
-	// Check for errors
-	for i := 0; i < 2; i++ {
-		if err := <-errChan; err != nil {
-			return err
-		}
+	if err := validateDebrids(config.Debrids); err != nil {
+		return fmt.Errorf("debrids validation error: %w", err)
 	}
 
 	return nil
@@ -310,15 +299,15 @@ func (c *Config) NeedsSetup() bool {
 
 func (c *Config) updateDebrid(d Debrid) Debrid {
 
-	apiKeys := strings.Split(d.APIKey, ",")
-	newApiKeys := make([]string, 0, len(apiKeys))
-	for _, key := range apiKeys {
+	downloadAPIKeys := strings.Split(d.DownloadAPIKeys, ",")
+	newApiKeys := make([]string, 0, len(downloadAPIKeys))
+	for _, key := range downloadAPIKeys {
 		key = strings.TrimSpace(key)
 		if key != "" {
 			newApiKeys = append(newApiKeys, key)
 		}
 	}
-	d.APIKey = strings.Join(newApiKeys, ",")
+	d.DownloadAPIKeys = strings.Join(newApiKeys, ",")
 
 	if !d.UseWebDav {
 		return d

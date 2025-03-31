@@ -207,15 +207,14 @@ func (ad *AllDebrid) CheckStatus(torrent *types.Torrent, isSymlink bool) (*types
 	return torrent, nil
 }
 
-func (ad *AllDebrid) DeleteTorrent(torrentId string) {
+func (ad *AllDebrid) DeleteTorrent(torrentId string) error {
 	url := fmt.Sprintf("%s/magnet/delete?id=%s", ad.Host, torrentId)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	_, err := ad.client.MakeRequest(req)
-	if err == nil {
-		ad.logger.Info().Msgf("Torrent: %s deleted", torrentId)
-	} else {
-		ad.logger.Info().Msgf("Error deleting torrent: %s", err)
+	if _, err := ad.client.MakeRequest(req); err != nil {
+		return err
 	}
+	ad.logger.Info().Msgf("Torrent %s deleted from AD", torrentId)
+	return nil
 }
 
 func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {

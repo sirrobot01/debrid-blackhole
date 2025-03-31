@@ -8,6 +8,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"golang.org/x/net/webdav"
 	"html/template"
 	"io"
@@ -58,11 +59,11 @@ func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 	torrentName, filename := getName(rootDir, name)
 	cachedTorrent := h.cache.GetTorrentByName(torrentName)
 	if cachedTorrent == nil {
+		h.logger.Debug().Msgf("Torrent not found: %s", torrentName)
 		return os.ErrNotExist
 	}
 
 	if filename == "" {
-		h.cache.GetClient().DeleteTorrent(cachedTorrent.Torrent.Id)
 		h.cache.OnRemove(cachedTorrent.Id)
 		return nil
 	}
@@ -100,7 +101,8 @@ func (h *Handler) getParentFiles() []os.FileInfo {
 		}
 		if item == "version.txt" {
 			f.isDir = false
-			f.size = int64(len("v1.0.0"))
+			versionInfo := version.GetInfo().String()
+			f.size = int64(len(versionInfo))
 		}
 		rootFiles = append(rootFiles, f)
 	}
@@ -130,12 +132,13 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 			modTime:      now,
 		}, nil
 	case path.Join(rootDir, "version.txt"):
+		versionInfo := version.GetInfo().String()
 		return &File{
 			cache:        h.cache,
 			isDir:        false,
-			content:      []byte("v1.0.0"),
+			content:      []byte(versionInfo),
 			name:         "version.txt",
-			size:         int64(len("v1.0.0")),
+			size:         int64(len(versionInfo)),
 			metadataOnly: metadataOnly,
 			modTime:      now,
 		}, nil

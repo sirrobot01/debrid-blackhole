@@ -253,15 +253,14 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 	return t, nil
 }
 
-func (r *RealDebrid) DeleteTorrent(torrentId string) {
+func (r *RealDebrid) DeleteTorrent(torrentId string) error {
 	url := fmt.Sprintf("%s/torrents/delete/%s", r.Host, torrentId)
 	req, _ := http.NewRequest(http.MethodDelete, url, nil)
-	_, err := r.client.MakeRequest(req)
-	if err == nil {
-		r.logger.Info().Msgf("Torrent: %s deleted", torrentId)
-	} else {
-		r.logger.Info().Msgf("Error deleting torrent: %s", err)
+	if _, err := r.client.MakeRequest(req); err != nil {
+		return err
 	}
+	r.logger.Info().Msgf("Torrent: %s deleted from RD", torrentId)
+	return nil
 }
 
 func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
@@ -555,14 +554,13 @@ func (r *RealDebrid) GetMountPath() string {
 
 func New(dc config.Debrid) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
-	apiKeys := strings.Split(dc.APIKey, ",")
+	apiKeys := strings.Split(dc.DownloadAPIKeys, ",")
 	extraKeys := make([]string, 0)
 	if len(apiKeys) > 1 {
 		extraKeys = apiKeys[1:]
 	}
-	mainKey := apiKeys[0]
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
+		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	_log := logger.NewLogger(dc.Name)
 	client := request.New().
@@ -573,7 +571,7 @@ func New(dc config.Debrid) *RealDebrid {
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,
-		APIKey:           mainKey,
+		APIKey:           dc.APIKey,
 		ExtraAPIKeys:     extraKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,

@@ -270,6 +270,6 @@ func (c *Cache) refreshDownloadLinks() {
 		}
 	}
 
-	c.logger.Debug().Msgf("Refreshed %d download links", len(downloadLinks))
+	c.logger.Trace().Msgf("Refreshed %d download links", len(downloadLinks))
 
 }

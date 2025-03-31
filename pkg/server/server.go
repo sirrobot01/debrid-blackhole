@@ -45,7 +45,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.router.Get("/logs", s.getLogs)
 	s.router.Get("/stats", s.getStats)
 	port := fmt.Sprintf(":%s", cfg.QBitTorrent.Port)
-	s.logger.Info().Msgf("Starting server on %s", port)
+	s.logger.Info().Msgf("Server started on %s", port)
 	srv := &http.Server{
 		Addr:    port,
 		Handler: s.router,

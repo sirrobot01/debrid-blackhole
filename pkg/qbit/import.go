@@ -78,7 +78,9 @@ func (i *ImportRequest) Process(q *QBit) (err error) {
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
-			go dbClient.DeleteTorrent(debridTorrent.Id)
+			go func() {
+				_ = dbClient.DeleteTorrent(debridTorrent.Id)
+			}()
 		}
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")

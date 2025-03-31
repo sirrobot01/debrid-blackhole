@@ -14,7 +14,7 @@ func getName(rootDir, path string) (string, string) {
 	if len(parts) < 2 {
 		return "", ""
 	}
-	return parts[0], strings.Join(parts[1:], "/")
+	return parts[1], strings.Join(parts[2:], "/") // Note the change from [0] to [1]
 }
 
 func acceptsGzip(r *http.Request) bool {

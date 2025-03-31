@@ -21,7 +21,7 @@ func NewEngine() *Engine {
 		client := createDebridClient(dc)
 		logger := client.GetLogger()
 		if dc.UseWebDav {
-			caches[dc.Name] = NewCache(dc, client)
+			caches[dc.Name] = New(dc, client)
 			logger.Info().Msg("Debrid Service started with WebDAV")
 		} else {
 			logger.Info().Msg("Debrid Service started")

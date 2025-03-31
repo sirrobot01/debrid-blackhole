@@ -262,17 +262,16 @@ func (tb *Torbox) CheckStatus(torrent *types.Torrent, isSymlink bool) (*types.To
 	return torrent, nil
 }
 
-func (tb *Torbox) DeleteTorrent(torrentId string) {
+func (tb *Torbox) DeleteTorrent(torrentId string) error {
 	url := fmt.Sprintf("%s/api/torrents/controltorrent/%s", tb.Host, torrentId)
 	payload := map[string]string{"torrent_id": torrentId, "action": "Delete"}
 	jsonPayload, _ := json.Marshal(payload)
 	req, _ := http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(jsonPayload))
-	_, err := tb.client.MakeRequest(req)
-	if err == nil {
-		tb.logger.Info().Msgf("Torrent: %s deleted", torrentId)
-	} else {
-		tb.logger.Info().Msgf("Error deleting torrent: %s", err)
+	if _, err := tb.client.MakeRequest(req); err != nil {
+		return err
 	}
+	tb.logger.Info().Msgf("Torrent %s deleted from Torbox", torrentId)
+	return nil
 }
 
 func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {

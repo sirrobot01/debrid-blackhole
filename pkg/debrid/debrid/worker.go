@@ -4,7 +4,6 @@ import "time"
 
 func (c *Cache) Refresh() error {
 	// For now, we just want to refresh the listing and download links
-	c.logger.Info().Msg("Starting cache refresh workers")
 	go c.refreshDownloadLinksWorker()
 	go c.refreshTorrentsWorker()
 	return nil

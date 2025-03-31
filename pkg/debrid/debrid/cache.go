@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,7 +49,15 @@ type downloadLinkCache struct {
 	ExpiresAt time.Time
 }
 
+type RepairType string
+
+const (
+	RepairTypeReinsert RepairType = "reinsert"
+	RepairTypeDelete   RepairType = "delete"
+)
+
 type RepairRequest struct {
+	Type      RepairType
 	TorrentID string
 	Priority  int
 	FileName  string
@@ -85,7 +94,7 @@ type Cache struct {
 	ctx           context.Context
 }
 
-func NewCache(dc config.Debrid, client types.Client) *Cache {
+func New(dc config.Debrid, client types.Client) *Cache {
 	cfg := config.GetConfig()
 	torrentRefreshInterval, err := time.ParseDuration(dc.TorrentsRefreshInterval)
 	if err != nil {
@@ -120,6 +129,34 @@ func NewCache(dc config.Debrid, client types.Client) *Cache {
 		saveSemaphore:                make(chan struct{}, 10),
 		ctx:                          context.Background(),
 	}
+}
+
+func (c *Cache) Start(ctx context.Context) error {
+	if err := os.MkdirAll(c.dir, 0755); err != nil {
+		return fmt.Errorf("failed to create cache directory: %w", err)
+	}
+	c.ctx = ctx
+
+	if err := c.Sync(); err != nil {
+		return fmt.Errorf("failed to sync cache: %w", err)
+	}
+
+	// initial download links
+	go func() {
+		c.refreshDownloadLinks()
+	}()
+
+	go func() {
+		err := c.Refresh()
+		if err != nil {
+			c.logger.Error().Err(err).Msg("Failed to start cache refresh worker")
+		}
+	}()
+
+	c.repairChan = make(chan RepairRequest, 100)
+	go c.repairWorker()
+
+	return nil
 }
 
 func (c *Cache) GetTorrentFolder(torrent *types.Torrent) string {
@@ -165,34 +202,6 @@ func (c *Cache) GetListing() []os.FileInfo {
 	return nil
 }
 
-func (c *Cache) Start(ctx context.Context) error {
-	if err := os.MkdirAll(c.dir, 0755); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-	c.ctx = ctx
-
-	if err := c.Sync(); err != nil {
-		return fmt.Errorf("failed to sync cache: %w", err)
-	}
-
-	// initial download links
-	go func() {
-		c.refreshDownloadLinks()
-	}()
-
-	go func() {
-		err := c.Refresh()
-		if err != nil {
-			c.logger.Error().Err(err).Msg("Failed to start cache refresh worker")
-		}
-	}()
-
-	c.repairChan = make(chan RepairRequest, 100)
-	go c.repairWorker()
-
-	return nil
-}
-
 func (c *Cache) Close() error {
 	return nil
 }
@@ -226,27 +235,27 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 			c.logger.Debug().Err(err).Msgf("Failed to unmarshal file: %s", filePath)
 			continue
 		}
+		isComplete := true
 		if len(ct.Files) != 0 {
 			// We can assume the torrent is complete
 
-			// Make sure no file has a duplicate link
-			linkStore := make(map[string]bool)
 			for _, f := range ct.Files {
-				if _, ok := linkStore[f.Link]; ok {
-					// Duplicate link, refresh the torrent
-					ct = *c.refreshTorrent(&ct)
-					break
-				} else {
-					linkStore[f.Link] = true
+				if f.Link == "" {
+					c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s", ct.Id, f.Name)
+					isComplete = false
+					continue
 				}
 			}
-			addedOn, err := time.Parse(time.RFC3339, ct.Added)
-			if err != nil {
-				addedOn = now
+			if isComplete {
+				addedOn, err := time.Parse(time.RFC3339, ct.Added)
+				if err != nil {
+					addedOn = now
+				}
+				ct.AddedOn = addedOn
+				ct.IsComplete = true
+				torrents[ct.Id] = &ct
 			}
-			ct.AddedOn = addedOn
-			ct.IsComplete = true
-			torrents[ct.Id] = &ct
+
 		}
 	}
 
@@ -305,14 +314,26 @@ func (c *Cache) saveTorrent(ct *CachedTorrent) {
 
 	fileName := ct.Torrent.Id + ".json"
 	filePath := filepath.Join(c.dir, fileName)
-	tmpFile := filePath + ".tmp"
+
+	// Use a unique temporary filename for concurrent safety
+	tmpFile := filePath + ".tmp." + strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	f, err := os.Create(tmpFile)
 	if err != nil {
 		c.logger.Debug().Err(err).Msgf("Failed to create file: %s", tmpFile)
 		return
 	}
-	defer f.Close()
+
+	// Track if we've closed the file
+	fileClosed := false
+	defer func() {
+		// Only close if not already closed
+		if !fileClosed {
+			_ = f.Close()
+		}
+		// Clean up the temp file if it still exists and rename failed
+		_ = os.Remove(tmpFile)
+	}()
 
 	w := bufio.NewWriter(f)
 	if _, err := w.Write(data); err != nil {
@@ -322,12 +343,17 @@ func (c *Cache) saveTorrent(ct *CachedTorrent) {
 
 	if err := w.Flush(); err != nil {
 		c.logger.Debug().Err(err).Msgf("Failed to flush data: %s", tmpFile)
+		return
 	}
+
+	// Close the file before renaming
+	_ = f.Close()
+	fileClosed = true
 
 	if err := os.Rename(tmpFile, filePath); err != nil {
 		c.logger.Debug().Err(err).Msgf("Failed to rename file: %s", tmpFile)
+		return
 	}
-	return
 }
 
 func (c *Cache) Sync() error {
@@ -451,6 +477,13 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 	if len(t.Files) == 0 {
 		if err := c.client.UpdateTorrent(t); err != nil {
 			return fmt.Errorf("failed to update torrent: %w", err)
+		}
+	}
+	// Validate each file in the torrent
+	for _, file := range t.Files {
+		if file.Link == "" {
+			c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s. Triggering a reinsert", t.Id, file.Name)
+			c.reinsertTorrent(t)
 		}
 	}
 
@@ -586,15 +619,20 @@ func (c *Cache) GetClient() types.Client {
 	return c.client
 }
 
-func (c *Cache) DeleteTorrent(id string) {
+func (c *Cache) DeleteTorrent(id string) error {
 	c.logger.Info().Msgf("Deleting torrent %s", id)
 
 	if t, ok := c.torrents.Load(id); ok {
+		err := c.client.DeleteTorrent(id)
+		if err != nil {
+			return err
+		}
 		c.torrents.Delete(id)
 		c.torrentsNames.Delete(c.GetTorrentFolder(t.Torrent))
 		c.removeFromDB(id)
 		c.refreshListings()
 	}
+	return nil
 }
 
 func (c *Cache) DeleteTorrents(ids []string) {
@@ -618,8 +656,11 @@ func (c *Cache) removeFromDB(torrentId string) {
 
 func (c *Cache) OnRemove(torrentId string) {
 	c.logger.Debug().Msgf("OnRemove triggered for %s", torrentId)
-	c.DeleteTorrent(torrentId)
-	c.refreshListings()
+	err := c.DeleteTorrent(torrentId)
+	if err != nil {
+		c.logger.Error().Err(err).Msgf("Failed to delete torrent: %s", torrentId)
+		return
+	}
 }
 
 func (c *Cache) GetLogger() zerolog.Logger {

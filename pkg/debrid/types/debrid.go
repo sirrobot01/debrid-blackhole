@@ -9,7 +9,7 @@ type Client interface {
 	CheckStatus(tr *Torrent, isSymlink bool) (*Torrent, error)
 	GenerateDownloadLinks(tr *Torrent) error
 	GetDownloadLink(tr *Torrent, file *File) (string, error)
-	DeleteTorrent(torrentId string)
+	DeleteTorrent(torrentId string) error
 	IsAvailable(infohashes []string) map[string]bool
 	GetCheckCached() bool
 	GetDownloadUncached() bool
