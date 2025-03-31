@@ -626,10 +626,7 @@ func (c *Cache) DeleteTorrent(id string) error {
 	c.logger.Info().Msgf("Deleting torrent %s", id)
 
 	if t, ok := c.torrents.Load(id); ok {
-		err := c.client.DeleteTorrent(id)
-		if err != nil {
-			return err
-		}
+		_ = c.client.DeleteTorrent(id) // SKip error handling, we don't care if it fails
 		c.torrents.Delete(id)
 		c.torrentsNames.Delete(c.GetTorrentFolder(t.Torrent))
 		c.removeFromDB(id)

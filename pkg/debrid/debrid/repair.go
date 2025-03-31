@@ -131,6 +131,8 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 
 	oldID := torrent.Id
 
+	defer c.repairsInProgress.Delete(oldID)
+
 	// Submit the magnet to the debrid service
 	torrent.Id = ""
 	var err error
@@ -143,13 +145,23 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	if torrent == nil || torrent.Id == "" {
 		return fmt.Errorf("failed to submit magnet: empty torrent")
 	}
+	torrent.DownloadUncached = false // Set to false, avoid re-downloading
 	torrent, err = c.client.CheckStatus(torrent, true)
-	if err != nil {
+	if err != nil && torrent != nil {
+		// Torrent is likely in progress
+		// Delete the old and new torrent
+		_ = c.DeleteTorrent(oldID)
+		_ = c.DeleteTorrent(torrent.Id)
+
 		return fmt.Errorf("failed to check status: %w", err)
 	}
 
 	if err := c.DeleteTorrent(oldID); err != nil {
 		return fmt.Errorf("failed to delete old torrent: %w", err)
+	}
+
+	if torrent == nil {
+		return fmt.Errorf("failed to check status: empty torrent")
 	}
 
 	// Update the torrent in the cache
@@ -164,7 +176,5 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	}
 	c.setTorrent(ct)
 	c.refreshListings()
-
-	c.repairsInProgress.Delete(oldID)
 	return nil
 }
