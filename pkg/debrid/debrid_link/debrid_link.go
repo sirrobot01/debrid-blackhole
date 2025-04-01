@@ -129,7 +129,7 @@ func (dl *DebridLink) UpdateTorrent(t *types.Torrent) error {
 	t.Seeders = data.PeersConnected
 	t.Filename = name
 	t.OriginalFilename = name
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	for _, f := range data.Files {
 		if !cfg.IsSizeAllowed(f.Size) {
 			continue
@@ -235,6 +235,7 @@ func (dl *DebridLink) DeleteTorrent(torrentId string) error {
 }
 
 func (dl *DebridLink) GenerateDownloadLinks(t *types.Torrent) error {
+	// Download links are already generated
 	return nil
 }
 
@@ -270,10 +271,12 @@ func New(dc config.Debrid) *DebridLink {
 		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
 		"Content-Type":  "application/json",
 	}
-	_log := logger.NewLogger(dc.Name)
-	client := request.New().
-		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log)
+	_log := logger.New(dc.Name)
+	client := request.New(
+		request.WithHeaders(headers),
+		request.WithLogger(_log),
+		request.WithRateLimiter(rl),
+	)
 	return &DebridLink{
 		Name:             "debridlink",
 		Host:             dc.Host,
@@ -282,7 +285,7 @@ func New(dc config.Debrid) *DebridLink {
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name),
+		logger:           logger.New(dc.Name),
 		CheckCached:      dc.CheckCached,
 	}
 }
@@ -341,7 +344,7 @@ func (dl *DebridLink) getTorrents(page, perPage int) ([]*types.Torrent, error) {
 			Debrid:           dl.Name,
 			MountPath:        dl.MountPath,
 		}
-		cfg := config.GetConfig()
+		cfg := config.Get()
 		for _, f := range t.Files {
 			if !cfg.IsSizeAllowed(f.Size) {
 				continue

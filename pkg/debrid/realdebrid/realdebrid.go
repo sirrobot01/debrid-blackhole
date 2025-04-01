@@ -48,7 +48,7 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 // if validate is false, selected files will be returned
 func getTorrentFiles(t *types.Torrent, data TorrentInfo, validate bool) map[string]types.File {
 	files := make(map[string]types.File)
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	idx := 0
 	for _, f := range data.Files {
 		name := filepath.Base(f.Path)
@@ -267,9 +267,8 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	errCh := make(chan error, len(t.Files))
 
 	var wg sync.WaitGroup
-
+	wg.Add(len(t.Files))
 	for _, f := range t.Files {
-		wg.Add(1)
 		go func(file types.File) {
 			defer wg.Done()
 
@@ -446,7 +445,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 }
 
 func (r *RealDebrid) GetTorrents() ([]*types.Torrent, error) {
-	limit := 1000
+	limit := 5000
 
 	// Get first batch and total count
 	totalItems, firstBatch, err := r.getTorrents(0, limit)
@@ -561,12 +560,14 @@ func New(dc config.Debrid) *RealDebrid {
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
-	_log := logger.NewLogger(dc.Name)
-	client := request.New().
-		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log).
-		WithMaxRetries(5).
-		WithRetryableStatus(429)
+	_log := logger.New(dc.Name)
+	client := request.New(
+		request.WithHeaders(headers),
+		request.WithRateLimiter(rl),
+		request.WithLogger(_log),
+		request.WithMaxRetries(5),
+		request.WithRetryableStatus(429),
+	)
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,
@@ -575,7 +576,7 @@ func New(dc config.Debrid) *RealDebrid {
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name),
+		logger:           logger.New(dc.Name),
 		CheckCached:      dc.CheckCached,
 	}
 }

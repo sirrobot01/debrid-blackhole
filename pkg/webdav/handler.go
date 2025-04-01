@@ -56,19 +56,15 @@ func (h *Handler) RemoveAll(ctx context.Context, name string) error {
 		return os.ErrPermission
 	}
 
-	torrentName, filename := getName(rootDir, name)
+	torrentName, _ := getName(rootDir, name)
 	cachedTorrent := h.cache.GetTorrentByName(torrentName)
 	if cachedTorrent == nil {
 		h.logger.Debug().Msgf("Torrent not found: %s", torrentName)
-		return os.ErrNotExist
+		return nil // It's possible that the torrent was removed
 	}
 
-	if filename == "" {
-		h.cache.OnRemove(cachedTorrent.Id)
-		return nil
-	}
-
-	return os.ErrPermission
+	h.cache.OnRemove(cachedTorrent.Id)
+	return nil
 }
 
 // Rename implements webdav.FileSystem

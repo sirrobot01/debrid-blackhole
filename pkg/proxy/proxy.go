@@ -80,7 +80,7 @@ type Proxy struct {
 }
 
 func NewProxy() *Proxy {
-	cfg := config.GetConfig().Proxy
+	cfg := config.Get().Proxy
 	port := cmp.Or(os.Getenv("PORT"), cfg.Port, "8181")
 	return &Proxy{
 		port:       port,
@@ -88,7 +88,7 @@ func NewProxy() *Proxy {
 		username:   cfg.Username,
 		password:   cfg.Password,
 		cachedOnly: cfg.CachedOnly,
-		logger:     logger.NewLogger("proxy"),
+		logger:     logger.New("proxy"),
 	}
 }
 

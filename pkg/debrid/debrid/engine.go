@@ -12,7 +12,7 @@ type Engine struct {
 }
 
 func NewEngine() *Engine {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	clients := make(map[string]types.Client)
 
 	caches := make(map[string]*Cache)

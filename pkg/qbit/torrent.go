@@ -119,8 +119,9 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		if ok {
 			q.logger.Info().Msgf("Using internal webdav for %s", debridTorrent.Debrid)
 			// Use webdav to download the file
-			err := cache.AddTorrent(debridTorrent)
-			if err != nil {
+			if err := cache.AddTorrent(debridTorrent); err != nil {
+				q.logger.Error().Msgf("Error adding torrent to cache: %v", err)
+				q.MarkAsFailed(torrent)
 				return
 			}
 			rclonePath := filepath.Join(debridTorrent.MountPath, cache.GetTorrentFolder(debridTorrent))

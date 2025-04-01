@@ -62,7 +62,7 @@ type Handler struct {
 func New(qbit *qbit.QBit) *Handler {
 	return &Handler{
 		qbit:   qbit,
-		logger: logger.NewLogger("ui"),
+		logger: logger.New("ui"),
 	}
 }
 
@@ -93,7 +93,7 @@ func init() {
 func (ui *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if setup is needed
-		cfg := config.GetConfig()
+		cfg := config.Get()
 		if cfg.NeedsSetup() && r.URL.Path != "/setup" {
 			http.Redirect(w, r, "/setup", http.StatusSeeOther)
 			return
@@ -127,7 +127,7 @@ func (ui *Handler) verifyAuth(username, password string) bool {
 	if username == "" {
 		return false
 	}
-	auth := config.GetConfig().GetAuth()
+	auth := config.Get().GetAuth()
 	if auth == nil {
 		return false
 	}
@@ -187,7 +187,7 @@ func (ui *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ui *Handler) SetupHandler(w http.ResponseWriter, r *http.Request) {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	authCfg := cfg.GetAuth()
 
 	if !cfg.NeedsSetup() {
@@ -436,7 +436,7 @@ func (ui *Handler) handleDeleteTorrents(w http.ResponseWriter, r *http.Request) 
 }
 
 func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	arrCfgs := make([]config.Arr, 0)
 	svc := service.GetService()
 	for _, a := range svc.Arr.GetAll() {

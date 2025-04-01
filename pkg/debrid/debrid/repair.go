@@ -130,7 +130,6 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	}
 
 	oldID := torrent.Id
-
 	defer c.repairsInProgress.Delete(oldID)
 
 	// Submit the magnet to the debrid service
@@ -138,6 +137,8 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	var err error
 	torrent, err = c.client.SubmitMagnet(torrent)
 	if err != nil {
+		// Remove the old torrent from the cache and debrid service
+		_ = c.DeleteTorrent(oldID)
 		return fmt.Errorf("failed to submit magnet: %w", err)
 	}
 

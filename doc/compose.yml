@@ -16,5 +16,3 @@ services:
       - QBIT_PORT=8282
       - PORT=8181
     restart: unless-stopped
-    depends_on:
-      - rclone # If you are using rclone with docker

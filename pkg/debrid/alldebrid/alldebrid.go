@@ -9,14 +9,14 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
-	"slices"
-	"strings"
-	"time"
-
 	"net/http"
 	gourl "net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type AllDebrid struct {
@@ -30,6 +30,36 @@ type AllDebrid struct {
 	MountPath   string
 	logger      zerolog.Logger
 	CheckCached bool
+}
+
+func New(dc config.Debrid) *AllDebrid {
+	rl := request.ParseRateLimit(dc.RateLimit)
+	apiKeys := strings.Split(dc.APIKey, ",")
+	extraKeys := make([]string, 0)
+	if len(apiKeys) > 1 {
+		extraKeys = apiKeys[1:]
+	}
+	mainKey := apiKeys[0]
+	headers := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
+	}
+	_log := logger.New(dc.Name)
+	client := request.New(
+		request.WithHeaders(headers),
+		request.WithLogger(_log),
+		request.WithRateLimiter(rl),
+	)
+	return &AllDebrid{
+		Name:             "alldebrid",
+		Host:             dc.Host,
+		APIKey:           mainKey,
+		ExtraAPIKeys:     extraKeys,
+		DownloadUncached: dc.DownloadUncached,
+		client:           client,
+		MountPath:        dc.Folder,
+		logger:           logger.New(dc.Name),
+		CheckCached:      dc.CheckCached,
+	}
 }
 
 func (ad *AllDebrid) GetName() string {
@@ -89,7 +119,7 @@ func getAlldebridStatus(statusCode int) string {
 func flattenFiles(files []MagnetFile, parentPath string, index *int) map[string]types.File {
 	result := make(map[string]types.File)
 
-	cfg := config.GetConfig()
+	cfg := config.Get()
 
 	for _, f := range files {
 		currentPath := f.Name
@@ -218,26 +248,46 @@ func (ad *AllDebrid) DeleteTorrent(torrentId string) error {
 }
 
 func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
-	for _, file := range t.Files {
-		url := fmt.Sprintf("%s/link/unlock", ad.Host)
-		query := gourl.Values{}
-		query.Add("link", file.Link)
-		url += "?" + query.Encode()
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
-		resp, err := ad.client.MakeRequest(req)
-		if err != nil {
-			return err
-		}
-		var data DownloadLink
-		if err = json.Unmarshal(resp, &data); err != nil {
-			return err
-		}
-		link := data.Data.Link
-		file.DownloadLink = link
-		file.Generated = time.Now()
-		t.Files[file.Name] = file
+	filesCh := make(chan types.File, len(t.Files))
+	errCh := make(chan error, len(t.Files))
 
+	var wg sync.WaitGroup
+	wg.Add(len(t.Files))
+	for _, file := range t.Files {
+		go func(file types.File) {
+			defer wg.Done()
+			link, err := ad.GetDownloadLink(t, &file)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			file.DownloadLink = link
+			file.Generated = time.Now()
+			if link == "" {
+				errCh <- fmt.Errorf("error getting download links %w", err)
+				return
+			}
+			filesCh <- file
+		}(file)
 	}
+	go func() {
+		wg.Wait()
+		close(filesCh)
+		close(errCh)
+	}()
+	files := make(map[string]types.File, len(t.Files))
+	for file := range filesCh {
+		files[file.Name] = file
+	}
+
+	// Check for errors
+	for err := range errCh {
+		if err != nil {
+			return err // Return the first error encountered
+		}
+	}
+
+	t.Files = files
 	return nil
 }
 
@@ -316,32 +366,4 @@ func (ad *AllDebrid) CheckLink(link string) error {
 
 func (ad *AllDebrid) GetMountPath() string {
 	return ad.MountPath
-}
-
-func New(dc config.Debrid) *AllDebrid {
-	rl := request.ParseRateLimit(dc.RateLimit)
-	apiKeys := strings.Split(dc.APIKey, ",")
-	extraKeys := make([]string, 0)
-	if len(apiKeys) > 1 {
-		extraKeys = apiKeys[1:]
-	}
-	mainKey := apiKeys[0]
-	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
-	}
-	_log := logger.NewLogger(dc.Name)
-	client := request.New().
-		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log)
-	return &AllDebrid{
-		Name:             "alldebrid",
-		Host:             dc.Host,
-		APIKey:           mainKey,
-		ExtraAPIKeys:     extraKeys,
-		DownloadUncached: dc.DownloadUncached,
-		client:           client,
-		MountPath:        dc.Folder,
-		logger:           logger.NewLogger(dc.Name),
-		CheckCached:      dc.CheckCached,
-	}
 }

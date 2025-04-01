@@ -61,8 +61,7 @@ func (c *Cache) refreshListings() {
 	}
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
-	//c.resetPropfindResponse()
-	_ = c.RefreshXml()
+	_ = c.refreshXml()
 	if err := c.RefreshRclone(); err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
 	}
@@ -187,7 +186,7 @@ func (c *Cache) refreshTorrents() {
 
 func (c *Cache) RefreshRclone() error {
 	client := request.Default()
-	cfg := config.GetConfig().WebDav
+	cfg := config.Get().WebDav
 
 	if cfg.RcUrl == "" {
 		return nil

@@ -100,7 +100,7 @@
     "download_links_refresh_interval": "1h",
     "folder_naming": "original",
     "auto_expire_links_after": "24h",
-    "rc_url": "http://192.168.0.219:9990",
+    "rc_url": "http://your-ip-address:9990",
     "rc_user": "your_rclone_rc_user",
     "rc_pass": "your_rclone_rc_pass"
   }

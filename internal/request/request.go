@@ -60,9 +60,10 @@ type Client struct {
 }
 
 // WithMaxRetries sets the maximum number of retry attempts
-func (c *Client) WithMaxRetries(retries int) *Client {
-	c.maxRetries = retries
-	return c
+func WithMaxRetries(maxRetries int) ClientOption {
+	return func(c *Client) {
+		c.maxRetries = maxRetries
+	}
 }
 
 // WithTimeout sets the request timeout
@@ -79,24 +80,27 @@ func WithRedirectPolicy(policy func(req *http.Request, via []*http.Request) erro
 }
 
 // WithRateLimiter sets a rate limiter
-func (c *Client) WithRateLimiter(rl *rate.Limiter) *Client {
-	c.rateLimiter = rl
-	return c
+func WithRateLimiter(rl *rate.Limiter) ClientOption {
+	return func(c *Client) {
+		c.rateLimiter = rl
+	}
 }
 
 // WithHeaders sets default headers
-func (c *Client) WithHeaders(headers map[string]string) *Client {
-	c.headers = headers
-	return c
+func WithHeaders(headers map[string]string) ClientOption {
+	return func(c *Client) {
+		c.headers = headers
+	}
 }
 
 func (c *Client) SetHeader(key, value string) {
 	c.headers[key] = value
 }
 
-func (c *Client) WithLogger(logger zerolog.Logger) *Client {
-	c.logger = logger
-	return c
+func WithLogger(logger zerolog.Logger) ClientOption {
+	return func(c *Client) {
+		c.logger = logger
+	}
 }
 
 func WithTransport(transport *http.Transport) ClientOption {
@@ -106,11 +110,12 @@ func WithTransport(transport *http.Transport) ClientOption {
 }
 
 // WithRetryableStatus adds status codes that should trigger a retry
-func (c *Client) WithRetryableStatus(statusCodes ...int) *Client {
-	for _, code := range statusCodes {
-		c.retryableStatus[code] = true
+func WithRetryableStatus(statusCodes ...int) ClientOption {
+	return func(c *Client) {
+		for _, code := range statusCodes {
+			c.retryableStatus[code] = true
+		}
 	}
-	return c
 }
 
 // doRequest performs a single HTTP request with rate limiting
@@ -249,7 +254,7 @@ func New(options ...ClientOption) *Client {
 			http.StatusServiceUnavailable:  true,
 			http.StatusGatewayTimeout:      true,
 		},
-		logger:  logger.NewLogger("request"),
+		logger:  logger.New("request"),
 		timeout: 60 * time.Second,
 	}
 

@@ -17,7 +17,7 @@ var (
 )
 
 func GetLogPath() string {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	logsDir := filepath.Join(cfg.Path, "logs")
 
 	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
@@ -29,9 +29,9 @@ func GetLogPath() string {
 	return filepath.Join(logsDir, "decypharr.log")
 }
 
-func NewLogger(prefix string) zerolog.Logger {
+func New(prefix string) zerolog.Logger {
 
-	level := config.GetConfig().LogLevel
+	level := config.Get().LogLevel
 
 	rotatingLogFile := &lumberjack.Logger{
 		Filename: GetLogPath(),
@@ -91,7 +91,7 @@ func NewLogger(prefix string) zerolog.Logger {
 
 func GetDefaultLogger() zerolog.Logger {
 	once.Do(func() {
-		logger = NewLogger("decypharr")
+		logger = New("decypharr")
 	})
 	return logger
 }

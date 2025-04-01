@@ -41,7 +41,7 @@ type Repair struct {
 }
 
 func New(arrs *arr.Storage, engine *debrid.Engine) *Repair {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	duration, err := parseSchedule(cfg.Repair.Interval)
 	if err != nil {
 		duration = time.Hour * 24
@@ -52,7 +52,7 @@ func New(arrs *arr.Storage, engine *debrid.Engine) *Repair {
 	}
 	r := &Repair{
 		arrs:        arrs,
-		logger:      logger.NewLogger("repair"),
+		logger:      logger.New("repair"),
 		duration:    duration,
 		runOnStart:  cfg.Repair.RunOnStart,
 		ZurgURL:     cfg.Repair.ZurgURL,
@@ -73,7 +73,7 @@ func New(arrs *arr.Storage, engine *debrid.Engine) *Repair {
 }
 
 func (r *Repair) Start(ctx context.Context) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	r.ctx = ctx
 	if r.runOnStart {
 		r.logger.Info().Msgf("Running initial repair")

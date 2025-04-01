@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (c *Cache) RefreshXml() error {
+func (c *Cache) refreshXml() error {
 	parents := []string{"__all__", "torrents"}
 	torrents := c.GetListing()
 	for _, parent := range parents {

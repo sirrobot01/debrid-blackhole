@@ -217,7 +217,7 @@ func SetConfigPath(path string) error {
 	return nil
 }
 
-func GetConfig() *Config {
+func Get() *Config {
 	once.Do(func() {
 		instance = &Config{} // Initialize instance first
 		if err := instance.loadConfig(); err != nil {

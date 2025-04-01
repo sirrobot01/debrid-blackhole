@@ -134,7 +134,7 @@ func InferType(host, name string) Type {
 
 func NewStorage() *Storage {
 	arrs := make(map[string]*Arr)
-	for _, a := range config.GetConfig().Arrs {
+	for _, a := range config.Get().Arrs {
 		name := a.Name
 		arrs[name] = New(name, a.Host, a.Token, a.Cleanup, a.SkipRepair, a.DownloadUncached)
 	}

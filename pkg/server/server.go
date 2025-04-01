@@ -24,7 +24,7 @@ type Server struct {
 }
 
 func New() *Server {
-	l := logger.NewLogger("http")
+	l := logger.New("http")
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -36,7 +36,7 @@ func New() *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	// Register routes
 	// Register webhooks
 	s.router.Post("/webhooks/tautulli", s.handleTautulli)

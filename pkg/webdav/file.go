@@ -118,8 +118,15 @@ func (f *File) Read(p []byte) (n int, err error) {
 		if err != nil {
 			return 0, fmt.Errorf("HTTP request error: %w", err)
 		}
+
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			resp.Body.Close()
+			_log := f.cache.GetLogger()
+			_log.Debug().
+				Str("downloadLink", downloadLink).
+				Str("link", f.link).
+				Str("torrentId", f.torrentId).
+				Msgf("Unexpected HTTP status: %d", resp.StatusCode)
 			return 0, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
 		}
 		f.reader = resp.Body

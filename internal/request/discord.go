@@ -56,7 +56,7 @@ func getDiscordHeader(event string) string {
 }
 
 func SendDiscordMessage(event string, status string, message string) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	webhookURL := cfg.DiscordWebhook
 	if webhookURL == "" {
 		return nil

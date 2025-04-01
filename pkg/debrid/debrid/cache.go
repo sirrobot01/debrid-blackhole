@@ -95,7 +95,7 @@ type Cache struct {
 }
 
 func New(dc config.Debrid, client types.Client) *Cache {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	torrentRefreshInterval, err := time.ParseDuration(dc.TorrentsRefreshInterval)
 	if err != nil {
 		torrentRefreshInterval = time.Second * 15
@@ -117,7 +117,7 @@ func New(dc config.Debrid, client types.Client) *Cache {
 		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
 		torrentsNames:                xsync.NewMapOf[string, *CachedTorrent](),
 		client:                       client,
-		logger:                       logger.NewLogger(fmt.Sprintf("%s-webdav", client.GetName())),
+		logger:                       logger.New(fmt.Sprintf("%s-webdav", client.GetName())),
 		workers:                      workers,
 		downloadLinks:                xsync.NewMapOf[string, downloadLinkCache](),
 		torrentRefreshInterval:       torrentRefreshInterval,
@@ -219,11 +219,12 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 
 	now := time.Now()
 	for _, file := range files {
-		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
+		fileName := file.Name()
+		if file.IsDir() || filepath.Ext(fileName) != ".json" {
 			continue
 		}
 
-		filePath := filepath.Join(c.dir, file.Name())
+		filePath := filepath.Join(c.dir, fileName)
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			c.logger.Debug().Err(err).Msgf("Failed to read file: %s", filePath)
@@ -301,7 +302,7 @@ func (c *Cache) SaveTorrent(ct *CachedTorrent) {
 			c.saveTorrent(ct)
 		}()
 	default:
-		c.saveTorrent(ct)
+		go c.saveTorrent(ct) // If the semaphore is full, just run the save in the background
 	}
 }
 

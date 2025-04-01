@@ -31,7 +31,7 @@ func Start(ctx context.Context) error {
 		syscall.Umask(int(umask))
 	}
 
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	var wg sync.WaitGroup
 	errChan := make(chan error)
 

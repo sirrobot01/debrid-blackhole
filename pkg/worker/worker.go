@@ -18,13 +18,13 @@ var (
 func getLogger() zerolog.Logger {
 
 	once.Do(func() {
-		_logInstance = logger.NewLogger("worker")
+		_logInstance = logger.New("worker")
 	})
 	return _logInstance
 }
 
 func Start(ctx context.Context) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	// Start Arr Refresh Worker
 
 	var wg sync.WaitGroup

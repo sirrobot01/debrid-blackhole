@@ -10,8 +10,6 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
-	"time"
-
 	"mime/multipart"
 	"net/http"
 	gourl "net/url"
@@ -20,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Torbox struct {
@@ -46,10 +45,12 @@ func New(dc config.Debrid) *Torbox {
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
 	}
-	_log := logger.NewLogger(dc.Name)
-	client := request.New().
-		WithHeaders(headers).
-		WithRateLimiter(rl).WithLogger(_log)
+	_log := logger.New(dc.Name)
+	client := request.New(
+		request.WithHeaders(headers),
+		request.WithRateLimiter(rl),
+		request.WithLogger(_log),
+	)
 
 	return &Torbox{
 		Name:             "torbox",
@@ -196,7 +197,7 @@ func (tb *Torbox) UpdateTorrent(t *types.Torrent) error {
 	t.OriginalFilename = name
 	t.MountPath = tb.MountPath
 	t.Debrid = tb.Name
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	for _, f := range data.Files {
 		fileName := filepath.Base(f.Name)
 		if utils.IsSampleFile(f.AbsolutePath) {
@@ -275,30 +276,43 @@ func (tb *Torbox) DeleteTorrent(torrentId string) error {
 }
 
 func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
+	filesCh := make(chan types.File, len(t.Files))
+	errCh := make(chan error, len(t.Files))
+
+	var wg sync.WaitGroup
+	wg.Add(len(t.Files))
 	for _, file := range t.Files {
-		url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
-		query := gourl.Values{}
-		query.Add("torrent_id", t.Id)
-		query.Add("token", tb.APIKey)
-		query.Add("file_id", file.Id)
-		url += "?" + query.Encode()
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
-		resp, err := tb.client.MakeRequest(req)
-		if err != nil {
-			return err
-		}
-		var data DownloadLinksResponse
-		if err = json.Unmarshal(resp, &data); err != nil {
-			return err
-		}
-		if data.Data == nil {
-			return fmt.Errorf("error getting download links")
-		}
-		link := *data.Data
-		file.DownloadLink = link
-		file.Generated = time.Now()
-		t.Files[file.Name] = file
+		go func() {
+			defer wg.Done()
+			link, err := tb.GetDownloadLink(t, &file)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			file.DownloadLink = link
+			filesCh <- file
+		}()
 	}
+	go func() {
+		wg.Wait()
+		close(filesCh)
+		close(errCh)
+	}()
+
+	// Collect results
+	files := make(map[string]types.File, len(t.Files))
+	for file := range filesCh {
+		files[file.Name] = file
+	}
+
+	// Check for errors
+	for err := range errCh {
+		if err != nil {
+			return err // Return the first error encountered
+		}
+	}
+
+	t.Files = files
 	return nil
 }
 

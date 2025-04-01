@@ -5,10 +5,7 @@ import (
 	"flag"
 	"github.com/sirrobot01/debrid-blackhole/cmd/decypharr"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/pkg/version"
 	"log"
-	"net/http"
-	_ "net/http/pprof" // registers pprof handlers
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -22,15 +19,6 @@ func main() {
 			debug.PrintStack()
 		}
 	}()
-
-	if version.GetInfo().Channel == "dev" {
-		log.Println("Running in dev mode")
-		go func() {
-			if err := http.ListenAndServe(":6060", nil); err != nil {
-				log.Fatalf("pprof server failed: %v", err)
-			}
-		}()
-	}
 	var configPath string
 	flag.StringVar(&configPath, "config", "/data", "path to the data folder")
 	flag.Parse()
@@ -39,7 +27,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	config.GetConfig()
+	config.Get()
 
 	// Create a context that's cancelled on SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
