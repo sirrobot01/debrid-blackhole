@@ -56,7 +56,7 @@
   "arrs": [
     {
       "name": "sonarr",
-      "host": "http://radarr:8989",
+      "host": "http://sonarr:8989",
       "token": "arr_key",
       "cleanup": true,
       "skip_repair": true,
@@ -71,7 +71,7 @@
     },
     {
       "name": "lidarr",
-      "host": "http://lidarr:7878",
+      "host": "http://lidarr:8686",
       "token": "arr_key",
       "cleanup": false,
       "skip_repair": true,
