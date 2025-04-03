@@ -11,7 +11,7 @@ var (
 	MUSICMATCH = "(?i)(\\.)(mp2|mp3|m4a|m4b|m4p|ogg|oga|opus|wma|wav|wv|flac|ape|aif|aiff|aifc)$"
 )
 
-var SAMPLEMATCH = `(?i)(^|[\\/]|\s|[._-])(sample|trailer|thumb|special|extras?)s?(\s|[._-]|$|/)`
+var SAMPLEMATCH = `(?i)(^|[\\/]|\s|[(])(?:sample|trailer|thumb|special|extras?)s?([\s._\-/)]|$)`
 
 func RegexMatch(regex string, value string) bool {
 	re := regexp.MustCompile(regex)

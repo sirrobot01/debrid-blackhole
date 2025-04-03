@@ -244,6 +244,7 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 			if !t.DownloadUncached {
 				return t, fmt.Errorf("torrent: %s not cached", t.Name)
 			}
+			return t, nil
 		} else {
 			return t, fmt.Errorf("torrent: %s has error: %s", t.Name, status)
 		}

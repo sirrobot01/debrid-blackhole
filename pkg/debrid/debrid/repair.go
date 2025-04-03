@@ -131,6 +131,7 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 
 	oldID := torrent.Id
 	defer c.repairsInProgress.Delete(oldID)
+	defer c.DeleteTorrent(oldID)
 
 	// Submit the magnet to the debrid service
 	torrent.Id = ""
@@ -138,7 +139,6 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	torrent, err = c.client.SubmitMagnet(torrent)
 	if err != nil {
 		// Remove the old torrent from the cache and debrid service
-		_ = c.DeleteTorrent(oldID)
 		return fmt.Errorf("failed to submit magnet: %w", err)
 	}
 
@@ -150,19 +150,22 @@ func (c *Cache) ReInsertTorrent(torrent *types.Torrent) error {
 	torrent, err = c.client.CheckStatus(torrent, true)
 	if err != nil && torrent != nil {
 		// Torrent is likely in progress
-		// Delete the old and new torrent
-		_ = c.DeleteTorrent(oldID)
 		_ = c.DeleteTorrent(torrent.Id)
 
 		return fmt.Errorf("failed to check status: %w", err)
 	}
 
-	if err := c.DeleteTorrent(oldID); err != nil {
-		return fmt.Errorf("failed to delete old torrent: %w", err)
-	}
-
 	if torrent == nil {
 		return fmt.Errorf("failed to check status: empty torrent")
+	}
+
+	for _, file := range torrent.Files {
+		if file.Link == "" {
+			c.logger.Debug().Msgf("Torrent %s is still not complete, missing link for file %s.", torrent.Name, file.Name)
+			// Delete the torrent from the cache
+			_ = c.DeleteTorrent(torrent.Id)
+			return fmt.Errorf("torrent %s is still not complete, missing link for file %s", torrent.Name, file.Name)
+		}
 	}
 
 	// Update the torrent in the cache

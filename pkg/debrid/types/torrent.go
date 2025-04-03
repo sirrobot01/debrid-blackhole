@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
@@ -78,6 +79,26 @@ type File struct {
 	Link         string    `json:"link"`
 	DownloadLink string    `json:"download_link"`
 	Generated    time.Time `json:"generated"`
+}
+
+func (f *File) IsValid() bool {
+	cfg := config.Get()
+	name := filepath.Base(f.Path)
+	if utils.IsSampleFile(f.Path) {
+		return false
+	}
+
+	if !cfg.IsAllowedFile(name) {
+		return false
+	}
+	if !cfg.IsSizeAllowed(f.Size) {
+		return false
+	}
+
+	if f.Link == "" {
+		return false
+	}
+	return true
 }
 
 func (t *Torrent) Cleanup(remove bool) {

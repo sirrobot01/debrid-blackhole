@@ -63,7 +63,7 @@ func (c *Cache) refreshListings() {
 	c.listings.Store(files)
 	_ = c.refreshXml()
 	if err := c.RefreshRclone(); err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to refresh rclone")
+		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
 	}
 }
 

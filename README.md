@@ -218,7 +218,10 @@ This is particularly useful if you want to use the Repair tool without using Qbi
 
 The repair worker is a simple worker that checks for missing files in the Arrs(Sonarr, Radarr, etc). It's particularly useful for files either deleted by the Debrid provider or files with bad symlinks.
 
-**Note**: If you're using zurg, set the `zurg_url` under repair config. This will speed up the repair process, exponentially.
+**Notes**
+
+- For those using the webdav server, set the `use_webdav` key to `true` in the debrid provider config. This will speed up the repair process, exponentially.
+- For those using zurg, set the `zurg_url` under repair config. This will speed up the repair process, exponentially.
 
 - Search for broken symlinks/files
 - Search for missing files

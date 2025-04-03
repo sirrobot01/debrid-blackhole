@@ -215,7 +215,7 @@ func (dl *DebridLink) CheckStatus(torrent *types.Torrent, isSymlink bool) (*type
 			}
 			// Break out of the loop if the torrent is downloading.
 			// This is necessary to prevent infinite loop since we moved to sync downloading and async processing
-			break
+			return torrent, nil
 		} else {
 			return torrent, fmt.Errorf("torrent: %s has error", torrent.Name)
 		}

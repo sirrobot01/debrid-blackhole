@@ -137,6 +137,10 @@ func (a *Arr) CleanupQueue() error {
 						isMessedUp = true
 						break
 					}
+					if strings.Contains(m.Title, "One or more episodes expected in this release were not imported or missing from the release") {
+						isMessedUp = true
+						break
+					}
 				}
 			}
 		}

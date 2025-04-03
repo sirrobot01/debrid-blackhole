@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Stage 2: Create directory structure
 FROM alpine:3.19 as dirsetup
 RUN mkdir -p /app/logs && \
+    mkdir -p /app/cache && \
     chmod 777 /app/logs && \
     touch /app/logs/decypharr.log && \
     chmod 666 /app/logs/decypharr.log

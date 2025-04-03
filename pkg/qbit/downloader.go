@@ -163,6 +163,7 @@ func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrent
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	filePaths := make([]string, 0, len(pending))
 
 	for len(pending) > 0 {
 		<-ticker.C
@@ -170,11 +171,24 @@ func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrent
 			fullFilePath := filepath.Join(rclonePath, file.Path)
 			if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
 				q.logger.Info().Msgf("File is ready: %s", file.Path)
-				q.createSymLink(torrentSymlinkPath, rclonePath, file)
+				_filePath := q.createSymLink(torrentSymlinkPath, rclonePath, file)
+				filePaths = append(filePaths, _filePath)
 				delete(pending, path)
 			}
 		}
 	}
+
+	if q.SkipPreCache {
+		return torrentSymlinkPath, nil
+	}
+
+	go func() {
+
+		if err := q.preCacheFile(debridTorrent.Name, filePaths); err != nil {
+			q.logger.Error().Msgf("Failed to pre-cache file: %s", err)
+		}
+	}() // Pre-cache the files in the background
+	// Pre-cache the first 256KB and 1MB of the file
 	return torrentSymlinkPath, nil
 }
 
@@ -189,7 +203,7 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 	}
 }
 
-func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.File) {
+func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.File) string {
 
 	// Combine the directory and filename to form a full path
 	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
@@ -200,28 +214,27 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.F
 		// It's okay if the symlink already exists
 		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fullPath, err)
 	}
-	if q.SkipPreCache {
-		return
-	}
-	go func() {
-		err := q.preCacheFile(torrentFilePath)
-		if err != nil {
-			q.logger.Debug().Msgf("Failed to pre-cache file: %s: %v", torrentFilePath, err)
-		}
-	}()
+	return torrentFilePath
 }
 
-func (q *QBit) preCacheFile(filePath string) error {
-	q.logger.Trace().Msgf("Pre-caching file: %s", filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("error opening file: %v", err)
+func (q *QBit) preCacheFile(name string, filePaths []string) error {
+	q.logger.Trace().Msgf("Pre-caching file: %s", name)
+	if len(filePaths) == 0 {
+		return fmt.Errorf("no file paths provided")
 	}
-	defer file.Close()
-
-	// Pre-cache the file header (first 256KB) using 16KB chunks.
-	q.readSmallChunks(file, 0, 256*1024, 16*1024)
-	q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
+	for _, filePath := range filePaths {
+		func() {
+			file, err := os.Open(filePath)
+			defer file.Close()
+			if err != nil {
+				return
+			}
+			// Pre-cache the file header (first 256KB) using 16KB chunks.
+			q.readSmallChunks(file, 0, 256*1024, 16*1024)
+			q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
+			return
+		}()
+	}
 
 	return nil
 }

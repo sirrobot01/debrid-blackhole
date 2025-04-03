@@ -86,7 +86,8 @@
     "enabled": false,
     "interval": "12h",
     "run_on_start": false,
-    "zurg_url": "http://zurg:9999",
+    "zurg_url": "",
+    "use_webdav": false,
     "auto_process": false
   },
   "log_level": "info",

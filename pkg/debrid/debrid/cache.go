@@ -126,7 +126,7 @@ func New(dc config.Debrid, client types.Client) *Cache {
 		folderNaming:                 WebDavFolderNaming(dc.FolderNaming),
 		autoExpiresLinksAfter:        autoExpiresLinksAfter,
 		repairsInProgress:            xsync.NewMapOf[string, bool](),
-		saveSemaphore:                make(chan struct{}, 10),
+		saveSemaphore:                make(chan struct{}, 50),
 		ctx:                          context.Background(),
 	}
 }
@@ -156,53 +156,6 @@ func (c *Cache) Start(ctx context.Context) error {
 	c.repairChan = make(chan RepairRequest, 100)
 	go c.repairWorker()
 
-	return nil
-}
-
-func (c *Cache) GetTorrentFolder(torrent *types.Torrent) string {
-	switch c.folderNaming {
-	case WebDavUseFileName:
-		return torrent.Filename
-	case WebDavUseOriginalName:
-		return torrent.OriginalFilename
-	case WebDavUseFileNameNoExt:
-		return utils.RemoveExtension(torrent.Filename)
-	case WebDavUseOriginalNameNoExt:
-		return utils.RemoveExtension(torrent.OriginalFilename)
-	case WebDavUseID:
-		return torrent.Id
-	default:
-		return torrent.Filename
-	}
-}
-
-func (c *Cache) setTorrent(t *CachedTorrent) {
-	c.torrents.Store(t.Id, t)
-
-	c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
-
-	c.SaveTorrent(t)
-}
-
-func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
-	for _, t := range torrents {
-		c.torrents.Store(t.Id, t)
-		c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
-	}
-
-	c.refreshListings()
-
-	c.SaveTorrents()
-}
-
-func (c *Cache) GetListing() []os.FileInfo {
-	if v, ok := c.listings.Load().([]os.FileInfo); ok {
-		return v
-	}
-	return nil
-}
-
-func (c *Cache) Close() error {
 	return nil
 }
 
@@ -238,13 +191,11 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		}
 		isComplete := true
 		if len(ct.Files) != 0 {
-			// We can assume the torrent is complete
-
+			// Check if all files are valid, if not, delete the file.json and remove from cache.
 			for _, f := range ct.Files {
-				if f.Link == "" {
-					c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s", ct.Id, f.Name)
+				if !f.IsValid() {
 					isComplete = false
-					continue
+					break
 				}
 			}
 			if isComplete {
@@ -255,106 +206,15 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 				ct.AddedOn = addedOn
 				ct.IsComplete = true
 				torrents[ct.Id] = &ct
+			} else {
+				// Delete the file if it's not complete
+				_ = os.Remove(filePath)
 			}
 
 		}
 	}
 
 	return torrents, nil
-}
-
-func (c *Cache) GetTorrents() map[string]*CachedTorrent {
-	torrents := make(map[string]*CachedTorrent)
-	c.torrents.Range(func(key string, value *CachedTorrent) bool {
-		torrents[key] = value
-		return true
-	})
-	return torrents
-}
-
-func (c *Cache) GetTorrent(id string) *CachedTorrent {
-	if t, ok := c.torrents.Load(id); ok {
-		return t
-	}
-	return nil
-}
-
-func (c *Cache) GetTorrentByName(name string) *CachedTorrent {
-	if t, ok := c.torrentsNames.Load(name); ok {
-		return t
-	}
-	return nil
-}
-
-func (c *Cache) SaveTorrents() {
-	c.torrents.Range(func(key string, value *CachedTorrent) bool {
-		c.SaveTorrent(value)
-		return true
-	})
-}
-
-func (c *Cache) SaveTorrent(ct *CachedTorrent) {
-	// Try to acquire semaphore without blocking
-	select {
-	case c.saveSemaphore <- struct{}{}:
-		go func() {
-			defer func() { <-c.saveSemaphore }()
-			c.saveTorrent(ct)
-		}()
-	default:
-		go c.saveTorrent(ct) // If the semaphore is full, just run the save in the background
-	}
-}
-
-func (c *Cache) saveTorrent(ct *CachedTorrent) {
-	data, err := json.MarshalIndent(ct, "", "  ")
-	if err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to marshal torrent: %s", ct.Id)
-		return
-	}
-
-	fileName := ct.Torrent.Id + ".json"
-	filePath := filepath.Join(c.dir, fileName)
-
-	// Use a unique temporary filename for concurrent safety
-	tmpFile := filePath + ".tmp." + strconv.FormatInt(time.Now().UnixNano(), 10)
-
-	f, err := os.Create(tmpFile)
-	if err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to create file: %s", tmpFile)
-		return
-	}
-
-	// Track if we've closed the file
-	fileClosed := false
-	defer func() {
-		// Only close if not already closed
-		if !fileClosed {
-			_ = f.Close()
-		}
-		// Clean up the temp file if it still exists and rename failed
-		_ = os.Remove(tmpFile)
-	}()
-
-	w := bufio.NewWriter(f)
-	if _, err := w.Write(data); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to write data: %s", tmpFile)
-		return
-	}
-
-	if err := w.Flush(); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to flush data: %s", tmpFile)
-		return
-	}
-
-	// Close the file before renaming
-	_ = f.Close()
-	fileClosed = true
-
-	if err := os.Rename(tmpFile, filePath); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to rename file: %s", tmpFile)
-		return
-	}
 }
 
 func (c *Cache) Sync() error {
@@ -414,7 +274,7 @@ func (c *Cache) Sync() error {
 func (c *Cache) sync(torrents []*types.Torrent) error {
 
 	// Create channels with appropriate buffering
-	workChan := make(chan *types.Torrent, min(1000, len(torrents)))
+	workChan := make(chan *types.Torrent, min(c.workers, len(torrents)))
 
 	// Use an atomic counter for progress tracking
 	var processed int64
@@ -474,6 +334,157 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 	return nil
 }
 
+func (c *Cache) GetTorrentFolder(torrent *types.Torrent) string {
+	switch c.folderNaming {
+	case WebDavUseFileName:
+		return torrent.Filename
+	case WebDavUseOriginalName:
+		return torrent.OriginalFilename
+	case WebDavUseFileNameNoExt:
+		return utils.RemoveExtension(torrent.Filename)
+	case WebDavUseOriginalNameNoExt:
+		return utils.RemoveExtension(torrent.OriginalFilename)
+	case WebDavUseID:
+		return torrent.Id
+	default:
+		return torrent.Filename
+	}
+}
+
+func (c *Cache) setTorrent(t *CachedTorrent) {
+	c.torrents.Store(t.Id, t)
+
+	c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
+
+	c.SaveTorrent(t)
+}
+
+func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
+	for _, t := range torrents {
+		c.torrents.Store(t.Id, t)
+		c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
+	}
+
+	c.refreshListings()
+
+	c.SaveTorrents()
+}
+
+func (c *Cache) GetListing() []os.FileInfo {
+	if v, ok := c.listings.Load().([]os.FileInfo); ok {
+		return v
+	}
+	return nil
+}
+
+func (c *Cache) Close() error {
+	return nil
+}
+
+func (c *Cache) GetTorrents() map[string]*CachedTorrent {
+	torrents := make(map[string]*CachedTorrent)
+	c.torrents.Range(func(key string, value *CachedTorrent) bool {
+		torrents[key] = value
+		return true
+	})
+	return torrents
+}
+
+func (c *Cache) GetTorrent(id string) *CachedTorrent {
+	if t, ok := c.torrents.Load(id); ok {
+		return t
+	}
+	return nil
+}
+
+func (c *Cache) GetTorrentByName(name string) *CachedTorrent {
+	if t, ok := c.torrentsNames.Load(name); ok {
+		return t
+	}
+	return nil
+}
+
+func (c *Cache) SaveTorrents() {
+	c.torrents.Range(func(key string, value *CachedTorrent) bool {
+		c.SaveTorrent(value)
+		return true
+	})
+}
+
+func (c *Cache) SaveTorrent(ct *CachedTorrent) {
+	marshaled, err := json.MarshalIndent(ct, "", "  ")
+	if err != nil {
+		c.logger.Debug().Err(err).Msgf("Failed to marshal torrent: %s", ct.Id)
+		return
+	}
+
+	// Store just the essential info needed for the file operation
+	saveInfo := struct {
+		id       string
+		jsonData []byte
+	}{
+		id:       ct.Torrent.Id,
+		jsonData: marshaled,
+	}
+
+	// Try to acquire semaphore without blocking
+	select {
+	case c.saveSemaphore <- struct{}{}:
+		go func() {
+			defer func() { <-c.saveSemaphore }()
+			c.saveTorrent(saveInfo.id, saveInfo.jsonData)
+		}()
+	default:
+		c.saveTorrent(saveInfo.id, saveInfo.jsonData)
+	}
+}
+
+func (c *Cache) saveTorrent(id string, data []byte) {
+
+	fileName := id + ".json"
+	filePath := filepath.Join(c.dir, fileName)
+
+	// Use a unique temporary filename for concurrent safety
+	tmpFile := filePath + ".tmp." + strconv.FormatInt(time.Now().UnixNano(), 10)
+
+	f, err := os.Create(tmpFile)
+	if err != nil {
+		c.logger.Debug().Err(err).Msgf("Failed to create file: %s", tmpFile)
+		return
+	}
+
+	// Track if we've closed the file
+	fileClosed := false
+	defer func() {
+		// Only close if not already closed
+		if !fileClosed {
+			_ = f.Close()
+		}
+		// Clean up the temp file if it still exists and rename failed
+		_ = os.Remove(tmpFile)
+	}()
+
+	w := bufio.NewWriter(f)
+	if _, err := w.Write(data); err != nil {
+		c.logger.Debug().Err(err).Msgf("Failed to write data: %s", tmpFile)
+		return
+	}
+
+	if err := w.Flush(); err != nil {
+		c.logger.Debug().Err(err).Msgf("Failed to flush data: %s", tmpFile)
+		return
+	}
+
+	// Close the file before renaming
+	_ = f.Close()
+	fileClosed = true
+
+	if err := os.Rename(tmpFile, filePath); err != nil {
+		c.logger.Debug().Err(err).Msgf("Failed to rename file: %s", tmpFile)
+		return
+	}
+}
+
 func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 	if len(t.Files) == 0 {
 		if err := c.client.UpdateTorrent(t); err != nil {
@@ -481,13 +492,19 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 		}
 	}
 	// Validate each file in the torrent
+	isComplete := true
 	for _, file := range t.Files {
 		if file.Link == "" {
-			c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s. Triggering a reinsert", t.Id, file.Name)
-			if err := c.ReInsertTorrent(t); err != nil {
-				c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
-				return fmt.Errorf("failed to reinsert torrent: %w", err)
-			}
+			isComplete = false
+			continue
+		}
+	}
+
+	if !isComplete {
+		c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s. Triggering a reinsert", t.Id)
+		if err := c.ReInsertTorrent(t); err != nil {
+			c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
+			return fmt.Errorf("failed to reinsert torrent: %w", err)
 		}
 	}
 
@@ -535,6 +552,8 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
+			c.logger.Debug().Err(err).Msgf("Hoster is unavailable for %s/%s", ct.Name, filename)
+			return ""
 			// This code is commented iut due to the fact that if a torrent link is uncached, it's likely that we can't redownload it again
 			// Do not attempt to repair the torrent if the hoster is unavailable
 			// Check link here??
@@ -565,8 +584,10 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	file.Generated = time.Now()
 	ct.Files[filename] = file
 
-	go c.updateDownloadLink(file.Link, downloadLink)
-	go c.setTorrent(ct)
+	go func() {
+		c.updateDownloadLink(file.Link, downloadLink)
+		c.setTorrent(ct)
+	}()
 	return file.DownloadLink
 }
 

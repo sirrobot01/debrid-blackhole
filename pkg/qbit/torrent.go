@@ -124,8 +124,9 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 				q.MarkAsFailed(torrent)
 				return
 			}
-			rclonePath := filepath.Join(debridTorrent.MountPath, cache.GetTorrentFolder(debridTorrent))
-			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, debridTorrent.Name)
+			rclonePath := filepath.Join(debridTorrent.MountPath, cache.GetTorrentFolder(debridTorrent)) // /mnt/remote/realdebrid/MyTVShow
+			torrentFolderNoExt := utils.RemoveExtension(debridTorrent.Name)
+			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, torrentFolderNoExt) // /mnt/symlinks/{category}/MyTVShow/
 
 		} else {
 			// User is using either zurg or debrid webdav
