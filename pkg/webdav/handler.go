@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	path "path/filepath"
 	"slices"
@@ -463,6 +464,48 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int {
 			return a + b
+		},
+		"urlpath": func(p string) string {
+			segments := strings.Split(p, "/")
+			for i, segment := range segments {
+				segments[i] = url.PathEscape(segment)
+			}
+			return strings.Join(segments, "/")
+		},
+		"formatSize": func(bytes int64) string {
+			const (
+				KB = 1024
+				MB = 1024 * KB
+				GB = 1024 * MB
+				TB = 1024 * GB
+			)
+
+			var size float64
+			var unit string
+
+			switch {
+			case bytes >= TB:
+				size = float64(bytes) / TB
+				unit = "TB"
+			case bytes >= GB:
+				size = float64(bytes) / GB
+				unit = "GB"
+			case bytes >= MB:
+				size = float64(bytes) / MB
+				unit = "MB"
+			case bytes >= KB:
+				size = float64(bytes) / KB
+				unit = "KB"
+			default:
+				size = float64(bytes)
+				unit = "bytes"
+			}
+
+			// Format to 2 decimal places for larger units, no decimals for bytes
+			if unit == "bytes" {
+				return fmt.Sprintf("%.0f %s", size, unit)
+			}
+			return fmt.Sprintf("%.2f %s", size, unit)
 		},
 	}
 	tmpl, err := template.New("directory").Funcs(funcMap).Parse(directoryTemplate)

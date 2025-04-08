@@ -29,7 +29,7 @@ func (c *Cache) refreshTorrentsWorker() {
 }
 
 func (c *Cache) resetInvalidLinksWorker() {
-	// Calculate time until next 12:00 CET
+	// Calculate time until next 00:00 CET
 	now := time.Now()
 	loc, err := time.LoadLocation("CET")
 	if err != nil {
@@ -43,7 +43,7 @@ func (c *Cache) resetInvalidLinksWorker() {
 		nowInCET.Year(),
 		nowInCET.Month(),
 		nowInCET.Day(),
-		12, 0, 0, 0,
+		0, 0, 0, 0,
 		loc,
 	)
 
