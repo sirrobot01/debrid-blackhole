@@ -21,7 +21,6 @@ This is an implementation of QbitTorrent with a **Multiple Debrid service suppor
   - [Proxy Config](#proxy-config)
   - [Qbittorrent Config](#qbittorrent-config)
   - [Arrs Config](#arrs-config)
-- [Proxy](#proxy)
 - [Repair Worker](#repair-worker)
 - [WebDAV](#webdav)
   - [WebDAV Config](#webdav-config)
@@ -131,12 +130,6 @@ This is the default config file. You can create a `config.json` file in the root
       "folder": "/mnt/remote/realdebrid/__all__/"
     }
   ],
-  "proxy": {
-    "enabled": false,
-    "port": "8100",
-    "username": "username",
-    "password": "password"
-  },
   "qbittorrent": {
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
@@ -172,6 +165,7 @@ Full config are [here](doc/config.full.json)
 - The `name` key is the name of the debrid provider
 - The `host` key is the API endpoint of the debrid provider
 - The `api_key` key is the API key of the debrid provider. This can be comma separated for multiple API keys
+- The `download_api_keys` key is the API key of the debrid provider. By default, this is the same as the `api_key` key. This is used to download the torrents. This is an array of API keys. This is useful for those using multiple api keys. The API keys are used to download the torrents.
 - The `folder` key is the folder where your debrid folder is mounted(webdav, rclone, zurg etc). e.g `data/realdebrid/torrents/`, `/media/remote/alldebrid/magnets/`
 - The `rate_limit` key is the rate limit of the debrid provider(null by default)
 - The `download_uncached` bool key is used to download uncached torrents(disabled by default)
@@ -188,14 +182,6 @@ The `repair` key is used to enable the repair worker
 - The `use_webdav` key is used to enable the webdav server for the repair worker. The default value is `false`. Read the [webdav](#webdav) section for more information
 - The `zurg_url` is the url of the zurg server. Typically `http://localhost:9999` or `http://zurg:9999`
 - The `auto_process` is used to automatically process the repair worker. This will delete broken symlinks and re-search for missing files
-
-##### Proxy Config
-- The `enabled` key is used to enable the proxy
-- The `port` key is the port the proxy will listen on
-- The `log_level` key is used to set the log level of the proxy. The default value is `info`
-- The `username` and `password` keys are used for basic authentication
-- The `cached_only` means only cached torrents will be returned
-
 
 ##### Qbittorrent Config
 - The `port` key is the port the qBittorrent will listen on
@@ -249,14 +235,6 @@ You can use the webdav server with media players like Infuse, VidHub or mount it
 - The `auto_expire_links_after` Download links are deemed old after this time. The default value is `3d`. E,g `15s`, `1m`, `1h`, `1d`
 - The `rc_url`, `rc_user`, `rc_pass` keys are used to trigger a vfs refresh on your rclone. This speeds up the process of getting the files. This is useful for rclone users. T
 
-
-### Proxy
-
-#### **Note**: Proxy has stopped working for Real Debrid, Debrid Link, and All Debrid. It still works for Torbox. This is due to the changes in the API of the Debrid Providers.
-
-The proxy is useful in filtering out un-cached Debrid torrents. 
-The proxy is a simple HTTP proxy that requires basic authentication. The proxy can be enabled by setting the `proxy.enabled` to `true` in the config file. 
-The proxy listens on the port `8181` by default. The username and password can be set in the config file.
 
 ### Changelog
 

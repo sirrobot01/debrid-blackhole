@@ -13,11 +13,8 @@ func (c *Cache) refreshDownloadLinksWorker() {
 	refreshTicker := time.NewTicker(c.downloadLinksRefreshInterval)
 	defer refreshTicker.Stop()
 
-	for {
-		select {
-		case <-refreshTicker.C:
-			c.refreshDownloadLinks()
-		}
+	for range refreshTicker.C {
+		c.refreshDownloadLinks()
 	}
 }
 
@@ -25,10 +22,7 @@ func (c *Cache) refreshTorrentsWorker() {
 	refreshTicker := time.NewTicker(c.torrentRefreshInterval)
 	defer refreshTicker.Stop()
 
-	for {
-		select {
-		case <-refreshTicker.C:
-			c.refreshTorrents()
-		}
+	for range refreshTicker.C {
+		c.refreshTorrents()
 	}
 }

@@ -3,11 +3,18 @@ package webdav
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
+)
+
+var (
+	sdClient *request.Client
+	once     sync.Once
 )
 
 var sharedClient = &http.Client{
@@ -24,6 +31,32 @@ var sharedClient = &http.Client{
 		DisableKeepAlives:     false,
 	},
 	Timeout: 60 * time.Second,
+}
+
+func getClient() *request.Client {
+	once.Do(func() {
+		var transport = &http.Transport{
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+			Proxy:                 http.ProxyFromEnvironment,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   20,
+			MaxConnsPerHost:       50,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     false,
+		}
+		sdClient = request.New(
+			request.WithTransport(transport),
+			request.WithTimeout(30*time.Second),
+			request.WithHeaders(map[string]string{
+				"Accept":     "*/*",
+				"Connection": "keep-alive",
+			}),
+		)
+	})
+	return sdClient
 }
 
 type File struct {
@@ -47,6 +80,8 @@ type File struct {
 	link         string
 }
 
+// You can not download this file because you have exceeded your traffic on this hoster
+
 // File interface implementations for File
 
 func (f *File) Close() error {
@@ -57,19 +92,111 @@ func (f *File) Close() error {
 	return nil
 }
 
-func (f *File) GetDownloadLink() string {
+func (f *File) getDownloadLink(index int) string {
 	// Check if we already have a final URL cached
 
 	if f.downloadLink != "" && isValidURL(f.downloadLink) {
 		return f.downloadLink
 	}
-	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link)
+	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link, index)
 	if downloadLink != "" && isValidURL(downloadLink) {
-		f.downloadLink = downloadLink
 		return downloadLink
 	}
-
 	return ""
+}
+
+func (f *File) stream(index int) (*http.Response, error) {
+	client := sharedClient // Might be replaced with the custom client
+	_log := f.cache.GetLogger()
+	var (
+		err          error
+		downloadLink string
+	)
+
+	downloadLink = f.getDownloadLink(index) // Uses the first API key
+	if downloadLink == "" {
+		_log.Error().Msgf("Failed to get download link for %s", f.name)
+		return nil, fmt.Errorf("failed to get download link")
+	}
+
+	req, err := http.NewRequest("GET", downloadLink, nil)
+	if err != nil {
+		_log.Error().Msgf("Failed to create HTTP request: %s", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	if f.offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, fmt.Errorf("HTTP request error: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+
+		closeResp := func() {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			closeResp()
+			// Read the body to consume the response
+			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "bandwidth limit reached")
+			// Generate a new download link
+			if index < f.cache.TotalDownloadKeys()-1 {
+				// Retry with a different download key
+				_log.Debug().Str("link", downloadLink).
+					Str("torrentId", f.torrentId).
+					Str("fileId", f.fileId).
+					Msgf("Bandwidth limit reached, retrying with another API key, attempt %d", index+1)
+				return f.stream(index + 1) // Retry with the next download key
+			} else {
+				// No more download keys available, return an error
+				_log.Error().Msgf("Bandwidth limit reached for all download keys")
+				return nil, fmt.Errorf("bandwidth_limit_exceeded")
+			}
+
+		} else if resp.StatusCode == http.StatusNotFound {
+			closeResp()
+			// Mark download link as not found
+			// Regenerate a new download link
+			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "link_not_found")
+			f.cache.RemoveDownloadLink(f.link) // Remove the link from the cache
+			// Generate a new download link
+			downloadLink = f.getDownloadLink(index)
+			if downloadLink == "" {
+				_log.Error().Msgf("Failed to get download link for %s", f.name)
+				return nil, fmt.Errorf("failed to get download link")
+			}
+			req, err = http.NewRequest("GET", downloadLink, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+			}
+			if f.offset > 0 {
+				req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
+			}
+
+			resp, err = client.Do(req)
+			if err != nil {
+				return resp, fmt.Errorf("HTTP request error: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+				closeResp()
+				// Read the body to consume the response
+				f.cache.MarkDownloadLinkAsInvalid(downloadLink, "link_not_found")
+				return resp, fmt.Errorf("link not found")
+			}
+			return resp, nil
+
+		} else {
+			closeResp()
+			return resp, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
+		}
+
+	}
+	return resp, nil
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
@@ -96,39 +223,15 @@ func (f *File) Read(p []byte) (n int, err error) {
 			f.reader = nil
 		}
 
-		downloadLink := f.GetDownloadLink()
-		if downloadLink == "" {
-			return 0, io.EOF
-		}
-
-		req, err := http.NewRequest("GET", downloadLink, nil)
+		// Make the request to get the file
+		resp, err := f.stream(0)
 		if err != nil {
-			return 0, fmt.Errorf("failed to create HTTP request: %w", err)
+			return 0, err
+		}
+		if resp == nil {
+			return 0, fmt.Errorf("failed to get response")
 		}
 
-		if f.offset > 0 {
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
-		}
-
-		// Set headers as needed
-		req.Header.Set("Connection", "keep-alive")
-		req.Header.Set("Accept", "*/*")
-
-		resp, err := sharedClient.Do(req)
-		if err != nil {
-			return 0, fmt.Errorf("HTTP request error: %w", err)
-		}
-
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-			resp.Body.Close()
-			_log := f.cache.GetLogger()
-			_log.Debug().
-				Str("downloadLink", downloadLink).
-				Str("link", f.link).
-				Str("torrentId", f.torrentId).
-				Msgf("Unexpected HTTP status: %d", resp.StatusCode)
-			return 0, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
-		}
 		f.reader = resp.Body
 		f.seekPending = false
 	}

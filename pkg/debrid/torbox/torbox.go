@@ -25,7 +25,7 @@ type Torbox struct {
 	Name             string
 	Host             string `json:"host"`
 	APIKey           string
-	ExtraAPIKeys     []string
+	DownloadKeys     []string
 	DownloadUncached bool
 	client           *request.Client
 
@@ -36,27 +36,23 @@ type Torbox struct {
 
 func New(dc config.Debrid) *Torbox {
 	rl := request.ParseRateLimit(dc.RateLimit)
-	apiKeys := strings.Split(dc.APIKey, ",")
-	extraKeys := make([]string, 0)
-	if len(apiKeys) > 1 {
-		extraKeys = apiKeys[1:]
-	}
-	mainKey := apiKeys[0]
+
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
+		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	_log := logger.New(dc.Name)
 	client := request.New(
 		request.WithHeaders(headers),
 		request.WithRateLimiter(rl),
 		request.WithLogger(_log),
+		request.WithProxy(dc.Proxy),
 	)
 
 	return &Torbox{
 		Name:             "torbox",
 		Host:             dc.Host,
-		APIKey:           mainKey,
-		ExtraAPIKeys:     extraKeys,
+		APIKey:           dc.APIKey,
+		DownloadKeys:     dc.DownloadAPIKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
@@ -284,7 +280,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func() {
 			defer wg.Done()
-			link, err := tb.GetDownloadLink(t, &file)
+			link, err := tb.GetDownloadLink(t, &file, 0)
 			if err != nil {
 				errCh <- err
 				return
@@ -316,7 +312,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -365,4 +361,8 @@ func (tb *Torbox) CheckLink(link string) error {
 
 func (tb *Torbox) GetMountPath() string {
 	return tb.MountPath
+}
+
+func (tb *Torbox) GetDownloadKeys() []string {
+	return tb.DownloadKeys
 }

@@ -3,15 +3,18 @@ package request
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"golang.org/x/net/proxy"
 	"golang.org/x/time/rate"
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -52,11 +55,13 @@ type Client struct {
 	client          *http.Client
 	rateLimiter     *rate.Limiter
 	headers         map[string]string
+	headersMu       sync.RWMutex
 	maxRetries      int
 	timeout         time.Duration
 	skipTLSVerify   bool
 	retryableStatus map[int]bool
 	logger          zerolog.Logger
+	proxy           string
 }
 
 // WithMaxRetries sets the maximum number of retry attempts
@@ -89,12 +94,16 @@ func WithRateLimiter(rl *rate.Limiter) ClientOption {
 // WithHeaders sets default headers
 func WithHeaders(headers map[string]string) ClientOption {
 	return func(c *Client) {
+		c.headersMu.Lock()
 		c.headers = headers
+		c.headersMu.Unlock()
 	}
 }
 
 func (c *Client) SetHeader(key, value string) {
+	c.headersMu.Lock()
 	c.headers[key] = value
+	c.headersMu.Unlock()
 }
 
 func WithLogger(logger zerolog.Logger) ClientOption {
@@ -115,6 +124,12 @@ func WithRetryableStatus(statusCodes ...int) ClientOption {
 		for _, code := range statusCodes {
 			c.retryableStatus[code] = true
 		}
+	}
+}
+
+func WithProxy(proxyURL string) ClientOption {
+	return func(c *Client) {
+		c.proxy = proxyURL
 	}
 }
 
@@ -154,11 +169,13 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 
 		// Apply headers
+		c.headersMu.RLock()
 		if c.headers != nil {
 			for key, value := range c.headers {
 				req.Header.Set(key, value)
 			}
 		}
+		c.headersMu.RUnlock()
 
 		resp, err = c.doRequest(req)
 		if err != nil {
@@ -256,25 +273,67 @@ func New(options ...ClientOption) *Client {
 		},
 		logger:  logger.New("request"),
 		timeout: 60 * time.Second,
+		proxy:   "",
+		headers: make(map[string]string), // Initialize headers map
 	}
 
-	// Apply options
+	// default http client
+	client.client = &http.Client{
+		Timeout: client.timeout,
+	}
+
+	// Apply options before configuring transport
 	for _, option := range options {
 		option(client)
 	}
 
-	// Create transport
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: client.skipTLSVerify,
-		},
-		Proxy: http.ProxyFromEnvironment,
-	}
+	// Check if transport was set by WithTransport option
+	if client.client.Transport == nil {
+		// No custom transport provided, create the default one
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: client.skipTLSVerify,
+			},
+		}
 
-	// Create HTTP client
-	client.client = &http.Client{
-		Transport: transport,
-		Timeout:   client.timeout,
+		// Configure proxy if needed
+		if client.proxy != "" {
+			if strings.HasPrefix(client.proxy, "socks5://") {
+				// Handle SOCKS5 proxy
+				socksURL, err := url.Parse(client.proxy)
+				if err != nil {
+					client.logger.Error().Msgf("Failed to parse SOCKS5 proxy URL: %v", err)
+				} else {
+					auth := &proxy.Auth{}
+					if socksURL.User != nil {
+						auth.User = socksURL.User.Username()
+						password, _ := socksURL.User.Password()
+						auth.Password = password
+					}
+
+					dialer, err := proxy.SOCKS5("tcp", socksURL.Host, auth, proxy.Direct)
+					if err != nil {
+						client.logger.Error().Msgf("Failed to create SOCKS5 dialer: %v", err)
+					} else {
+						transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+							return dialer.Dial(network, addr)
+						}
+					}
+				}
+			} else {
+				proxyURL, err := url.Parse(client.proxy)
+				if err != nil {
+					client.logger.Error().Msgf("Failed to parse proxy URL: %v", err)
+				} else {
+					transport.Proxy = http.ProxyURL(proxyURL)
+				}
+			}
+		} else {
+			transport.Proxy = http.ProxyFromEnvironment
+		}
+
+		// Set the transport to the client
+		client.client.Transport = transport
 	}
 
 	return client

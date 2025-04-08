@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath \
     -ldflags="-w -s -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version=${VERSION} -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel=${CHANNEL}" \
-    -o /blackhole
+    -o /decypharr
 
 # Build healthcheck (optimized)
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -43,12 +43,12 @@ FROM gcr.io/distroless/static-debian12:nonroot
 LABEL version = "${VERSION}-${CHANNEL}"
 
 LABEL org.opencontainers.image.source = "https://github.com/sirrobot01/debrid-blackhole"
-LABEL org.opencontainers.image.title = "debrid-blackhole"
+LABEL org.opencontainers.image.title = "decypharr"
 LABEL org.opencontainers.image.authors = "sirrobot01"
 LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/debrid-blackhole/blob/main/README.md"
 
 # Copy binaries
-COPY --from=builder --chown=nonroot:nonroot /blackhole /usr/bin/blackhole
+COPY --from=builder --chown=nonroot:nonroot /decypharr /usr/bin/decypharr
 COPY --from=builder --chown=nonroot:nonroot /healthcheck /usr/bin/healthcheck
 
 # Copy pre-made directory structure
@@ -63,4 +63,4 @@ USER nonroot:nonroot
 
 HEALTHCHECK CMD ["/usr/bin/healthcheck"]
 
-CMD ["/usr/bin/blackhole", "--config", "/app"]
+CMD ["/usr/bin/decypharr", "--config", "/app"]

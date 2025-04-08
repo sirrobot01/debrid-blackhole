@@ -18,17 +18,14 @@ import (
 	path "path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
 type Handler struct {
-	Name         string
-	logger       zerolog.Logger
-	cache        *debrid.Cache
-	lastRefresh  time.Time
-	refreshMutex sync.Mutex
-	RootPath     string
+	Name     string
+	logger   zerolog.Logger
+	cache    *debrid.Cache
+	RootPath string
 }
 
 func NewHandler(name string, cache *debrid.Cache, logger zerolog.Logger) *Handler {
@@ -299,11 +296,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(gzippedData)))
 			w.WriteHeader(responseRecorder.Code)
-			w.Write(gzippedData)
+			_, _ = w.Write(gzippedData)
 		} else {
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(responseData)))
 			w.WriteHeader(responseRecorder.Code)
-			w.Write(responseData)
+			_, _ = w.Write(responseData)
 		}
 		return
 	}
@@ -422,11 +419,11 @@ func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, 
 		w.Header().Set("Vary", "Accept-Encoding")
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.GzippedData)))
 		w.WriteHeader(http.StatusOK)
-		w.Write(respCache.GzippedData)
+		_, _ = w.Write(respCache.GzippedData)
 	} else {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.Data)))
 		w.WriteHeader(http.StatusOK)
-		w.Write(respCache.Data)
+		_, _ = w.Write(respCache.Data)
 	}
 	return true
 }

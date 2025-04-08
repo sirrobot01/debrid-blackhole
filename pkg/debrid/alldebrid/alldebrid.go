@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -23,7 +22,7 @@ type AllDebrid struct {
 	Name             string
 	Host             string `json:"host"`
 	APIKey           string
-	ExtraAPIKeys     []string
+	DownloadKeys     []string
 	DownloadUncached bool
 	client           *request.Client
 
@@ -34,26 +33,22 @@ type AllDebrid struct {
 
 func New(dc config.Debrid) *AllDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
-	apiKeys := strings.Split(dc.APIKey, ",")
-	extraKeys := make([]string, 0)
-	if len(apiKeys) > 1 {
-		extraKeys = apiKeys[1:]
-	}
-	mainKey := apiKeys[0]
+
 	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Bearer %s", mainKey),
+		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	_log := logger.New(dc.Name)
 	client := request.New(
 		request.WithHeaders(headers),
 		request.WithLogger(_log),
 		request.WithRateLimiter(rl),
+		request.WithProxy(dc.Proxy),
 	)
 	return &AllDebrid{
 		Name:             "alldebrid",
 		Host:             dc.Host,
-		APIKey:           mainKey,
-		ExtraAPIKeys:     extraKeys,
+		APIKey:           dc.APIKey,
+		DownloadKeys:     dc.DownloadAPIKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
@@ -256,7 +251,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func(file types.File) {
 			defer wg.Done()
-			link, err := ad.GetDownloadLink(t, &file)
+			link, err := ad.GetDownloadLink(t, &file, 0)
 			if err != nil {
 				errCh <- err
 				return
@@ -291,7 +286,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -366,4 +361,8 @@ func (ad *AllDebrid) CheckLink(link string) error {
 
 func (ad *AllDebrid) GetMountPath() string {
 	return ad.MountPath
+}
+
+func (ad *AllDebrid) GetDownloadKeys() []string {
+	return ad.DownloadKeys
 }

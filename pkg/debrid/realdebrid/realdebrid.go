@@ -1,6 +1,7 @@
 package realdebrid
 
 import (
+	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
@@ -25,7 +26,7 @@ type RealDebrid struct {
 	Host string `json:"host"`
 
 	APIKey       string
-	ExtraAPIKeys []string // This is used for bandwidth
+	DownloadKeys []string // This is used for bandwidth
 
 	DownloadUncached bool
 	client           *request.Client
@@ -43,45 +44,58 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
+func getSelectedFiles(t *types.Torrent, data TorrentInfo) map[string]types.File {
+	selectedFiles := make([]types.File, 0)
+	for _, f := range data.Files {
+		if f.Selected == 1 {
+			name := filepath.Base(f.Path)
+			file := types.File{
+				Name: name,
+				Path: name,
+				Size: f.Bytes,
+				Id:   strconv.Itoa(f.ID),
+			}
+			selectedFiles = append(selectedFiles, file)
+		}
+	}
+	files := make(map[string]types.File)
+	for index, f := range selectedFiles {
+		if index >= len(data.Links) {
+			break
+		}
+		f.Link = data.Links[index]
+		files[f.Name] = f
+	}
+	return files
+}
+
 // getTorrentFiles returns a list of torrent files from the torrent info
 // validate is used to determine if the files should be validated
 // if validate is false, selected files will be returned
-func getTorrentFiles(t *types.Torrent, data TorrentInfo, validate bool) map[string]types.File {
+func getTorrentFiles(t *types.Torrent, data TorrentInfo) map[string]types.File {
 	files := make(map[string]types.File)
 	cfg := config.Get()
 	idx := 0
+
 	for _, f := range data.Files {
 		name := filepath.Base(f.Path)
-		if validate {
-			if utils.IsSampleFile(f.Path) {
-				// Skip sample files
-				continue
-			}
-
-			if !cfg.IsAllowedFile(name) {
-				continue
-			}
-			if !cfg.IsSizeAllowed(f.Bytes) {
-				continue
-			}
-		} else {
-			if f.Selected == 0 {
-				continue
-			}
+		if utils.IsSampleFile(f.Path) {
+			// Skip sample files
+			continue
 		}
 
-		fileId := f.ID
-		_link := ""
-		if len(data.Links) > idx {
-			_link = data.Links[idx]
+		if !cfg.IsAllowedFile(name) {
+			continue
+		}
+		if !cfg.IsSizeAllowed(f.Bytes) {
+			continue
 		}
 
 		file := types.File{
 			Name: name,
 			Path: name,
 			Size: f.Bytes,
-			Id:   strconv.Itoa(fileId),
-			Link: _link,
+			Id:   strconv.Itoa(f.ID),
 		}
 		files[name] = file
 		idx++
@@ -182,7 +196,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	t.MountPath = r.MountPath
 	t.Debrid = r.Name
 	t.Added = data.Added
-	t.Files = getTorrentFiles(t, data, false) // Get selected files
+	t.Files = getSelectedFiles(t, data) // Get selected files
 	return nil
 }
 
@@ -213,7 +227,7 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 		t.Debrid = r.Name
 		t.MountPath = r.MountPath
 		if status == "waiting_files_selection" {
-			t.Files = getTorrentFiles(t, data, true)
+			t.Files = getTorrentFiles(t, data)
 			if len(t.Files) == 0 {
 				return t, fmt.Errorf("no video files found")
 			}
@@ -231,7 +245,7 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 				return t, err
 			}
 		} else if status == "downloaded" {
-			t.Files = getTorrentFiles(t, data, false) // Get selected files
+			t.Files = getSelectedFiles(t, data) // Get selected files
 			r.logger.Info().Msgf("Torrent: %s downloaded to RD", t.Name)
 			if !isSymlink {
 				err = r.GenerateDownloadLinks(t)
@@ -273,7 +287,7 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 		go func(file types.File) {
 			defer wg.Done()
 
-			link, err := r.GetDownloadLink(t, &file)
+			link, err := r.GetDownloadLink(t, &file, 0)
 			if err != nil {
 				errCh <- err
 				return
@@ -333,6 +347,7 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		// Read the response body to get the error message
 		b, err := io.ReadAll(resp.Body)
@@ -348,12 +363,12 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 			return "", request.TrafficExceededError
 		case 24:
 			return "", request.HosterUnavailableError // Link has been nerfed
+		case 19:
+			return "", request.HosterUnavailableError // File has been removed
 		default:
 			return "", fmt.Errorf("realdebrid API error: %d", resp.StatusCode)
 		}
-
 	}
-	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -366,20 +381,28 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 
 }
 
-func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
+
+	if index >= len(r.DownloadKeys) {
+		// Reset to first key
+		index = 0
+	}
+	r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.DownloadKeys[index]))
 	link, err := r._getDownloadLink(file)
-	if err == nil {
+	if err == nil && link != "" {
 		return link, nil
 	}
-	for _, key := range r.ExtraAPIKeys {
-		r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", key))
-		if link, err := r._getDownloadLink(file); err == nil {
-			return link, nil
+	if err != nil && errors.Is(err, request.HosterUnavailableError) {
+		// Try the next key
+		if index+1 < len(r.DownloadKeys) {
+			return r.GetDownloadLink(t, file, index+1)
 		}
 	}
-	// Reset to main API key
+	// If we reach here, it means we have tried all keys
+	// and none of them worked, or the error is not related to the keys
+	// Reset to the first key
 	r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.APIKey))
-	return "", err
+	return link, err
 }
 
 func (r *RealDebrid) GetCheckCached() bool {
@@ -553,11 +576,7 @@ func (r *RealDebrid) GetMountPath() string {
 
 func New(dc config.Debrid) *RealDebrid {
 	rl := request.ParseRateLimit(dc.RateLimit)
-	apiKeys := strings.Split(dc.DownloadAPIKeys, ",")
-	extraKeys := make([]string, 0)
-	if len(apiKeys) > 1 {
-		extraKeys = apiKeys[1:]
-	}
+
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
@@ -568,16 +587,21 @@ func New(dc config.Debrid) *RealDebrid {
 		request.WithLogger(_log),
 		request.WithMaxRetries(5),
 		request.WithRetryableStatus(429),
+		request.WithProxy(dc.Proxy),
 	)
 	return &RealDebrid{
 		Name:             "realdebrid",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
-		ExtraAPIKeys:     extraKeys,
+		DownloadKeys:     dc.DownloadAPIKeys,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
 		logger:           logger.New(dc.Name),
 		CheckCached:      dc.CheckCached,
 	}
+}
+
+func (r *RealDebrid) GetDownloadKeys() []string {
+	return r.DownloadKeys
 }

@@ -321,7 +321,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 
 	proxy.OnRequest(goproxy.ReqHostMatches(regexp.MustCompile("^.443$"))).HandleConnect(goproxy.AlwaysMitm)
 	proxy.OnResponse(
-		UrlMatches(regexp.MustCompile("^.*/api\\?t=(search|tvsearch|movie)(&.*)?$")),
+		UrlMatches(regexp.MustCompile(`^.*/api\?t=(search|tvsearch|movie)(&.*)?$`)),
 		goproxy.StatusCodeIs(http.StatusOK, http.StatusAccepted)).DoFunc(
 		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 			return p.ProcessResponse(resp)

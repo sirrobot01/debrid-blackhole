@@ -434,26 +434,6 @@ func (r *Repair) repairArr(j *Job, _arr string, tmdbId string) ([]arr.ContentFil
 	return brokenItems, nil
 }
 
-func (r *Repair) getUniquePaths(media arr.Content) map[string]string {
-	// Use zurg setup to check file availability with zurg
-	// This reduces bandwidth usage significantly
-
-	uniqueParents := make(map[string]string)
-	files := media.Files
-	for _, file := range files {
-		target := getSymlinkTarget(file.Path)
-		if target != "" {
-			file.IsSymlink = true
-			dir, f := filepath.Split(target)
-			parent := filepath.Base(filepath.Clean(dir))
-			// Set target path folder/file.mkv
-			file.TargetPath = f
-			uniqueParents[parent] = target
-		}
-	}
-	return uniqueParents
-}
-
 func (r *Repair) isMediaAccessible(m arr.Content) bool {
 	files := m.Files
 	if len(files) == 0 {
@@ -758,7 +738,7 @@ func (r *Repair) saveToFile() {
 	if err != nil {
 		r.logger.Debug().Err(err).Msg("Failed to marshal jobs")
 	}
-	err = os.WriteFile(r.filename, data, 0644)
+	_ = os.WriteFile(r.filename, data, 0644)
 }
 
 func (r *Repair) loadFromFile() {

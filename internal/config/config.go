@@ -7,7 +7,6 @@ import (
 	"github.com/goccy/go-json"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -18,14 +17,15 @@ var (
 )
 
 type Debrid struct {
-	Name             string `json:"name"`
-	Host             string `json:"host"`
-	APIKey           string `json:"api_key"`
-	DownloadAPIKeys  string `json:"download_api_keys"`
-	Folder           string `json:"folder"`
-	DownloadUncached bool   `json:"download_uncached"`
-	CheckCached      bool   `json:"check_cached"`
-	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
+	Name             string   `json:"name"`
+	Host             string   `json:"host"`
+	APIKey           string   `json:"api_key"`
+	DownloadAPIKeys  []string `json:"download_api_keys"`
+	Folder           string   `json:"folder"`
+	DownloadUncached bool     `json:"download_uncached"`
+	CheckCached      bool     `json:"check_cached"`
+	RateLimit        string   `json:"rate_limit"` // 200/minute or 10/second
+	Proxy            string   `json:"proxy"`
 
 	UseWebDav bool `json:"use_webdav"`
 	WebDav
@@ -192,15 +192,15 @@ func validateDebrids(debrids []Debrid) error {
 	return nil
 }
 
-func validateQbitTorrent(config *QBitTorrent) error {
-	if config.DownloadFolder == "" {
-		return errors.New("qbittorent download folder is required")
-	}
-	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
-		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
-	}
-	return nil
-}
+//func validateQbitTorrent(config *QBitTorrent) error {
+//	if config.DownloadFolder == "" {
+//		return errors.New("qbittorent download folder is required")
+//	}
+//	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
+//		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
+//	}
+//	return nil
+//}
 
 func validateConfig(config *Config) error {
 	// Run validations concurrently
@@ -299,15 +299,9 @@ func (c *Config) NeedsSetup() bool {
 
 func (c *Config) updateDebrid(d Debrid) Debrid {
 
-	downloadAPIKeys := strings.Split(d.DownloadAPIKeys, ",")
-	newApiKeys := make([]string, 0, len(downloadAPIKeys))
-	for _, key := range downloadAPIKeys {
-		key = strings.TrimSpace(key)
-		if key != "" {
-			newApiKeys = append(newApiKeys, key)
-		}
+	if len(d.DownloadAPIKeys) == 0 {
+		d.DownloadAPIKeys = append(d.DownloadAPIKeys, d.APIKey)
 	}
-	d.DownloadAPIKeys = strings.Join(newApiKeys, ",")
 
 	if !d.UseWebDav {
 		return d

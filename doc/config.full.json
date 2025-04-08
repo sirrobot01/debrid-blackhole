@@ -5,13 +5,17 @@
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
       "folder": "/mnt/remote/realdebrid/__all__/",
+      "proxy": "",
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": false,
       "use_webdav": true,
       "torrents_refresh_interval": "15s",
       "folder_naming": "original_no_ext",
-      "auto_expire_links_after": "3d"
+      "auto_expire_links_after": "3d",
+      "rc_url": "http://your-ip-address:9990",
+      "rc_user": "your_rclone_rc_user",
+      "rc_pass": "your_rclone_rc_pass"
     },
     {
       "name": "torbox",
@@ -41,14 +45,6 @@
       "check_cached": false
     }
   ],
-  "proxy": {
-    "enabled": true,
-    "port": "8100",
-    "log_level": "info",
-    "username": "username",
-    "password": "password",
-    "cached_only": true
-  },
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
@@ -95,14 +91,5 @@
   "max_file_size": "",
   "allowed_file_types": [],
   "use_auth": false,
-  "discord_webhook_url": "https://discord.com/api/webhooks/...",
-  "webdav": {
-    "torrents_refresh_interval": "15s",
-    "download_links_refresh_interval": "1h",
-    "folder_naming": "original",
-    "auto_expire_links_after": "24h",
-    "rc_url": "http://your-ip-address:9990",
-    "rc_user": "your_rclone_rc_user",
-    "rc_pass": "your_rclone_rc_pass"
-  }
+  "discord_webhook_url": "https://discord.com/api/webhooks/..."
 }

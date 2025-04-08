@@ -225,14 +225,15 @@ func (q *QBit) preCacheFile(name string, filePaths []string) error {
 	for _, filePath := range filePaths {
 		func() {
 			file, err := os.Open(filePath)
-			defer file.Close()
+			defer func(file *os.File) {
+				_ = file.Close()
+			}(file)
 			if err != nil {
 				return
 			}
 			// Pre-cache the file header (first 256KB) using 16KB chunks.
 			q.readSmallChunks(file, 0, 256*1024, 16*1024)
 			q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
-			return
 		}()
 	}
 
@@ -264,5 +265,4 @@ func (q *QBit) readSmallChunks(file *os.File, startPos int64, totalToRead int, c
 
 		bytesRemaining -= n
 	}
-	return
 }

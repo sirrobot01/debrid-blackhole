@@ -46,6 +46,7 @@ type CachedTorrent struct {
 
 type downloadLinkCache struct {
 	Link      string
+	KeyIndex  int
 	ExpiresAt time.Time
 }
 
@@ -68,12 +69,13 @@ type Cache struct {
 	client types.Client
 	logger zerolog.Logger
 
-	torrents      *xsync.MapOf[string, *CachedTorrent] // key: torrent.Id, value: *CachedTorrent
-	torrentsNames *xsync.MapOf[string, *CachedTorrent] // key: torrent.Name, value: torrent
-	listings      atomic.Value
-	downloadLinks *xsync.MapOf[string, downloadLinkCache]
-	PropfindResp  *xsync.MapOf[string, PropfindResponse]
-	folderNaming  WebDavFolderNaming
+	torrents             *xsync.MapOf[string, *CachedTorrent] // key: torrent.Id, value: *CachedTorrent
+	torrentsNames        *xsync.MapOf[string, *CachedTorrent] // key: torrent.Name, value: torrent
+	listings             atomic.Value
+	downloadLinks        *xsync.MapOf[string, downloadLinkCache]
+	invalidDownloadLinks *xsync.MapOf[string, string]
+	PropfindResp         *xsync.MapOf[string, PropfindResponse]
+	folderNaming         WebDavFolderNaming
 
 	// repair
 	repairChan        chan RepairRequest
@@ -116,6 +118,7 @@ func New(dc config.Debrid, client types.Client) *Cache {
 		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
 		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
 		torrentsNames:                xsync.NewMapOf[string, *CachedTorrent](),
+		invalidDownloadLinks:         xsync.NewMapOf[string, string](),
 		client:                       client,
 		logger:                       logger.New(fmt.Sprintf("%s-webdav", client.GetName())),
 		workers:                      workers,
@@ -161,6 +164,8 @@ func (c *Cache) Start(ctx context.Context) error {
 
 func (c *Cache) load() (map[string]*CachedTorrent, error) {
 	torrents := make(map[string]*CachedTorrent)
+	var results sync.Map
+
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
 		return torrents, fmt.Errorf("failed to create cache directory: %w", err)
 	}
@@ -170,54 +175,102 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 		return torrents, fmt.Errorf("failed to read cache directory: %w", err)
 	}
 
-	now := time.Now()
+	// Get only json files
+	var jsonFiles []os.DirEntry
 	for _, file := range files {
-		fileName := file.Name()
-		if file.IsDir() || filepath.Ext(fileName) != ".json" {
-			continue
-		}
-
-		filePath := filepath.Join(c.dir, fileName)
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			c.logger.Debug().Err(err).Msgf("Failed to read file: %s", filePath)
-			continue
-		}
-
-		var ct CachedTorrent
-		if err := json.Unmarshal(data, &ct); err != nil {
-			c.logger.Debug().Err(err).Msgf("Failed to unmarshal file: %s", filePath)
-			continue
-		}
-		isComplete := true
-		if len(ct.Files) != 0 {
-			// Check if all files are valid, if not, delete the file.json and remove from cache.
-			for _, f := range ct.Files {
-				if !f.IsValid() {
-					isComplete = false
-					break
-				}
-			}
-			if isComplete {
-				addedOn, err := time.Parse(time.RFC3339, ct.Added)
-				if err != nil {
-					addedOn = now
-				}
-				ct.AddedOn = addedOn
-				ct.IsComplete = true
-				torrents[ct.Id] = &ct
-			} else {
-				// Delete the file if it's not complete
-				_ = os.Remove(filePath)
-			}
-
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
+			jsonFiles = append(jsonFiles, file)
 		}
 	}
+
+	if len(jsonFiles) == 0 {
+		return torrents, nil
+	}
+
+	// Create channels with appropriate buffering
+	workChan := make(chan os.DirEntry, min(c.workers, len(jsonFiles)))
+
+	// Create a wait group for workers
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < c.workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			now := time.Now()
+
+			for {
+				file, ok := <-workChan
+				if !ok {
+					return // Channel closed, exit goroutine
+				}
+
+				fileName := file.Name()
+				filePath := filepath.Join(c.dir, fileName)
+				data, err := os.ReadFile(filePath)
+				if err != nil {
+					c.logger.Debug().Err(err).Msgf("Failed to read file: %s", filePath)
+					continue
+				}
+
+				var ct CachedTorrent
+				if err := json.Unmarshal(data, &ct); err != nil {
+					c.logger.Debug().Err(err).Msgf("Failed to unmarshal file: %s", filePath)
+					continue
+				}
+
+				isComplete := true
+				if len(ct.Files) != 0 {
+					// Check if all files are valid, if not, delete the file.json and remove from cache.
+					for _, f := range ct.Files {
+						if f.Link == "" {
+							isComplete = false
+							break
+						}
+					}
+
+					if isComplete {
+						addedOn, err := time.Parse(time.RFC3339, ct.Added)
+						if err != nil {
+							addedOn = now
+						}
+						ct.AddedOn = addedOn
+						ct.IsComplete = true
+						results.Store(ct.Id, &ct)
+					} else {
+						// Delete the file if it's not complete
+						_ = os.Remove(filePath)
+					}
+				}
+			}
+		}()
+	}
+
+	// Feed work to workers
+	for _, file := range jsonFiles {
+		workChan <- file
+	}
+
+	// Signal workers that no more work is coming
+	close(workChan)
+
+	// Wait for all workers to complete
+	wg.Wait()
+
+	// Convert sync.Map to regular map
+	results.Range(func(key, value interface{}) bool {
+		id, _ := key.(string)
+		torrent, _ := value.(*CachedTorrent)
+		torrents[id] = torrent
+		return true
+	})
 
 	return torrents, nil
 }
 
 func (c *Cache) Sync() error {
+	defer c.logger.Info().Msg("WebDav server sync complete")
 	cachedTorrents, err := c.load()
 	if err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to load cache")
@@ -486,38 +539,45 @@ func (c *Cache) saveTorrent(id string, data []byte) {
 }
 
 func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
-	if len(t.Files) == 0 {
+
+	isComplete := func(files map[string]types.File) bool {
+		_complete := len(files) > 0
+		for _, file := range files {
+			if file.Link == "" {
+				_complete = false
+				break
+			}
+		}
+		return _complete
+	}
+
+	if !isComplete(t.Files) {
 		if err := c.client.UpdateTorrent(t); err != nil {
 			return fmt.Errorf("failed to update torrent: %w", err)
 		}
 	}
-	// Validate each file in the torrent
-	isComplete := true
-	for _, file := range t.Files {
-		if file.Link == "" {
-			isComplete = false
-			continue
-		}
-	}
 
-	if !isComplete {
-		c.logger.Debug().Msgf("Torrent %s is not complete, missing link for file %s. Triggering a reinsert", t.Id)
-		if err := c.ReInsertTorrent(t); err != nil {
-			c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
-			return fmt.Errorf("failed to reinsert torrent: %w", err)
-		}
-	}
+	if !isComplete(t.Files) {
+		c.logger.Debug().Msgf("Torrent %s is still not complete. Triggering a reinsert(disabled)", t.Id)
+		//ct, err := c.reInsertTorrent(t)
+		//if err != nil {
+		//	c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
+		//	return err
+		//}
+		//c.logger.Debug().Msgf("Reinserted torrent %s", ct.Id)
 
-	addedOn, err := time.Parse(time.RFC3339, t.Added)
-	if err != nil {
-		addedOn = time.Now()
+	} else {
+		addedOn, err := time.Parse(time.RFC3339, t.Added)
+		if err != nil {
+			addedOn = time.Now()
+		}
+		ct := &CachedTorrent{
+			Torrent:    t,
+			IsComplete: len(t.Files) > 0,
+			AddedOn:    addedOn,
+		}
+		c.setTorrent(ct)
 	}
-	ct := &CachedTorrent{
-		Torrent:    t,
-		IsComplete: len(t.Files) > 0,
-		AddedOn:    addedOn,
-	}
-	c.setTorrent(ct)
 
 	if refreshRclone {
 		c.refreshListings()
@@ -525,7 +585,7 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 	return nil
 }
 
-func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
+func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string, index int) string {
 
 	// Check link cache
 	if dl := c.checkDownloadLink(fileLink); dl != "" {
@@ -548,44 +608,60 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 		}
 	}
 
+	// If file.Link is still empty, return
+	if file.Link == "" {
+		c.logger.Debug().Msgf("File link is empty for %s. Release is probably nerfed", filename)
+		// Try to reinsert the torrent?
+		ct, err := c.reInsertTorrent(ct.Torrent)
+		if err != nil {
+			c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
+			return ""
+		}
+		file = ct.Files[filename]
+		c.logger.Debug().Msgf("Reinserted torrent %s", ct.Name)
+	}
+
 	c.logger.Trace().Msgf("Getting download link for %s", filename)
-	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
+	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file, index)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
-			c.logger.Debug().Err(err).Msgf("Hoster is unavailable for %s/%s", ct.Name, filename)
+			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
+			ct, err := c.reInsertTorrent(ct.Torrent)
+			if err != nil {
+				c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
+				return ""
+			}
+			c.logger.Debug().Msgf("Reinserted torrent %s", ct.Name)
+			file = ct.Files[filename]
+			// Retry getting the download link
+			downloadLink, err = c.client.GetDownloadLink(ct.Torrent, &file, index)
+			if err != nil {
+				c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
+				return ""
+			}
+			if downloadLink == "" {
+				c.logger.Debug().Msgf("Download link is empty for %s", file.Link)
+				return ""
+			}
+			file.DownloadLink = downloadLink
+			file.Generated = time.Now()
+			ct.Files[filename] = file
+			go func() {
+				c.updateDownloadLink(file.Link, downloadLink, 0)
+				c.setTorrent(ct)
+			}()
+			return file.DownloadLink
+		} else {
+			c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
 			return ""
-			// This code is commented iut due to the fact that if a torrent link is uncached, it's likely that we can't redownload it again
-			// Do not attempt to repair the torrent if the hoster is unavailable
-			// Check link here??
-			//c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
-			//if err := c.repairTorrent(ct); err != nil {
-			//	c.logger.Error().Err(err).Msgf("Failed to trigger repair for %s", ct.Name)
-			//	return ""
-			//}
-			//// Generate download link for the file then
-			//f := ct.Files[filename]
-			//downloadLink, _ = c.client.GetDownloadLink(ct.Torrent, &f)
-			//f.DownloadLink = downloadLink
-			//file.Generated = time.Now()
-			//ct.Files[filename] = f
-			//c.updateDownloadLink(file.Link, downloadLink)
-			//
-			//go func() {
-			//	go c.setTorrent(ct)
-			//}()
-			//
-			//return downloadLink // Gets download link in the next pass
 		}
-
-		c.logger.Debug().Err(err).Msgf("Failed to get download link for :%s", file.Link)
-		return ""
 	}
 	file.DownloadLink = downloadLink
 	file.Generated = time.Now()
 	ct.Files[filename] = file
 
 	go func() {
-		c.updateDownloadLink(file.Link, downloadLink)
+		c.updateDownloadLink(file.Link, downloadLink, 0)
 		c.setTorrent(ct)
 	}()
 	return file.DownloadLink
@@ -596,7 +672,7 @@ func (c *Cache) GenerateDownloadLinks(t *CachedTorrent) {
 		c.logger.Error().Err(err).Msg("Failed to generate download links")
 	}
 	for _, file := range t.Files {
-		c.updateDownloadLink(file.Link, file.DownloadLink)
+		c.updateDownloadLink(file.Link, file.DownloadLink, 0)
 	}
 
 	c.SaveTorrent(t)
@@ -624,20 +700,37 @@ func (c *Cache) AddTorrent(t *types.Torrent) error {
 
 }
 
-func (c *Cache) updateDownloadLink(link, downloadLink string) {
+func (c *Cache) updateDownloadLink(link, downloadLink string, keyIndex int) {
 	c.downloadLinks.Store(link, downloadLinkCache{
 		Link:      downloadLink,
-		ExpiresAt: time.Now().Add(c.autoExpiresLinksAfter), // Expires in 24 hours
+		ExpiresAt: time.Now().Add(c.autoExpiresLinksAfter),
+		KeyIndex:  keyIndex,
 	})
 }
 
 func (c *Cache) checkDownloadLink(link string) string {
 	if dl, ok := c.downloadLinks.Load(link); ok {
-		if dl.ExpiresAt.After(time.Now()) {
+		if dl.ExpiresAt.After(time.Now()) && !c.IsDownloadLinkInvalid(dl.Link) {
 			return dl.Link
 		}
 	}
 	return ""
+}
+
+func (c *Cache) RemoveDownloadLink(link string) {
+	c.downloadLinks.Delete(link)
+}
+
+func (c *Cache) MarkDownloadLinkAsInvalid(downloadLink, reason string) {
+	c.invalidDownloadLinks.Store(downloadLink, reason)
+}
+
+func (c *Cache) IsDownloadLinkInvalid(downloadLink string) bool {
+	if reason, ok := c.invalidDownloadLinks.Load(downloadLink); ok {
+		c.logger.Debug().Msgf("Download link %s is invalid: %s", downloadLink, reason)
+		return true
+	}
+	return false
 }
 
 func (c *Cache) GetClient() types.Client {
@@ -687,4 +780,8 @@ func (c *Cache) OnRemove(torrentId string) {
 
 func (c *Cache) GetLogger() zerolog.Logger {
 	return c.logger
+}
+
+func (c *Cache) TotalDownloadKeys() int {
+	return len(c.client.GetDownloadKeys())
 }

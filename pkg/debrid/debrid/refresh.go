@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -67,29 +66,6 @@ func (c *Cache) refreshListings() {
 	}
 }
 
-func (c *Cache) resetPropfindResponse() {
-	// Right now, parents are hardcoded
-	parents := []string{"__all__", "torrents"}
-	// Reset only the parent directories
-	// Convert the parents to a keys
-	// This is a bit hacky, but it works
-	// Instead of deleting all the keys, we only delete the parent keys, e.g __all__/ or torrents/
-	keys := make([]string, 0, len(parents))
-	for _, p := range parents {
-		// Construct the key
-		// construct url
-		url := filepath.Clean(filepath.Join("/webdav", c.client.GetName(), p))
-		key0 := fmt.Sprintf("propfind:%s:0", url)
-		key1 := fmt.Sprintf("propfind:%s:1", url)
-		keys = append(keys, key0, key1)
-	}
-
-	// Delete the keys
-	for _, k := range keys {
-		c.PropfindResp.Delete(k)
-	}
-}
-
 func (c *Cache) refreshTorrents() {
 	if c.torrentsRefreshMu.TryLock() {
 		defer c.torrentsRefreshMu.Unlock()
@@ -127,7 +103,7 @@ func (c *Cache) refreshTorrents() {
 
 	// Check for deleted torrents
 	deletedTorrents := make([]string, 0)
-	for id, _ := range torrents {
+	for id := range torrents {
 		if _, ok := idStore[id]; !ok {
 			deletedTorrents = append(deletedTorrents, id)
 		}
@@ -264,8 +240,7 @@ func (c *Cache) refreshDownloadLinks() {
 				ExpiresAt: v.Generated.Add(c.autoExpiresLinksAfter - timeSince),
 			})
 		} else {
-			//c.downloadLinks.Delete(k) don't delete, just log
-			c.logger.Trace().Msgf("Download link for %s expired", k)
+			c.downloadLinks.Delete(k)
 		}
 	}
 
