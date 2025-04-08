@@ -5,6 +5,7 @@
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
       "folder": "/mnt/remote/realdebrid/__all__/",
+      "download_api_keys": [],
       "proxy": "",
       "rate_limit": "250/minute",
       "download_uncached": false,

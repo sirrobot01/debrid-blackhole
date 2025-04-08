@@ -169,7 +169,6 @@ func (c *Cache) refreshDownloadLink(link string) error {
 	return nil
 }
 
-func (c *Cache) resetDownloadLinks() {
+func (c *Cache) resetInvalidLinks() {
 	c.invalidDownloadLinks = xsync.NewMapOf[string, string]()
-	c.downloadLinks = xsync.NewMapOf[string, downloadLinkCache]()
 }
