@@ -19,12 +19,13 @@ import (
 )
 
 type AllDebrid struct {
-	Name             string
-	Host             string `json:"host"`
-	APIKey           string
-	DownloadKeys     []string
-	DownloadUncached bool
-	client           *request.Client
+	Name               string
+	Host               string `json:"host"`
+	APIKey             string
+	DownloadKeys       []string
+	ActiveDownloadKeys []string
+	DownloadUncached   bool
+	client             *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -251,7 +252,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func(file types.File) {
 			defer wg.Done()
-			link, err := ad.GetDownloadLink(t, &file, 0)
+			link, err := ad.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
@@ -286,7 +287,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
+func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -363,6 +364,9 @@ func (ad *AllDebrid) GetMountPath() string {
 	return ad.MountPath
 }
 
-func (ad *AllDebrid) GetDownloadKeys() []string {
-	return ad.DownloadKeys
+func (ad *AllDebrid) RemoveActiveDownloadKey() {
+}
+
+func (ad *AllDebrid) ResetActiveDownloadKeys() {
+	ad.ActiveDownloadKeys = ad.DownloadKeys
 }

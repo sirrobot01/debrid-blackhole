@@ -22,12 +22,13 @@ import (
 )
 
 type Torbox struct {
-	Name             string
-	Host             string `json:"host"`
-	APIKey           string
-	DownloadKeys     []string
-	DownloadUncached bool
-	client           *request.Client
+	Name               string
+	Host               string `json:"host"`
+	APIKey             string
+	DownloadKeys       []string
+	ActiveDownloadKeys []string
+	DownloadUncached   bool
+	client             *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -280,7 +281,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func() {
 			defer wg.Done()
-			link, err := tb.GetDownloadLink(t, &file, 0)
+			link, err := tb.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
@@ -312,7 +313,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -363,6 +364,9 @@ func (tb *Torbox) GetMountPath() string {
 	return tb.MountPath
 }
 
-func (tb *Torbox) GetDownloadKeys() []string {
-	return tb.DownloadKeys
+func (tb *Torbox) RemoveActiveDownloadKey() {
+}
+
+func (tb *Torbox) ResetActiveDownloadKeys() {
+	tb.ActiveDownloadKeys = tb.DownloadKeys
 }

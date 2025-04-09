@@ -162,13 +162,7 @@ func (c *Cache) reInsertTorrent(torrent *types.Torrent) (*CachedTorrent, error) 
 	return ct, nil
 }
 
-func (c *Cache) refreshDownloadLink(link string) error {
-	// A generated download link has being limited
-	// Generate a new one with other API keys
-	// Temporarily remove the old one
-	return nil
-}
-
 func (c *Cache) resetInvalidLinks() {
 	c.invalidDownloadLinks = xsync.NewMapOf[string, string]()
+	c.client.ResetActiveDownloadKeys() // Reset the active download keys
 }

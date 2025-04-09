@@ -4,7 +4,7 @@ import "time"
 
 func (c *Cache) Refresh() error {
 	// For now, we just want to refresh the listing and download links
-	go c.refreshDownloadLinksWorker()
+	//go c.refreshDownloadLinksWorker()
 	go c.refreshTorrentsWorker()
 	go c.resetInvalidLinksWorker()
 	return nil

@@ -18,12 +18,13 @@ import (
 )
 
 type DebridLink struct {
-	Name             string
-	Host             string `json:"host"`
-	APIKey           string
-	DownloadKeys     []string
-	DownloadUncached bool
-	client           *request.Client
+	Name               string
+	Host               string `json:"host"`
+	APIKey             string
+	DownloadKeys       []string
+	ActiveDownloadKeys []string
+	DownloadUncached   bool
+	client             *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -243,7 +244,7 @@ func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File, index int) (string, error) {
+func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
 	return file.DownloadLink, nil
 }
 
@@ -368,6 +369,9 @@ func (dl *DebridLink) GetMountPath() string {
 	return dl.MountPath
 }
 
-func (dl *DebridLink) GetDownloadKeys() []string {
-	return dl.DownloadKeys
+func (dl *DebridLink) RemoveActiveDownloadKey() {
+}
+
+func (dl *DebridLink) ResetActiveDownloadKeys() {
+	dl.ActiveDownloadKeys = dl.DownloadKeys
 }

@@ -3,18 +3,11 @@ package webdav
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
 	"io"
 	"net/http"
 	"os"
-	"sync"
 	"time"
-)
-
-var (
-	sdClient *request.Client
-	once     sync.Once
 )
 
 var sharedClient = &http.Client{
@@ -31,32 +24,6 @@ var sharedClient = &http.Client{
 		DisableKeepAlives:     false,
 	},
 	Timeout: 60 * time.Second,
-}
-
-func getClient() *request.Client {
-	once.Do(func() {
-		var transport = &http.Transport{
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-			Proxy:                 http.ProxyFromEnvironment,
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   20,
-			MaxConnsPerHost:       50,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     false,
-		}
-		sdClient = request.New(
-			request.WithTransport(transport),
-			request.WithTimeout(30*time.Second),
-			request.WithHeaders(map[string]string{
-				"Accept":     "*/*",
-				"Connection": "keep-alive",
-			}),
-		)
-	})
-	return sdClient
 }
 
 type File struct {
@@ -92,20 +59,20 @@ func (f *File) Close() error {
 	return nil
 }
 
-func (f *File) getDownloadLink(index int) string {
+func (f *File) getDownloadLink() string {
 	// Check if we already have a final URL cached
 
 	if f.downloadLink != "" && isValidURL(f.downloadLink) {
 		return f.downloadLink
 	}
-	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link, index)
+	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link)
 	if downloadLink != "" && isValidURL(downloadLink) {
 		return downloadLink
 	}
 	return ""
 }
 
-func (f *File) stream(index int) (*http.Response, error) {
+func (f *File) stream() (*http.Response, error) {
 	client := sharedClient // Might be replaced with the custom client
 	_log := f.cache.GetLogger()
 	var (
@@ -113,7 +80,7 @@ func (f *File) stream(index int) (*http.Response, error) {
 		downloadLink string
 	)
 
-	downloadLink = f.getDownloadLink(index) // Uses the first API key
+	downloadLink = f.getDownloadLink() // Uses the first API key
 	if downloadLink == "" {
 		_log.Error().Msgf("Failed to get download link for %s", f.name)
 		return nil, fmt.Errorf("failed to get download link")
@@ -136,27 +103,16 @@ func (f *File) stream(index int) (*http.Response, error) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 
 		closeResp := func() {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
 
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			closeResp()
 			// Read the body to consume the response
-			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "bandwidth limit reached")
-			// Generate a new download link
-			if index < f.cache.TotalDownloadKeys()-1 {
-				// Retry with a different download key
-				_log.Debug().Str("link", downloadLink).
-					Str("torrentId", f.torrentId).
-					Str("fileId", f.fileId).
-					Msgf("Bandwidth limit reached, retrying with another API key, attempt %d", index+1)
-				return f.stream(index + 1) // Retry with the next download key
-			} else {
-				// No more download keys available, return an error
-				_log.Error().Msgf("Bandwidth limit reached for all download keys")
-				return nil, fmt.Errorf("bandwidth_limit_exceeded")
-			}
+			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "bandwidth_exceeded")
+			// Retry with a different API key if it's available
+			return f.stream()
 
 		} else if resp.StatusCode == http.StatusNotFound {
 			closeResp()
@@ -165,7 +121,7 @@ func (f *File) stream(index int) (*http.Response, error) {
 			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "link_not_found")
 			f.cache.RemoveDownloadLink(f.link) // Remove the link from the cache
 			// Generate a new download link
-			downloadLink = f.getDownloadLink(index)
+			downloadLink = f.getDownloadLink()
 			if downloadLink == "" {
 				_log.Error().Msgf("Failed to get download link for %s", f.name)
 				return nil, fmt.Errorf("failed to get download link")
@@ -224,7 +180,7 @@ func (f *File) Read(p []byte) (n int, err error) {
 		}
 
 		// Make the request to get the file
-		resp, err := f.stream(0)
+		resp, err := f.stream()
 		if err != nil {
 			return 0, err
 		}

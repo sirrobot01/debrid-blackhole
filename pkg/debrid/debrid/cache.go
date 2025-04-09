@@ -585,7 +585,7 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 	return nil
 }
 
-func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string, index int) string {
+func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 
 	// Check link cache
 	if dl := c.checkDownloadLink(fileLink); dl != "" {
@@ -622,7 +622,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string, index int)
 	}
 
 	c.logger.Trace().Msgf("Getting download link for %s", filename)
-	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file, index)
+	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
 			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
@@ -634,7 +634,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string, index int)
 			c.logger.Debug().Msgf("Reinserted torrent %s", ct.Name)
 			file = ct.Files[filename]
 			// Retry getting the download link
-			downloadLink, err = c.client.GetDownloadLink(ct.Torrent, &file, index)
+			downloadLink, err = c.client.GetDownloadLink(ct.Torrent, &file)
 			if err != nil {
 				c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
 				return ""
@@ -651,6 +651,8 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string, index int)
 				c.setTorrent(ct)
 			}()
 			return file.DownloadLink
+		} else if errors.Is(err, request.TrafficExceededError) {
+			// This is likely a fair usage limit error
 		} else {
 			c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
 			return ""
@@ -723,6 +725,10 @@ func (c *Cache) RemoveDownloadLink(link string) {
 
 func (c *Cache) MarkDownloadLinkAsInvalid(downloadLink, reason string) {
 	c.invalidDownloadLinks.Store(downloadLink, reason)
+	// Remove the download api key from active
+	if reason == "bandwidth_exceeded" {
+		c.client.RemoveActiveDownloadKey()
+	}
 }
 
 func (c *Cache) IsDownloadLinkInvalid(downloadLink string) bool {
@@ -780,8 +786,4 @@ func (c *Cache) OnRemove(torrentId string) {
 
 func (c *Cache) GetLogger() zerolog.Logger {
 	return c.logger
-}
-
-func (c *Cache) TotalDownloadKeys() int {
-	return len(c.client.GetDownloadKeys())
 }

@@ -747,12 +747,20 @@ func (r *Repair) loadFromFile() {
 		r.Jobs = make(map[string]*Job)
 		return
 	}
-	jobs := make(map[string]*Job)
-	err = json.Unmarshal(data, &jobs)
+	_jobs := make(map[string]*Job)
+	err = json.Unmarshal(data, &_jobs)
 	if err != nil {
 		r.logger.Trace().Err(err).Msg("Failed to unmarshal jobs; resetting")
 		r.Jobs = make(map[string]*Job)
 		return
+	}
+	jobs := make(map[string]*Job)
+	for k, v := range _jobs {
+		if v.Status != JobPending {
+			// Skip jobs that are not pending processing due to reboot
+			continue
+		}
+		jobs[k] = v
 	}
 	r.Jobs = jobs
 }
