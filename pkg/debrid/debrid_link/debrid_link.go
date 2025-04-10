@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
@@ -11,6 +12,7 @@ import (
 	"github.com/sirrobot01/debrid-blackhole/internal/utils"
 	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
 	"slices"
+	"strconv"
 	"time"
 
 	"net/http"
@@ -18,13 +20,12 @@ import (
 )
 
 type DebridLink struct {
-	Name               string
-	Host               string `json:"host"`
-	APIKey             string
-	DownloadKeys       []string
-	ActiveDownloadKeys []string
-	DownloadUncached   bool
-	client             *request.Client
+	Name             string
+	Host             string `json:"host"`
+	APIKey           string
+	DownloadKeys     *xsync.MapOf[string, types.Account]
+	DownloadUncached bool
+	client           *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -244,8 +245,8 @@ func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLinks, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
-	return file.DownloadLink, nil
+func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
+	return file.DownloadLink, "0", nil
 }
 
 func (dl *DebridLink) GetDownloadingStatus() []string {
@@ -274,11 +275,21 @@ func New(dc config.Debrid) *DebridLink {
 		request.WithRateLimiter(rl),
 		request.WithProxy(dc.Proxy),
 	)
+
+	accounts := xsync.NewMapOf[string, types.Account]()
+	for idx, key := range dc.DownloadAPIKeys {
+		id := strconv.Itoa(idx)
+		accounts.Store(id, types.Account{
+			Name:  key,
+			ID:    id,
+			Token: key,
+		})
+	}
 	return &DebridLink{
 		Name:             "debridlink",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
-		DownloadKeys:     dc.DownloadAPIKeys,
+		DownloadKeys:     accounts,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
@@ -369,9 +380,8 @@ func (dl *DebridLink) GetMountPath() string {
 	return dl.MountPath
 }
 
-func (dl *DebridLink) RemoveActiveDownloadKey() {
+func (dl *DebridLink) DisableAccount(accountId string) {
 }
 
 func (dl *DebridLink) ResetActiveDownloadKeys() {
-	dl.ActiveDownloadKeys = dl.DownloadKeys
 }

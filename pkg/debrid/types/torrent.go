@@ -78,6 +78,7 @@ type File struct {
 	Path         string    `json:"path"`
 	Link         string    `json:"link"`
 	DownloadLink string    `json:"download_link"`
+	AccountId    string    `json:"account_id"`
 	Generated    time.Time `json:"generated"`
 }
 
@@ -117,4 +118,11 @@ func (t *Torrent) GetFile(id string) *File {
 		}
 	}
 	return nil
+}
+
+type Account struct {
+	ID       string `json:"id"`
+	Disabled bool   `json:"disabled"`
+	Name     string `json:"name"`
+	Token    string `json:"token"`
 }

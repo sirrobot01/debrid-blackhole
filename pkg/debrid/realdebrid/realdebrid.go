@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
@@ -15,6 +16,7 @@ import (
 	gourl "net/url"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,13 +27,12 @@ type RealDebrid struct {
 	Name string
 	Host string `json:"host"`
 
-	APIKey             string
-	DownloadKeys       []string // This is used for bandwidth
-	ActiveDownloadKeys []string // This is used for active downloads api keys
-	downloadKeysMux    sync.Mutex
+	APIKey       string
+	DownloadKeys *xsync.MapOf[string, types.Account] // index | Account
 
 	DownloadUncached bool
 	client           *request.Client
+	downloadClient   *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -45,8 +46,24 @@ func New(dc config.Debrid) *RealDebrid {
 		"Authorization": fmt.Sprintf("Bearer %s", dc.APIKey),
 	}
 	_log := logger.New(dc.Name)
-	client := request.New(
-		request.WithHeaders(headers),
+
+	accounts := xsync.NewMapOf[string, types.Account]()
+	firstDownloadKey := dc.DownloadAPIKeys[0]
+	for idx, key := range dc.DownloadAPIKeys {
+		id := strconv.Itoa(idx)
+		accounts.Store(id, types.Account{
+			Name:  key,
+			ID:    id,
+			Token: key,
+		})
+	}
+
+	downloadHeaders := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", firstDownloadKey),
+	}
+
+	downloadClient := request.New(
+		request.WithHeaders(downloadHeaders),
 		request.WithRateLimiter(rl),
 		request.WithLogger(_log),
 		request.WithMaxRetries(5),
@@ -54,17 +71,27 @@ func New(dc config.Debrid) *RealDebrid {
 		request.WithProxy(dc.Proxy),
 		request.WithStatusCooldown(447, 10*time.Second), // 447 is a fair use error
 	)
+
+	client := request.New(
+		request.WithHeaders(headers),
+		request.WithRateLimiter(rl),
+		request.WithLogger(_log),
+		request.WithMaxRetries(5),
+		request.WithRetryableStatus(429),
+		request.WithProxy(dc.Proxy),
+	)
+
 	return &RealDebrid{
-		Name:               "realdebrid",
-		Host:               dc.Host,
-		APIKey:             dc.APIKey,
-		DownloadKeys:       dc.DownloadAPIKeys,
-		ActiveDownloadKeys: dc.DownloadAPIKeys,
-		DownloadUncached:   dc.DownloadUncached,
-		client:             client,
-		MountPath:          dc.Folder,
-		logger:             logger.New(dc.Name),
-		CheckCached:        dc.CheckCached,
+		Name:             "realdebrid",
+		Host:             dc.Host,
+		APIKey:           dc.APIKey,
+		DownloadKeys:     accounts,
+		DownloadUncached: dc.DownloadUncached,
+		client:           client,
+		downloadClient:   downloadClient,
+		MountPath:        dc.Folder,
+		logger:           logger.New(dc.Name),
+		CheckCached:      dc.CheckCached,
 	}
 }
 
@@ -319,13 +346,14 @@ func (r *RealDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 		go func(file types.File) {
 			defer wg.Done()
 
-			link, err := r.GetDownloadLink(t, &file)
+			link, accountId, err := r.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
 			}
 
 			file.DownloadLink = link
+			file.AccountId = accountId
 			filesCh <- file
 		}(f)
 	}
@@ -375,7 +403,7 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 		"link": {file.Link},
 	}
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(payload.Encode()))
-	resp, err := r.client.Do(req)
+	resp, err := r.downloadClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -398,7 +426,9 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 		case 19:
 			return "", request.HosterUnavailableError // File has been removed
 		case 36:
-			return "", request.TrafficExceededError // File has been nerfed
+			return "", request.TrafficExceededError // traffic exceeded
+		case 34:
+			return "", request.TrafficExceededError // traffic exceeded
 		default:
 			return "", fmt.Errorf("realdebrid API error: Status: %d || Code: %d", resp.StatusCode, data.ErrorCode)
 		}
@@ -415,29 +445,47 @@ func (r *RealDebrid) _getDownloadLink(file *types.File) (string, error) {
 
 }
 
-func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
-	if len(r.ActiveDownloadKeys) < 1 {
+func (r *RealDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
+	defer r.downloadClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.APIKey))
+	var (
+		downloadLink string
+		accountId    string
+		err          error
+	)
+	accounts := r.getActiveAccounts()
+	if len(accounts) < 1 {
 		// No active download keys. It's likely that the key has reached bandwidth limit
-		return "", fmt.Errorf("no active download keys")
+		return "", "", fmt.Errorf("no active download keys")
 	}
-	defer r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.APIKey))
-	for idx := range r.ActiveDownloadKeys {
-		r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.ActiveDownloadKeys[idx]))
-		link, err := r._getDownloadLink(file)
-		if err == nil && link != "" {
-			return link, nil
-		}
+	for _, account := range accounts {
+		r.downloadClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", account.Token))
+		downloadLink, err = r._getDownloadLink(file)
 		if err != nil {
 			if errors.Is(err, request.TrafficExceededError) {
-				// Retry with the next API key
 				continue
-			} else {
-				return "", err
 			}
+			// If the error is not traffic exceeded, skip generating the link with a new key
+			return "", "", err
+		} else {
+			// If we successfully generated a link, break the loop
+			accountId = account.ID
+			file.AccountId = accountId
+			break
 		}
+
 	}
-	// If we reach here, it means all API keys have been exhausted
-	return "", fmt.Errorf("all API keys have been exhausted")
+	if downloadLink != "" {
+		// If we successfully generated a link, return it
+		return downloadLink, accountId, nil
+	}
+	// If we reach here, it means all keys are disabled or traffic exceeded
+	if err != nil {
+		if errors.Is(err, request.TrafficExceededError) {
+			return "", "", request.TrafficExceededError
+		}
+		return "", "", fmt.Errorf("error generating download link: %v", err)
+	}
+	return "", "", fmt.Errorf("error generating download link: %v", err)
 }
 
 func (r *RealDebrid) GetCheckCached() bool {
@@ -476,7 +524,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 	if err = json.Unmarshal(body, &data); err != nil {
 		return 0, nil, err
 	}
-	filenames := map[string]bool{}
+	filenames := map[string]struct{}{}
 	for _, t := range data {
 		if t.Status != "downloaded" {
 			continue
@@ -499,6 +547,7 @@ func (r *RealDebrid) getTorrents(offset int, limit int) (int, []*types.Torrent, 
 			MountPath:        r.MountPath,
 			Added:            t.Added.Format(time.RFC3339),
 		})
+		filenames[t.Filename] = struct{}{}
 	}
 	return totalItems, torrents, nil
 }
@@ -546,13 +595,14 @@ func (r *RealDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
 	links := make(map[string]types.DownloadLinks)
 	offset := 0
 	limit := 1000
-	if len(r.ActiveDownloadKeys) < 1 {
+
+	accounts := r.getActiveAccounts()
+
+	if len(accounts) < 1 {
 		// No active download keys. It's likely that the key has reached bandwidth limit
 		return nil, fmt.Errorf("no active download keys")
 	}
-	r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.ActiveDownloadKeys[0]))
-	// Reset to the API key
-	defer r.client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", r.APIKey))
+	r.downloadClient.SetHeader("Authorization", fmt.Sprintf("Bearer %s", accounts[0].Token))
 	for {
 		dl, err := r._getDownloads(offset, limit)
 		if err != nil {
@@ -581,7 +631,7 @@ func (r *RealDebrid) _getDownloads(offset int, limit int) ([]types.DownloadLinks
 		url = fmt.Sprintf("%s&offset=%d", url, offset)
 	}
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	resp, err := r.client.MakeRequest(req)
+	resp, err := r.downloadClient.MakeRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -616,16 +666,33 @@ func (r *RealDebrid) GetMountPath() string {
 	return r.MountPath
 }
 
-func (r *RealDebrid) RemoveActiveDownloadKey() {
-	r.downloadKeysMux.Lock()
-	defer r.downloadKeysMux.Unlock()
-	if len(r.ActiveDownloadKeys) > 0 {
-		r.ActiveDownloadKeys = r.ActiveDownloadKeys[1:]
+func (r *RealDebrid) DisableAccount(accountId string) {
+	if value, ok := r.DownloadKeys.Load(accountId); ok {
+		value.Disabled = true
+		r.DownloadKeys.Store(accountId, value)
+		r.logger.Info().Msgf("Disabled account Index: %s", value.ID)
 	}
 }
 
 func (r *RealDebrid) ResetActiveDownloadKeys() {
-	r.downloadKeysMux.Lock()
-	defer r.downloadKeysMux.Unlock()
-	r.ActiveDownloadKeys = r.DownloadKeys
+	r.DownloadKeys.Range(func(key string, value types.Account) bool {
+		value.Disabled = false
+		r.DownloadKeys.Store(key, value)
+		return true
+	})
+}
+
+func (r *RealDebrid) getActiveAccounts() []types.Account {
+	accounts := make([]types.Account, 0)
+	r.DownloadKeys.Range(func(key string, value types.Account) bool {
+		if value.Disabled {
+			return true
+		}
+		accounts = append(accounts, value)
+		return true
+	})
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].ID < accounts[j].ID
+	})
+	return accounts
 }

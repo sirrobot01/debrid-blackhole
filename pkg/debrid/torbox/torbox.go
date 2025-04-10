@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/debrid-blackhole/internal/config"
 	"github.com/sirrobot01/debrid-blackhole/internal/logger"
@@ -22,13 +23,12 @@ import (
 )
 
 type Torbox struct {
-	Name               string
-	Host               string `json:"host"`
-	APIKey             string
-	DownloadKeys       []string
-	ActiveDownloadKeys []string
-	DownloadUncached   bool
-	client             *request.Client
+	Name             string
+	Host             string `json:"host"`
+	APIKey           string
+	DownloadKeys     *xsync.MapOf[string, types.Account]
+	DownloadUncached bool
+	client           *request.Client
 
 	MountPath   string
 	logger      zerolog.Logger
@@ -49,11 +49,21 @@ func New(dc config.Debrid) *Torbox {
 		request.WithProxy(dc.Proxy),
 	)
 
+	accounts := xsync.NewMapOf[string, types.Account]()
+	for idx, key := range dc.DownloadAPIKeys {
+		id := strconv.Itoa(idx)
+		accounts.Store(id, types.Account{
+			Name:  key,
+			ID:    id,
+			Token: key,
+		})
+	}
+
 	return &Torbox{
 		Name:             "torbox",
 		Host:             dc.Host,
 		APIKey:           dc.APIKey,
-		DownloadKeys:     dc.DownloadAPIKeys,
+		DownloadKeys:     accounts,
 		DownloadUncached: dc.DownloadUncached,
 		client:           client,
 		MountPath:        dc.Folder,
@@ -281,12 +291,13 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func() {
 			defer wg.Done()
-			link, err := tb.GetDownloadLink(t, &file)
+			link, accountId, err := tb.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
 			}
 			file.DownloadLink = link
+			file.AccountId = accountId
 			filesCh <- file
 		}()
 	}
@@ -313,7 +324,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, error) {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -323,17 +334,17 @@ func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, e
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	var data DownloadLinksResponse
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if data.Data == nil {
-		return "", fmt.Errorf("error getting download links")
+		return "", "", fmt.Errorf("error getting download links")
 	}
 	link := *data.Data
-	return link, nil
+	return link, "0", nil
 }
 
 func (tb *Torbox) GetDownloadingStatus() []string {
@@ -364,9 +375,9 @@ func (tb *Torbox) GetMountPath() string {
 	return tb.MountPath
 }
 
-func (tb *Torbox) RemoveActiveDownloadKey() {
+func (tb *Torbox) DisableAccount(accountId string) {
 }
 
 func (tb *Torbox) ResetActiveDownloadKeys() {
-	tb.ActiveDownloadKeys = tb.DownloadKeys
+
 }

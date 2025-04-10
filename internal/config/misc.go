@@ -36,12 +36,12 @@ func getDefaultExtensions() []string {
 	}
 
 	// Remove duplicates
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	var unique []string
 
 	for _, ext := range allExts {
-		if !seen[ext] {
-			seen[ext] = true
+		if _, ok := seen[ext]; !ok {
+			seen[ext] = struct{}{}
 			unique = append(unique, ext)
 		}
 	}

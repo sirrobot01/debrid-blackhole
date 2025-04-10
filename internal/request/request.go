@@ -59,7 +59,7 @@ type Client struct {
 	maxRetries      int
 	timeout         time.Duration
 	skipTLSVerify   bool
-	retryableStatus map[int]bool
+	retryableStatus map[int]struct{}
 	logger          zerolog.Logger
 	proxy           string
 
@@ -139,7 +139,7 @@ func WithTransport(transport *http.Transport) ClientOption {
 func WithRetryableStatus(statusCodes ...int) ClientOption {
 	return func(c *Client) {
 		for _, code := range statusCodes {
-			c.retryableStatus[code] = true
+			c.retryableStatus[code] = struct{}{}
 		}
 	}
 }
@@ -250,7 +250,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 
 		// Check if the status code is retryable
-		if !c.retryableStatus[resp.StatusCode] || attempt == c.maxRetries {
+		if _, ok := c.retryableStatus[resp.StatusCode]; !ok || attempt == c.maxRetries {
 			return resp, nil
 		}
 
@@ -314,12 +314,12 @@ func New(options ...ClientOption) *Client {
 	client := &Client{
 		maxRetries:    3,
 		skipTLSVerify: true,
-		retryableStatus: map[int]bool{
-			http.StatusTooManyRequests:     true,
-			http.StatusInternalServerError: true,
-			http.StatusBadGateway:          true,
-			http.StatusServiceUnavailable:  true,
-			http.StatusGatewayTimeout:      true,
+		retryableStatus: map[int]struct{}{
+			http.StatusTooManyRequests:     struct{}{},
+			http.StatusInternalServerError: struct{}{},
+			http.StatusBadGateway:          struct{}{},
+			http.StatusServiceUnavailable:  struct{}{},
+			http.StatusGatewayTimeout:      struct{}{},
 		},
 		logger:          logger.New("request"),
 		timeout:         60 * time.Second,
@@ -341,11 +341,32 @@ func New(options ...ClientOption) *Client {
 
 	// Check if transport was set by WithTransport option
 	if client.client.Transport == nil {
-		// No custom transport provided, create the default one
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: client.skipTLSVerify,
 			},
+			// Connection pooling
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 50,
+			MaxConnsPerHost:     100,
+
+			// Timeouts
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+
+			// TCP keep-alive
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+
+			// Enable HTTP/2
+			ForceAttemptHTTP2: true,
+
+			// Disable compression to save CPU
+			DisableCompression: false,
 		}
 
 		// Configure proxy if needed

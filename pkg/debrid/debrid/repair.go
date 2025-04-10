@@ -66,7 +66,7 @@ func (c *Cache) repairWorker() {
 		}
 
 		// Mark as in progress
-		c.repairsInProgress.Store(torrentId, true)
+		c.repairsInProgress.Store(torrentId, struct{}{})
 		c.logger.Debug().Str("torrentId", req.TorrentID).Msg("Received repair request")
 
 		// Get the torrent from the cache

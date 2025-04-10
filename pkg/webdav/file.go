@@ -82,7 +82,7 @@ func (f *File) stream() (*http.Response, error) {
 
 	downloadLink = f.getDownloadLink() // Uses the first API key
 	if downloadLink == "" {
-		_log.Error().Msgf("Failed to get download link for %s", f.name)
+		_log.Error().Msgf("Failed to get download link for %s. Empty download link", f.name)
 		return nil, fmt.Errorf("failed to get download link")
 	}
 
@@ -100,6 +100,7 @@ func (f *File) stream() (*http.Response, error) {
 	if err != nil {
 		return resp, fmt.Errorf("HTTP request error: %w", err)
 	}
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 
 		closeResp := func() {
@@ -110,7 +111,7 @@ func (f *File) stream() (*http.Response, error) {
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			closeResp()
 			// Read the body to consume the response
-			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "bandwidth_exceeded")
+			f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "bandwidth_exceeded")
 			// Retry with a different API key if it's available
 			return f.stream()
 
@@ -118,8 +119,7 @@ func (f *File) stream() (*http.Response, error) {
 			closeResp()
 			// Mark download link as not found
 			// Regenerate a new download link
-			f.cache.MarkDownloadLinkAsInvalid(downloadLink, "link_not_found")
-			f.cache.RemoveDownloadLink(f.link) // Remove the link from the cache
+			f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "link_not_found")
 			// Generate a new download link
 			downloadLink = f.getDownloadLink()
 			if downloadLink == "" {
@@ -141,7 +141,7 @@ func (f *File) stream() (*http.Response, error) {
 			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 				closeResp()
 				// Read the body to consume the response
-				f.cache.MarkDownloadLinkAsInvalid(downloadLink, "link_not_found")
+				f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "link_not_found")
 				return resp, fmt.Errorf("link not found")
 			}
 			return resp, nil

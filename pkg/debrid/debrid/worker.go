@@ -59,7 +59,7 @@ func (c *Cache) resetInvalidLinksWorker() {
 	timer := time.NewTimer(initialWait)
 	defer timer.Stop()
 
-	c.logger.Debug().Msgf("Scheduled invalid links reset at %s (in %s)", next.Format("2006-01-02 15:04:05 MST"), initialWait)
+	c.logger.Debug().Msgf("Scheduled Links Reset at %s (in %s)", next.Format("2006-01-02 15:04:05 MST"), initialWait)
 
 	// Wait for the first execution
 	<-timer.C

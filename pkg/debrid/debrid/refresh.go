@@ -93,9 +93,9 @@ func (c *Cache) refreshTorrents() {
 
 	// Get the newly added torrents only
 	_newTorrents := make([]*types.Torrent, 0)
-	idStore := make(map[string]bool, len(debTorrents))
+	idStore := make(map[string]struct{}, len(debTorrents))
 	for _, t := range debTorrents {
-		idStore[t.Id] = true
+		idStore[t.Id] = struct{}{}
 		if _, ok := torrents[t.Id]; !ok {
 			_newTorrents = append(_newTorrents, t)
 		}
@@ -244,6 +244,6 @@ func (c *Cache) refreshDownloadLinks() {
 		}
 	}
 
-	c.logger.Trace().Msgf("Refreshed %d download links", len(downloadLinks))
+	c.logger.Debug().Msgf("Refreshed %d download links", len(downloadLinks))
 
 }
