@@ -2,7 +2,7 @@ package qbit
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"sync"
 )
 

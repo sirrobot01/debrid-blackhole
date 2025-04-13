@@ -3,7 +3,7 @@ package debrid
 import (
 	"fmt"
 	"github.com/beevik/etree"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
+	"github.com/sirrobot01/decypharr/internal/request"
 	"net/http"
 	"os"
 	path "path/filepath"

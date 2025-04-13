@@ -2,9 +2,9 @@ package debrid
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"io"
 	"net/http"
 	"os"

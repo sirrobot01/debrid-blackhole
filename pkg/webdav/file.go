@@ -3,7 +3,7 @@ package webdav
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
+	"github.com/sirrobot01/decypharr/pkg/debrid/debrid"
 	"io"
 	"net/http"
 	"os"

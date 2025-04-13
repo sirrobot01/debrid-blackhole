@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/qbit"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
@@ -18,8 +18,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/version"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	"github.com/sirrobot01/decypharr/pkg/version"
 )
 
 type AddRequest struct {

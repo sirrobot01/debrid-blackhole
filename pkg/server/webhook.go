@@ -3,7 +3,7 @@ package server
 import (
 	"cmp"
 	"github.com/goccy/go-json"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"net/http"
 )
 

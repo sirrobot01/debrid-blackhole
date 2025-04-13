@@ -2,7 +2,7 @@ package qbit
 
 import (
 	"github.com/google/uuid"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
+	"github.com/sirrobot01/decypharr/internal/utils"
 	"strings"
 )
 

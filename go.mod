@@ -1,4 +1,4 @@
-module github.com/sirrobot01/debrid-blackhole
+module github.com/sirrobot01/decypharr
 
 go 1.23.0
 

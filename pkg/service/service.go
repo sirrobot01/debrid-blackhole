@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
-	"github.com/sirrobot01/debrid-blackhole/pkg/repair"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	"github.com/sirrobot01/decypharr/pkg/debrid/debrid"
+	"github.com/sirrobot01/decypharr/pkg/repair"
 	"sync"
 )
 

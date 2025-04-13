@@ -17,8 +17,8 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version={{.Version}}
-      - -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel={{.Env.RELEASE_CHANNEL}}
+      - -X github.com/sirrobot01/decypharr/pkg/version.Version={{.Version}}
+      - -X github.com/sirrobot01/decypharr/pkg/version.Channel={{.Env.RELEASE_CHANNEL}}
 
 
 archives:

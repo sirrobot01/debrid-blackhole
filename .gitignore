@@ -12,3 +12,4 @@ tmp/**
 torrents.json
 logs/**
 auth.json
+.ven/

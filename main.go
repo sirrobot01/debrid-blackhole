@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/sirrobot01/debrid-blackhole/cmd/decypharr"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/pkg/version"
+	"github.com/sirrobot01/decypharr/cmd/decypharr"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/pkg/version"
 	"log"
 	"net/http"
 	_ "net/http/pprof" // registers pprof handlers

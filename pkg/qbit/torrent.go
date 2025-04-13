@@ -4,12 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	db "github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid"
-	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	db "github.com/sirrobot01/decypharr/pkg/debrid/debrid"
+	debrid "github.com/sirrobot01/decypharr/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"io"
 	"mime/multipart"
 	"os"
@@ -264,8 +264,8 @@ func (q *QBit) RefreshTorrent(t *Torrent) bool {
 func (q *QBit) GetTorrentProperties(t *Torrent) *TorrentProperties {
 	return &TorrentProperties{
 		AdditionDate:           t.AddedOn,
-		Comment:                "Debrid Blackhole <https://github.com/sirrobot01/debrid-blackhole>",
-		CreatedBy:              "Debrid Blackhole <https://github.com/sirrobot01/debrid-blackhole>",
+		Comment:                "Debrid Blackhole <https://github.com/sirrobot01/decypharr>",
+		CreatedBy:              "Debrid Blackhole <https://github.com/sirrobot01/decypharr>",
 		CreationDate:           t.AddedOn,
 		DlLimit:                -1,
 		UpLimit:                -1,

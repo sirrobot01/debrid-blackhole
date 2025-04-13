@@ -2,14 +2,14 @@ package debrid
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/alldebrid"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/debrid_link"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/realdebrid"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torbox"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	"github.com/sirrobot01/decypharr/pkg/debrid/alldebrid"
+	"github.com/sirrobot01/decypharr/pkg/debrid/debrid_link"
+	"github.com/sirrobot01/decypharr/pkg/debrid/realdebrid"
+	"github.com/sirrobot01/decypharr/pkg/debrid/torbox"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 )
 
 func createDebridClient(dc config.Debrid) types.Client {

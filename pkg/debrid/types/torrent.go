@@ -2,10 +2,10 @@ package types
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/arr"
 	"os"
 	"path/filepath"
 	"sync"

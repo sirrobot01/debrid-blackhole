@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/goccy/go-json"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/decypharr/internal/config"
 	"io"
 	"net/http"
 	"strings"

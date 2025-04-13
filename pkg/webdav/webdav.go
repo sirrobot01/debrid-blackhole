@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"html/template"
 	"net/http"
 	"sync"

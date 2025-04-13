@@ -3,9 +3,9 @@ package worker
 import (
 	"context"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"sync"
 	"time"
 )

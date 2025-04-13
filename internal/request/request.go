@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/logger"
 	"golang.org/x/net/proxy"
 	"golang.org/x/time/rate"
 	"io"

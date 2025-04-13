@@ -9,3 +9,4 @@ docker-compose.yml
 torrents.json
 **/dist/
 *.json
+.ven/**

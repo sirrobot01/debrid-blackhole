@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"slices"
 	"time"
 )

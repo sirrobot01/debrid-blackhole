@@ -2,7 +2,7 @@ package repair
 
 import (
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
+	"github.com/sirrobot01/decypharr/pkg/arr"
 	"os"
 	"path/filepath"
 	"strconv"

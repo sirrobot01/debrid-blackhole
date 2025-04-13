@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath \
-    -ldflags="-w -s -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version=${VERSION} -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel=${CHANNEL}" \
+    -ldflags="-w -s -X github.com/sirrobot01/decypharr/pkg/version.Version=${VERSION} -X github.com/sirrobot01/decypharr/pkg/version.Channel=${CHANNEL}" \
     -o /decypharr
 
 # Build healthcheck (optimized)
@@ -42,10 +42,10 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 LABEL version = "${VERSION}-${CHANNEL}"
 
-LABEL org.opencontainers.image.source = "https://github.com/sirrobot01/debrid-blackhole"
+LABEL org.opencontainers.image.source = "https://github.com/sirrobot01/decypharr"
 LABEL org.opencontainers.image.title = "decypharr"
 LABEL org.opencontainers.image.authors = "sirrobot01"
-LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/debrid-blackhole/blob/main/README.md"
+LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/decypharr/blob/main/README.md"
 
 # Copy binaries
 COPY --from=builder --chown=nonroot:nonroot /decypharr /usr/bin/decypharr
