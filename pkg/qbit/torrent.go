@@ -50,7 +50,7 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 
 func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category string) error {
 	svc := service.GetService()
-	torrent := CreateTorrentFromMagnet(magnet, category, "auto")
+	torrent := createTorrentFromMagnet(magnet, category, "auto")
 	a, ok := ctx.Value("arr").(*arr.Arr)
 	if !ok {
 		return fmt.Errorf("arr not found in context")

@@ -322,9 +322,13 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, url := range urlList {
-			importReq := qbit.NewImportRequest(url, _arr, !notSymlink, downloadUncached)
-			err := importReq.Process(ui.qbit)
+			magnet, err := utils.GetMagnetFromUrl(url)
 			if err != nil {
+				errs = append(errs, fmt.Sprintf("Failed to parse URL %s: %v", url, err))
+				continue
+			}
+			importReq := qbit.NewImportRequest(magnet, _arr, !notSymlink, downloadUncached)
+			if err := importReq.Process(ui.qbit); err != nil {
 				errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
 				continue
 			}
@@ -347,7 +351,7 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			importReq := qbit.NewImportRequest(magnet.Link, _arr, !notSymlink, downloadUncached)
+			importReq := qbit.NewImportRequest(magnet, _arr, !notSymlink, downloadUncached)
 			err = importReq.Process(ui.qbit)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("File %s: %v", fileHeader.Filename, err))

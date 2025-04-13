@@ -1,6 +1,7 @@
 package realdebrid
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
@@ -211,6 +212,35 @@ func (r *RealDebrid) IsAvailable(hashes []string) map[string]bool {
 }
 
 func (r *RealDebrid) SubmitMagnet(t *types.Torrent) (*types.Torrent, error) {
+	if t.Magnet.IsTorrent() {
+		return r.addTorrent(t)
+	}
+	return r.addMagnet(t)
+}
+
+func (r *RealDebrid) addTorrent(t *types.Torrent) (*types.Torrent, error) {
+	url := fmt.Sprintf("%s/torrents/addTorrent", r.Host)
+	var data AddMagnetSchema
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(t.Magnet.File))
+
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/x-bittorrent")
+	resp, err := r.client.MakeRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(resp, &data); err != nil {
+		return nil, err
+	}
+	t.Id = data.Id
+	t.Debrid = r.Name
+	t.MountPath = r.MountPath
+	return t, nil
+}
+
+func (r *RealDebrid) addMagnet(t *types.Torrent) (*types.Torrent, error) {
 	url := fmt.Sprintf("%s/torrents/addMagnet", r.Host)
 	payload := gourl.Values{
 		"magnet": {t.Magnet.Link},

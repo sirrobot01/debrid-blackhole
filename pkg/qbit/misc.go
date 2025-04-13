@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func CreateTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
+func createTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
 	torrent := &Torrent{
 		ID:        uuid.NewString(),
 		Hash:      strings.ToLower(magnet.InfoHash),
