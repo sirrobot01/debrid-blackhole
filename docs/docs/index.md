@@ -12,7 +12,6 @@ DecyphArr combines the power of QBittorrent with popular Debrid services to enha
 
 - 🔄 Mock Qbittorent API that supports Sonarr, Radarr, Lidarr and other Arr applications
 - 🖥️ Full-fledged UI for managing torrents
-- 🛡️ Proxy support for filtering uncached Debrid torrents
 - 🔌 Multiple Debrid providers support
 - 📁 WebDAV server support for each Debrid provider
 - 🔧 Repair Worker for missing files

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/internal/logger"
-	"github.com/sirrobot01/decypharr/pkg/proxy"
 	"github.com/sirrobot01/decypharr/pkg/qbit"
 	"github.com/sirrobot01/decypharr/pkg/server"
 	"github.com/sirrobot01/decypharr/pkg/service"
@@ -75,12 +74,6 @@ func Start(ctx context.Context) error {
 				errChan <- err
 			}
 		}()
-	}
-
-	if cfg.Proxy.Enabled {
-		safeGo(func() error {
-			return proxy.NewProxy().Start(ctx)
-		})
 	}
 
 	safeGo(func() error {

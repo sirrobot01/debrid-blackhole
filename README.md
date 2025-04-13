@@ -36,7 +36,6 @@ services:
     container_name: decypharr
     ports:
       - "8282:8282" # qBittorrent
-      - "8181:8181" # Proxy
     user: "1000:1000"
     volumes:
       - /mnt/:/mnt
@@ -50,7 +49,7 @@ services:
 
 ## Documentation
 
-For complete documentation, please visit our [Documentation Site](https://sirrobot01.github.io/decypharr/).
+For complete documentation, please visit our [Documentation](https://sirrobot01.github.io/debrid-blackhole/).
 
 The documentation includes:
 

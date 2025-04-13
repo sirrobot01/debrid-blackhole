@@ -18,7 +18,6 @@ You can configure WebDAV settings either globally or per-Debrid provider in your
 "webdav": {
   "torrents_refresh_interval": "15s",
   "download_links_refresh_interval": "40m",
-  "workers": 200,
   "folder_naming": "original_no_ext",
   "auto_expire_links_after": "3d",
   "rc_url": "http://localhost:5572",

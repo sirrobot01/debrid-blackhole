@@ -31,15 +31,6 @@ type Debrid struct {
 	WebDav
 }
 
-type Proxy struct {
-	Port       string `json:"port"`
-	Enabled    bool   `json:"enabled"`
-	LogLevel   string `json:"log_level"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	CachedOnly bool   `json:"cached_only"`
-}
-
 type QBitTorrent struct {
 	Username        string   `json:"username"`
 	Password        string   `json:"password"`
@@ -92,7 +83,6 @@ type WebDav struct {
 type Config struct {
 	LogLevel       string      `json:"log_level"`
 	Debrids        []Debrid    `json:"debrids"`
-	Proxy          Proxy       `json:"proxy"`
 	MaxCacheSize   int         `json:"max_cache_size"`
 	QBitTorrent    QBitTorrent `json:"qbittorrent"`
 	Arrs           []Arr       `json:"arrs"`
