@@ -5,6 +5,8 @@ on:
       - main
       - beta
       - experimental
+    paths:
+      - 'docs/**'
 permissions:
   contents: write
 jobs:
