@@ -11,13 +11,11 @@ Each Debrid provider is configured in the `debrids` array:
 "debrids": [
   {
     "name": "realdebrid",
-    "host": "https://api.real-debrid.com/rest/1.0",
     "api_key": "your-api-key",
     "folder": "/mnt/remote/realdebrid/__all__/"
   },
   {
     "name": "alldebrid",
-    "host": "https://api.alldebrid.com/v4",
     "api_key": "your-api-key",
     "folder": "/mnt/remote/alldebrid/downloads/"
   }
@@ -61,7 +59,6 @@ For services that support it, you can provide multiple download API keys for bet
 ```json
 {
   "name": "realdebrid",
-  "host": "https://api.real-debrid.com/rest/1.0",
   "api_key": "key1",
   "download_api_keys": ["key1", "key2", "key3"],
   "folder": "/mnt/remote/realdebrid/__all__/"
@@ -77,7 +74,6 @@ For services that support it, you can provide multiple download API keys for bet
 ```json
 {
   "name": "realdebrid",
-  "host": "https://api.real-debrid.com/rest/1.0",
   "api_key": "your-api-key",
   "folder": "/mnt/remote/realdebrid/__all__/",
   "rate_limit": null,
@@ -92,7 +88,6 @@ For services that support it, you can provide multiple download API keys for bet
 ```json
 {
   "name": "alldebrid",
-  "host": "https://api.alldebrid.com/v4",
   "api_key": "your-api-key",
   "folder": "/mnt/remote/alldebrid/torrents/",
   "rate_limit": null,
@@ -107,7 +102,6 @@ For services that support it, you can provide multiple download API keys for bet
 ```json
 {
   "name": "debridlink",
-  "host": "https://debrid-link.com/api/v2",
   "api_key": "your-api-key",
   "folder": "/mnt/remote/debridlink/torrents/",
   "rate_limit": null,
@@ -122,7 +116,6 @@ For services that support it, you can provide multiple download API keys for bet
 ```json
 {
   "name": "torbox",
-  "host": "https://api.torbox.com/v1",
   "api_key": "your-api-key",
   "folder": "/mnt/remote/torbox/torrents/",
   "rate_limit": null,

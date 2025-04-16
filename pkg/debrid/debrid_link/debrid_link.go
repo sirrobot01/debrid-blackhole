@@ -299,7 +299,7 @@ func New(dc config.Debrid) *DebridLink {
 	}
 	return &DebridLink{
 		Name:             "debridlink",
-		Host:             dc.Host,
+		Host:             "https://debrid-link.com/api/v2",
 		APIKey:           dc.APIKey,
 		DownloadKeys:     accounts,
 		DownloadUncached: dc.DownloadUncached,

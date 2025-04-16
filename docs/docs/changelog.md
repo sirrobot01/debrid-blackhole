@@ -9,6 +9,7 @@
     - Fix Alldebrid not downloading uncached torrents
     - Fix uncached torrents not being downloaded for RealDebrid
 - Add support for multiple download API keys for debrid providers
+- Add support for editable config.json via the UI
 
 
 ## 0.5.0

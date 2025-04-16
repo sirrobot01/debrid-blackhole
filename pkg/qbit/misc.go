@@ -1,14 +1,13 @@
 package qbit
 
 import (
-	"github.com/google/uuid"
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"strings"
 )
 
 func createTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
 	torrent := &Torrent{
-		ID:        uuid.NewString(),
+		ID:        "",
 		Hash:      strings.ToLower(magnet.InfoHash),
 		Name:      magnet.Name,
 		Size:      magnet.Size,

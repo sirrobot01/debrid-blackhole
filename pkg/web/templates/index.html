@@ -110,9 +110,14 @@
             <td>${torrent.debrid || 'None'}</td>
             <td><span class="badge ${getStateColor(torrent.state)}">${torrent.state}</span></td>
             <td>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', '${torrent.category}')">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', '${torrent.category}', false)">
                     <i class="bi bi-trash"></i>
                 </button>
+                ${torrent.debrid && torrent.id  ? `
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTorrent('${torrent.hash}', '${torrent.category}', true)">
+                    <i class="bi bi-trash"></i> Remove from Debrid
+                </button>
+                ` : ''}
             </td>
         </tr>
         `;
@@ -247,11 +252,11 @@
             return result;
         }
 
-        async function deleteTorrent(hash, category) {
+        async function deleteTorrent(hash, category, removeFromDebrid = false) {
             if (!confirm('Are you sure you want to delete this torrent?')) return;
 
             try {
-                await fetch(`/internal/torrents/${category}/${hash}`, {
+                await fetch(`/internal/torrents/${category}/${hash}?removeFromDebrid=${removeFromDebrid}`, {
                     method: 'DELETE'
                 });
                 await loadTorrents();

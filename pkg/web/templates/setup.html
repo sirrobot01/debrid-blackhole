@@ -1,4 +1,4 @@
-{{ define "setup" }}
+{{ define "auth" }}
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-6 col-lg-4">
@@ -7,7 +7,7 @@
                     <h4 class="mb-0 text-center">First Time Setup</h4>
                 </div>
                 <div class="card-body">
-                    <form id="setupForm" method="POST" action="/setup">
+                    <form id="authForm" method="POST" action="/auth">
                         <div class="mb-3">
                             <label for="username" class="form-label">Choose Username</label>
                             <input type="text" class="form-control" id="username" name="username" required>

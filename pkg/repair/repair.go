@@ -217,7 +217,7 @@ func (r *Repair) preRunChecks() error {
 	}
 	resp, err := http.Get(fmt.Sprint(r.ZurgURL, "/http/version.txt"))
 	if err != nil {
-		r.logger.Debug().Err(err).Msgf("Precheck failed: Failed to reach zurg at %s", r.ZurgURL)
+		r.logger.Error().Err(err).Msgf("Precheck failed: Failed to reach zurg at %s", r.ZurgURL)
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -525,7 +525,7 @@ func (r *Repair) getZurgBrokenFiles(media arr.Content) []arr.ContentFile {
 
 		resp, err := client.Get(fullURL)
 		if err != nil {
-			r.logger.Debug().Err(err).Msgf("Failed to reach %s", fullURL)
+			r.logger.Error().Err(err).Msgf("Failed to reach %s", fullURL)
 			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
@@ -737,7 +737,7 @@ func (r *Repair) saveToFile() {
 	// Save jobs to file
 	data, err := json.Marshal(r.Jobs)
 	if err != nil {
-		r.logger.Debug().Err(err).Msg("Failed to marshal jobs")
+		r.logger.Error().Err(err).Msg("Failed to marshal jobs")
 	}
 	_ = os.WriteFile(r.filename, data, 0644)
 }

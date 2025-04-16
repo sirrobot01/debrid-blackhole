@@ -8,7 +8,6 @@ import (
 	"github.com/sirrobot01/decypharr/pkg/qbit"
 	"github.com/sirrobot01/decypharr/pkg/server"
 	"github.com/sirrobot01/decypharr/pkg/service"
-	"github.com/sirrobot01/decypharr/pkg/version"
 	"github.com/sirrobot01/decypharr/pkg/web"
 	"github.com/sirrobot01/decypharr/pkg/webdav"
 	"github.com/sirrobot01/decypharr/pkg/worker"
@@ -16,6 +15,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"sync"
+	"time"
 )
 
 func Start(ctx context.Context) error {
@@ -28,14 +28,98 @@ func Start(ctx context.Context) error {
 		SetUmask(int(umask))
 	}
 
+	appCtx := ctx
+
+	// Service context - can be cancelled and recreated for restarts
+	svcCtx, cancelSvc := context.WithCancel(context.Background())
+
+	// Create a channel to listen for restart signals
+	restartCh := make(chan struct{}, 1)
+
+	// Create a function to expose for requesting restarts
+	RequestRestart := func() {
+		select {
+		case restartCh <- struct{}{}:
+			// Signal sent successfully
+		default:
+			// Channel is full, ignore
+		}
+	}
+
+	web.SetRestartFunc(RequestRestart)
+
+	go func() {
+		for {
+			select {
+			case <-appCtx.Done():
+				// Parent context is done, exit the loop and shut down all services
+				cancelSvc()
+				return
+			case <-restartCh:
+				_log := logger.Default()
+				_log.Info().Msg("Restarting services with new config...")
+
+				// Cancel current service context to shut down all services
+				cancelSvc()
+
+				// Wait a moment for services to shut down
+				time.Sleep(500 * time.Millisecond)
+
+				// Create a new service context
+				svcCtx, cancelSvc = context.WithCancel(context.Background())
+
+				// Reload configuration
+				config.Reload()
+
+				// Start services again with new context
+				go func() {
+					err := startServices(svcCtx)
+					if err != nil {
+						_log.Error().Err(err).Msg("Error restarting services")
+					}
+				}()
+
+				_log.Info().Msg("Services restarted successfully")
+			}
+		}
+	}()
+
+	go func() {
+		err := startServices(svcCtx)
+		if err != nil {
+			_log := logger.Default()
+			_log.Error().Err(err).Msg("Error starting services")
+		}
+	}()
+
+	// Start services for the first time
+	<-appCtx.Done()
+
+	// Clean up
+	cancelSvc()
+	return nil
+}
+
+func startServices(ctx context.Context) error {
 	cfg := config.Get()
 	var wg sync.WaitGroup
 	errChan := make(chan error)
 
-	_log := logger.GetDefaultLogger()
+	_log := logger.Default()
 
-	_log.Info().Msgf("Starting Decypher (%s)", version.GetInfo().String())
-	_log.Info().Msgf("Default Log Level: %s", cfg.LogLevel)
+	asciiArt := `
++-------------------------------------------------------+
+|                                                       |
+|  ╔╦╗╔═╗╔═╗╦ ╦╔═╗╦ ╦╔═╗╦═╗╦═╗                          |
+|   ║║║╣ ║  └┬┘╠═╝╠═╣╠═╣╠╦╝╠╦╝                          |
+|  ═╩╝╚═╝╚═╝ ┴ ╩  ╩ ╩╩ ╩╩╚═╩╚═                          |
+|                                                       |
++-------------------------------------------------------+
+|  Log Level: %s                         		|
++-------------------------------------------------------+
+`
+
+	_log.Info().Msgf(asciiArt, cfg.LogLevel)
 
 	svc := service.New()
 	_qbit := qbit.New()
@@ -101,11 +185,17 @@ func Start(ctx context.Context) error {
 		close(errChan)
 	}()
 
-	// Wait for context cancellation or completion or error
-	select {
-	case err := <-errChan:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	go func() {
+		for err := range errChan {
+			if err != nil {
+				_log.Error().Err(err).Msg("Service error detected")
+				// Don't shut down the whole app
+			}
+		}
+	}()
+
+	// Wait for context cancellation
+	<-ctx.Done()
+	_log.Debug().Msg("Services context cancelled")
+	return nil
 }

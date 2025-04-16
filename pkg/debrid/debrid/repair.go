@@ -80,7 +80,7 @@ func (c *Cache) repairWorker() {
 		case RepairTypeReinsert:
 			c.logger.Debug().Str("torrentId", torrentId).Msg("Reinserting torrent")
 			var err error
-			cachedTorrent, err = c.reInsertTorrent(cachedTorrent.Torrent)
+			cachedTorrent, err = c.reInsertTorrent(cachedTorrent)
 			if err != nil {
 				c.logger.Error().Err(err).Str("torrentId", cachedTorrent.Id).Msg("Failed to reinsert torrent")
 				continue
@@ -96,10 +96,11 @@ func (c *Cache) repairWorker() {
 	}
 }
 
-func (c *Cache) reInsertTorrent(torrent *types.Torrent) (*CachedTorrent, error) {
+func (c *Cache) reInsertTorrent(ct *CachedTorrent) (*CachedTorrent, error) {
 	// Check if Magnet is not empty, if empty, reconstruct the magnet
+	torrent := ct.Torrent
 	if _, ok := c.repairsInProgress.Load(torrent.Id); ok {
-		return nil, fmt.Errorf("repair already in progress for torrent %s", torrent.Id)
+		return ct, fmt.Errorf("repair already in progress for torrent %s", torrent.Id)
 	}
 
 	if torrent.Magnet == nil {
@@ -152,7 +153,7 @@ func (c *Cache) reInsertTorrent(torrent *types.Torrent) (*CachedTorrent, error) 
 	if err != nil {
 		addedOn = time.Now()
 	}
-	ct := &CachedTorrent{
+	ct = &CachedTorrent{
 		Torrent:    torrent,
 		IsComplete: len(torrent.Files) > 0,
 		AddedOn:    addedOn,

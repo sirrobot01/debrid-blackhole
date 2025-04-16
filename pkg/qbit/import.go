@@ -73,7 +73,7 @@ func (i *ImportRequest) Process(q *QBit) (err error) {
 	debridTorrent, err := debrid.ProcessTorrent(svc.Debrid, i.Magnet, i.Arr, i.IsSymlink, i.DownloadUncached)
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
-			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
+			dbClient := service.GetDebrid().GetClient(debridTorrent.Debrid)
 			go func() {
 				_ = dbClient.DeleteTorrent(debridTorrent.Id)
 			}()

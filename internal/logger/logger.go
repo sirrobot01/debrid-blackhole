@@ -89,7 +89,7 @@ func New(prefix string) zerolog.Logger {
 	return logger
 }
 
-func GetDefaultLogger() zerolog.Logger {
+func Default() zerolog.Logger {
 	once.Do(func() {
 		logger = New("decypharr")
 	})

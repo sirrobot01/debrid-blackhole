@@ -58,7 +58,7 @@ func (t *Torrent) GetSymlinkFolder(parent string) string {
 }
 
 func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
-	_log := logger.GetDefaultLogger()
+	_log := logger.Default()
 	possiblePaths := []string{
 		t.OriginalFilename,
 		t.Filename,

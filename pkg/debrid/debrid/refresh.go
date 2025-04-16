@@ -73,7 +73,7 @@ func (c *Cache) refreshTorrents() {
 	// Get all torrents from the debrid service
 	debTorrents, err := c.client.GetTorrents()
 	if err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to get torrents")
+		c.logger.Error().Err(err).Msg("Failed to get torrents")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (c *Cache) refreshTorrents() {
 				default:
 				}
 				if err := c.ProcessTorrent(t, true); err != nil {
-					c.logger.Debug().Err(err).Msgf("Failed to process new torrent %s", t.Id)
+					c.logger.Error().Err(err).Msgf("Failed to process new torrent %s", t.Id)
 					errChan <- err
 				}
 			}
@@ -208,7 +208,7 @@ func (c *Cache) refreshDownloadLinks() {
 
 	downloadLinks, err := c.client.GetDownloads()
 	if err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to get download links")
+		c.logger.Error().Err(err).Msg("Failed to get download links")
 	}
 	for k, v := range downloadLinks {
 		// if link is generated in the last 24 hours, add it to cache
@@ -225,6 +225,6 @@ func (c *Cache) refreshDownloadLinks() {
 		}
 	}
 
-	c.logger.Debug().Msgf("Refreshed %d download links", len(downloadLinks))
+	c.logger.Trace().Msgf("Refreshed %d download links", len(downloadLinks))
 
 }

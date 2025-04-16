@@ -170,6 +170,12 @@ func (as *Storage) GetAll() []*Arr {
 	return arrs
 }
 
+func (as *Storage) Clear() {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	as.Arrs = make(map[string]*Arr)
+}
+
 func (a *Arr) Refresh() error {
 	payload := struct {
 		Name string `json:"name"`

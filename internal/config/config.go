@@ -7,6 +7,7 @@ import (
 	"github.com/goccy/go-json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -17,84 +18,83 @@ var (
 )
 
 type Debrid struct {
-	Name             string   `json:"name"`
-	Host             string   `json:"host"`
-	APIKey           string   `json:"api_key"`
-	DownloadAPIKeys  []string `json:"download_api_keys"`
-	Folder           string   `json:"folder"`
-	DownloadUncached bool     `json:"download_uncached"`
-	CheckCached      bool     `json:"check_cached"`
-	RateLimit        string   `json:"rate_limit"` // 200/minute or 10/second
-	Proxy            string   `json:"proxy"`
+	Name             string   `json:"name,omitempty"`
+	APIKey           string   `json:"api_key,omitempty"`
+	DownloadAPIKeys  []string `json:"download_api_keys,omitempty"`
+	Folder           string   `json:"folder,omitempty"`
+	DownloadUncached bool     `json:"download_uncached,omitempty"`
+	CheckCached      bool     `json:"check_cached,omitempty"`
+	RateLimit        string   `json:"rate_limit,omitempty"` // 200/minute or 10/second
+	Proxy            string   `json:"proxy,omitempty"`
 
-	UseWebDav bool `json:"use_webdav"`
+	UseWebDav bool `json:"use_webdav,omitempty"`
 	WebDav
 }
 
 type QBitTorrent struct {
-	Username        string   `json:"username"`
-	Password        string   `json:"password"`
-	Port            string   `json:"port"`
-	DownloadFolder  string   `json:"download_folder"`
-	Categories      []string `json:"categories"`
-	RefreshInterval int      `json:"refresh_interval"`
-	SkipPreCache    bool     `json:"skip_pre_cache"`
+	Username        string   `json:"username,omitempty"`
+	Password        string   `json:"password,omitempty"`
+	Port            string   `json:"port,omitempty"`
+	DownloadFolder  string   `json:"download_folder,omitempty"`
+	Categories      []string `json:"categories,omitempty"`
+	RefreshInterval int      `json:"refresh_interval,omitempty"`
+	SkipPreCache    bool     `json:"skip_pre_cache,omitempty"`
 }
 
 type Arr struct {
-	Name             string `json:"name"`
-	Host             string `json:"host"`
-	Token            string `json:"token"`
-	Cleanup          bool   `json:"cleanup"`
-	SkipRepair       bool   `json:"skip_repair"`
-	DownloadUncached *bool  `json:"download_uncached"`
+	Name             string `json:"name,omitempty"`
+	Host             string `json:"host,omitempty"`
+	Token            string `json:"token,omitempty"`
+	Cleanup          bool   `json:"cleanup,omitempty"`
+	SkipRepair       bool   `json:"skip_repair,omitempty"`
+	DownloadUncached *bool  `json:"download_uncached,omitempty"`
 }
 
 type Repair struct {
-	Enabled     bool   `json:"enabled"`
-	Interval    string `json:"interval"`
-	RunOnStart  bool   `json:"run_on_start"`
-	ZurgURL     string `json:"zurg_url"`
-	AutoProcess bool   `json:"auto_process"`
-	UseWebDav   bool   `json:"use_webdav"`
-	Workers     int    `json:"workers"`
+	Enabled     bool   `json:"enabled,omitempty"`
+	Interval    string `json:"interval,omitempty"`
+	RunOnStart  bool   `json:"run_on_start,omitempty"`
+	ZurgURL     string `json:"zurg_url,omitempty"`
+	AutoProcess bool   `json:"auto_process,omitempty"`
+	UseWebDav   bool   `json:"use_webdav,omitempty"`
+	Workers     int    `json:"workers,omitempty"`
 }
 
 type Auth struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type WebDav struct {
-	TorrentsRefreshInterval      string `json:"torrents_refresh_interval"`
-	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval"`
-	Workers                      int    `json:"workers"`
-	AutoExpireLinksAfter         string `json:"auto_expire_links_after"`
+	TorrentsRefreshInterval      string `json:"torrents_refresh_interval,omitempty"`
+	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval,omitempty"`
+	Workers                      int    `json:"workers,omitempty"`
+	AutoExpireLinksAfter         string `json:"auto_expire_links_after,omitempty"`
 
 	// Folder
-	FolderNaming string `json:"folder_naming"`
+	FolderNaming string `json:"folder_naming,omitempty"`
 
 	// Rclone
-	RcUrl  string `json:"rc_url"`
-	RcUser string `json:"rc_user"`
-	RcPass string `json:"rc_pass"`
+	RcUrl  string `json:"rc_url,omitempty"`
+	RcUser string `json:"rc_user,omitempty"`
+	RcPass string `json:"rc_pass,omitempty"`
 }
 
 type Config struct {
-	LogLevel       string      `json:"log_level"`
-	Debrids        []Debrid    `json:"debrids"`
-	MaxCacheSize   int         `json:"max_cache_size"`
-	QBitTorrent    QBitTorrent `json:"qbittorrent"`
-	Arrs           []Arr       `json:"arrs"`
-	Repair         Repair      `json:"repair"`
-	WebDav         WebDav      `json:"webdav"`
-	AllowedExt     []string    `json:"allowed_file_types"`
-	MinFileSize    string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
-	MaxFileSize    string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
-	Path           string      `json:"-"`             // Path to save the config file
-	UseAuth        bool        `json:"use_auth"`
+	LogLevel       string      `json:"log_level,omitempty"`
+	Debrids        []Debrid    `json:"debrids,omitempty"`
+	MaxCacheSize   int         `json:"max_cache_size,omitempty"`
+	QBitTorrent    QBitTorrent `json:"qbittorrent,omitempty"`
+	Arrs           []Arr       `json:"arrs,omitempty"`
+	Repair         Repair      `json:"repair,omitempty"`
+	WebDav         WebDav      `json:"webdav,omitempty"`
+	AllowedExt     []string    `json:"allowed_file_types,omitempty"`
+	MinFileSize    string      `json:"min_file_size,omitempty"` // Minimum file size to download, 10MB, 1GB, etc
+	MaxFileSize    string      `json:"max_file_size,omitempty"` // Maximum file size to download (0 means no limit)
+	Path           string      `json:"-"`                       // Path to save the config file
+	UseAuth        bool        `json:"use_auth,omitempty"`
 	Auth           *Auth       `json:"-"`
-	DiscordWebhook string      `json:"discord_webhook_url"`
+	DiscordWebhook string      `json:"discord_webhook_url,omitempty"`
 }
 
 func (c *Config) JsonFile() string {
@@ -131,7 +131,7 @@ func (c *Config) loadConfig() error {
 	c.Auth = c.GetAuth()
 
 	//Validate the config
-	if err := validateConfig(c); err != nil {
+	if err := ValidateConfig(c); err != nil {
 		return err
 	}
 
@@ -143,60 +143,52 @@ func validateDebrids(debrids []Debrid) error {
 		return errors.New("no debrids configured")
 	}
 
-	errChan := make(chan error, len(debrids))
-	var wg sync.WaitGroup
-
 	for _, debrid := range debrids {
 		// Basic field validation
-		if debrid.Host == "" {
-			return errors.New("debrid host is required")
-		}
 		if debrid.APIKey == "" {
 			return errors.New("debrid api key is required")
 		}
 		if debrid.Folder == "" {
 			return errors.New("debrid folder is required")
 		}
-
-		// Check folder existence
-		//wg.Add(1)
-		//go func(folder string) {
-		//	defer wg.Done()
-		//	if _, err := os.Stat(folder); os.IsNotExist(err) {
-		//		errChan <- fmt.Errorf("debrid folder does not exist: %s", folder)
-		//	}
-		//}(debrid.Folder)
-	}
-
-	// Wait for all checks to complete
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	// Return first error if any
-	if err := <-errChan; err != nil {
-		return err
 	}
 
 	return nil
 }
 
-//func validateQbitTorrent(config *QBitTorrent) error {
-//	if config.DownloadFolder == "" {
-//		return errors.New("qbittorent download folder is required")
-//	}
-//	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
-//		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
-//	}
-//	return nil
-//}
+func validateQbitTorrent(config *QBitTorrent) error {
+	if config.DownloadFolder == "" {
+		return errors.New("qbittorent download folder is required")
+	}
+	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
+		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
+	}
+	return nil
+}
 
-func validateConfig(config *Config) error {
+func validateRepair(config *Repair) error {
+	if !config.Enabled {
+		return nil
+	}
+	if config.Interval == "" {
+		return errors.New("repair interval is required")
+	}
+	return nil
+}
+
+func ValidateConfig(config *Config) error {
 	// Run validations concurrently
 
 	if err := validateDebrids(config.Debrids); err != nil {
 		return fmt.Errorf("debrids validation error: %w", err)
+	}
+
+	if err := validateQbitTorrent(&config.QBitTorrent); err != nil {
+		return fmt.Errorf("qbittorrent validation error: %w", err)
+	}
+
+	if err := validateRepair(&config.Repair); err != nil {
+		return fmt.Errorf("repair validation error: %w", err)
 	}
 
 	return nil
@@ -210,7 +202,7 @@ func Get() *Config {
 	once.Do(func() {
 		instance = &Config{} // Initialize instance first
 		if err := instance.loadConfig(); err != nil {
-			fmt.Fprintf(os.Stderr, "configuration Error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "configuration Error: %v\n", err)
 			os.Exit(1)
 		}
 	})
@@ -280,6 +272,13 @@ func (c *Config) SaveAuth(auth *Auth) error {
 }
 
 func (c *Config) NeedsSetup() bool {
+	if err := ValidateConfig(c); err != nil {
+		return true
+	}
+	return false
+}
+
+func (c *Config) NeedsAuth() bool {
 	if c.UseAuth {
 		return c.GetAuth().Username == ""
 	}
@@ -287,6 +286,8 @@ func (c *Config) NeedsSetup() bool {
 }
 
 func (c *Config) updateDebrid(d Debrid) Debrid {
+	workers := runtime.NumCPU() * 50
+	perDebrid := workers / len(c.Debrids)
 
 	if len(d.DownloadAPIKeys) == 0 {
 		d.DownloadAPIKeys = append(d.DownloadAPIKeys, d.APIKey)
@@ -303,7 +304,7 @@ func (c *Config) updateDebrid(d Debrid) Debrid {
 		d.DownloadLinksRefreshInterval = cmp.Or(c.WebDav.DownloadLinksRefreshInterval, "40m") // 40 minutes
 	}
 	if d.Workers == 0 {
-		d.Workers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
+		d.Workers = perDebrid
 	}
 	if d.FolderNaming == "" {
 		d.FolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
@@ -311,5 +312,27 @@ func (c *Config) updateDebrid(d Debrid) Debrid {
 	if d.AutoExpireLinksAfter == "" {
 		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "3d") // 2 days
 	}
+	d.RcUrl = cmp.Or(d.RcUrl, c.WebDav.RcUrl)
+	d.RcUser = cmp.Or(d.RcUser, c.WebDav.RcUser)
+	d.RcPass = cmp.Or(d.RcPass, c.WebDav.RcPass)
+
 	return d
+}
+
+func (c *Config) Save() error {
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(c.JsonFile(), data, 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Reload forces a reload of the configuration from disk
+func Reload() {
+	instance = nil
+	once = sync.Once{}
 }

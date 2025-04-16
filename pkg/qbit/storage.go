@@ -3,6 +3,7 @@ package qbit
 import (
 	"fmt"
 	"github.com/goccy/go-json"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"os"
 	"sort"
 	"sync"
@@ -166,7 +167,7 @@ func (ts *TorrentStorage) Update(torrent *Torrent) {
 	}()
 }
 
-func (ts *TorrentStorage) Delete(hash, category string) {
+func (ts *TorrentStorage) Delete(hash, category string, removeFromDebrid bool) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	key := keyPair(hash, category)
@@ -181,10 +182,22 @@ func (ts *TorrentStorage) Delete(hash, category string) {
 			}
 		}
 	}
-	delete(ts.torrents, key)
+
 	if torrent == nil {
 		return
 	}
+	if removeFromDebrid && torrent.ID != "" && torrent.Debrid != "" {
+		dbClient := service.GetDebrid().GetClient(torrent.Debrid)
+		if dbClient != nil {
+			err := dbClient.DeleteTorrent(torrent.ID)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+
+	delete(ts.torrents, key)
+
 	// Delete the torrent folder
 	if torrent.ContentPath != "" {
 		err := os.RemoveAll(torrent.ContentPath)
@@ -200,13 +213,27 @@ func (ts *TorrentStorage) Delete(hash, category string) {
 	}()
 }
 
-func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
+func (ts *TorrentStorage) DeleteMultiple(hashes []string, removeFromDebrid bool) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
+	toDelete := make(map[string]string)
+
 	for _, hash := range hashes {
 		for key, torrent := range ts.torrents {
+			if torrent == nil {
+				continue
+			}
 			if torrent.Hash == hash {
+				if removeFromDebrid && torrent.ID != "" && torrent.Debrid != "" {
+					toDelete[torrent.ID] = torrent.Debrid
+				}
 				delete(ts.torrents, key)
+				if torrent.ContentPath != "" {
+					err := os.RemoveAll(torrent.ContentPath)
+					if err != nil {
+						return
+					}
+				}
 			}
 		}
 	}
@@ -214,6 +241,20 @@ func (ts *TorrentStorage) DeleteMultiple(hashes []string) {
 		err := ts.saveToFile()
 		if err != nil {
 			fmt.Println(err)
+		}
+	}()
+
+	go func() {
+		for id, debrid := range toDelete {
+			dbClient := service.GetDebrid().GetClient(debrid)
+			if dbClient == nil {
+				continue
+			}
+			fmt.Println("Deleting torrent from debrid:", id)
+			err := dbClient.DeleteTorrent(id)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}()
 }

@@ -2,7 +2,6 @@
   "debrids": [
     {
       "name": "realdebrid",
-      "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
       "folder": "/mnt/remote/realdebrid/__all__/",
       "download_api_keys": [],
@@ -20,7 +19,6 @@
     },
     {
       "name": "torbox",
-      "host": "https://api.torbox.app/v1",
       "api_key": "torbox_api_key",
       "folder": "/mnt/remote/torbox/torrents/",
       "rate_limit": "250/minute",
@@ -29,7 +27,6 @@
     },
     {
       "name": "debridlink",
-      "host": "https://debrid-link.com/api/v2",
       "api_key": "debridlink_key",
       "folder": "/mnt/remote/debridlink/torrents/",
       "rate_limit": "250/minute",
@@ -38,7 +35,6 @@
     },
     {
       "name": "alldebrid",
-      "host": "http://api.alldebrid.com/v4.1",
       "api_key": "alldebrid_key",
       "folder": "/mnt/remote/alldebrid/magnet/",
       "rate_limit": "600/minute",

@@ -67,7 +67,6 @@ The documentation includes:
   "debrids": [
     {
       "name": "realdebrid",
-      "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "your_api_key_here",
       "folder": "/mnt/remote/realdebrid/__all__/",
       "use_webdav": true
@@ -77,11 +76,6 @@ The documentation includes:
     "port": "8282",
     "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"]
-  },
-  "repair": {
-    "enabled": false,
-    "interval": "12h",
-    "run_on_start": false
   },
   "use_auth": false,
   "log_level": "info"

@@ -15,7 +15,6 @@ import (
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -111,10 +110,6 @@ func New(dc config.Debrid, client types.Client) *Cache {
 	if err != nil {
 		autoExpiresLinksAfter = time.Hour * 24
 	}
-	workers := runtime.NumCPU() * 50
-	if dc.Workers > 0 {
-		workers = dc.Workers
-	}
 	return &Cache{
 		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
 		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
@@ -122,7 +117,7 @@ func New(dc config.Debrid, client types.Client) *Cache {
 		invalidDownloadLinks:         xsync.NewMapOf[string, string](),
 		client:                       client,
 		logger:                       logger.New(fmt.Sprintf("%s-webdav", client.GetName())),
-		workers:                      workers,
+		workers:                      dc.Workers,
 		downloadLinks:                xsync.NewMapOf[string, downloadLinkCache](),
 		torrentRefreshInterval:       torrentRefreshInterval,
 		downloadLinksRefreshInterval: downloadLinksRefreshInterval,
@@ -211,13 +206,13 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 				filePath := filepath.Join(c.dir, fileName)
 				data, err := os.ReadFile(filePath)
 				if err != nil {
-					c.logger.Debug().Err(err).Msgf("Failed to read file: %s", filePath)
+					c.logger.Error().Err(err).Msgf("Failed to read file: %s", filePath)
 					continue
 				}
 
 				var ct CachedTorrent
 				if err := json.Unmarshal(data, &ct); err != nil {
-					c.logger.Debug().Err(err).Msgf("Failed to unmarshal file: %s", filePath)
+					c.logger.Error().Err(err).Msgf("Failed to unmarshal file: %s", filePath)
 					continue
 				}
 
@@ -271,7 +266,7 @@ func (c *Cache) Sync() error {
 	defer c.logger.Info().Msg("WebDav server sync complete")
 	cachedTorrents, err := c.load()
 	if err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to load cache")
+		c.logger.Error().Err(err).Msg("Failed to load cache")
 	}
 
 	torrents, err := c.client.GetTorrents()
@@ -465,7 +460,7 @@ func (c *Cache) SaveTorrents() {
 func (c *Cache) SaveTorrent(ct *CachedTorrent) {
 	marshaled, err := json.MarshalIndent(ct, "", "  ")
 	if err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to marshal torrent: %s", ct.Id)
+		c.logger.Error().Err(err).Msgf("Failed to marshal torrent: %s", ct.Id)
 		return
 	}
 
@@ -500,7 +495,7 @@ func (c *Cache) saveTorrent(id string, data []byte) {
 
 	f, err := os.Create(tmpFile)
 	if err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to create file: %s", tmpFile)
+		c.logger.Error().Err(err).Msgf("Failed to create file: %s", tmpFile)
 		return
 	}
 
@@ -517,12 +512,12 @@ func (c *Cache) saveTorrent(id string, data []byte) {
 
 	w := bufio.NewWriter(f)
 	if _, err := w.Write(data); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to write data: %s", tmpFile)
+		c.logger.Error().Err(err).Msgf("Failed to write data: %s", tmpFile)
 		return
 	}
 
 	if err := w.Flush(); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to flush data: %s", tmpFile)
+		c.logger.Error().Err(err).Msgf("Failed to flush data: %s", tmpFile)
 		return
 	}
 
@@ -531,7 +526,7 @@ func (c *Cache) saveTorrent(id string, data []byte) {
 	fileClosed = true
 
 	if err := os.Rename(tmpFile, filePath); err != nil {
-		c.logger.Debug().Err(err).Msgf("Failed to rename file: %s", tmpFile)
+		c.logger.Error().Err(err).Msgf("Failed to rename file: %s", tmpFile)
 		return
 	}
 }
@@ -559,7 +554,7 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 		c.logger.Debug().Msgf("Torrent %s is still not complete. Triggering a reinsert(disabled)", t.Id)
 		//ct, err := c.reInsertTorrent(t)
 		//if err != nil {
-		//	c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
+		//	c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
 		//	return err
 		//}
 		//c.logger.Debug().Msgf("Reinserted torrent %s", ct.Id)
@@ -610,9 +605,9 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	if file.Link == "" {
 		c.logger.Debug().Msgf("File link is empty for %s. Release is probably nerfed", filename)
 		// Try to reinsert the torrent?
-		ct, err := c.reInsertTorrent(ct.Torrent)
+		ct, err := c.reInsertTorrent(ct)
 		if err != nil {
-			c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
+			c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
 			return ""
 		}
 		file = ct.Files[filename]
@@ -623,10 +618,10 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
-			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
-			ct, err := c.reInsertTorrent(ct.Torrent)
+			c.logger.Error().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
+			ct, err := c.reInsertTorrent(ct)
 			if err != nil {
-				c.logger.Debug().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
+				c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
 				return ""
 			}
 			c.logger.Debug().Msgf("Reinserted torrent %s", ct.Name)
@@ -634,7 +629,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 			// Retry getting the download link
 			downloadLink, err = c.client.GetDownloadLink(ct.Torrent, &file)
 			if err != nil {
-				c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
+				c.logger.Error().Err(err).Msgf("Failed to get download link for %s", file.Link)
 				return ""
 			}
 			if downloadLink == nil {
@@ -645,9 +640,9 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 			return downloadLink.DownloadLink
 		} else if errors.Is(err, request.TrafficExceededError) {
 			// This is likely a fair usage limit error
-			c.logger.Debug().Err(err).Msgf("Traffic exceeded for %s", ct.Name)
+			c.logger.Error().Err(err).Msgf("Traffic exceeded for %s", ct.Name)
 		} else {
-			c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
+			c.logger.Error().Err(err).Msgf("Failed to get download link for %s", file.Link)
 			return ""
 		}
 	}

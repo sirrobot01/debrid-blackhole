@@ -3,11 +3,14 @@ package debrid
 import (
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
+	"sync"
 )
 
 type Engine struct {
 	Clients  map[string]types.Client
+	clientsMu sync.Mutex
 	Caches   map[string]*Cache
+	CacheMu sync.Mutex
 	LastUsed string
 }
 
@@ -37,16 +40,9 @@ func NewEngine() *Engine {
 	return d
 }
 
-func (d *Engine) Get() types.Client {
-	if d.LastUsed == "" {
-		for _, c := range d.Clients {
-			return c
-		}
-	}
-	return d.Clients[d.LastUsed]
-}
-
-func (d *Engine) GetByName(name string) types.Client {
+func (d *Engine) GetClient(name string) types.Client {
+	d.clientsMu.Lock()
+	defer d.clientsMu.Unlock()
 	return d.Clients[name]
 }
 

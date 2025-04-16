@@ -231,7 +231,7 @@ func (q *QBit) handleTorrentsDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	category := ctx.Value("category").(string)
 	for _, hash := range hashes {
-		q.Storage.Delete(hash, category)
+		q.Storage.Delete(hash, category, false)
 	}
 
 	w.WriteHeader(http.StatusOK)

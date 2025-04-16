@@ -59,7 +59,7 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 	debridTorrent, err := db.ProcessTorrent(svc.Debrid, magnet, a, isSymlink, false)
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
-			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
+			dbClient := service.GetDebrid().GetClient(debridTorrent.Debrid)
 			go func() {
 				_ = dbClient.DeleteTorrent(debridTorrent.Id)
 			}()
@@ -77,7 +77,7 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 
 func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *arr.Arr, isSymlink bool) {
 	svc := service.GetService()
-	client := svc.Debrid.GetByName(debridTorrent.Debrid)
+	client := svc.Debrid.GetClient(debridTorrent.Debrid)
 	for debridTorrent.Status != "downloaded" {
 		q.logger.Debug().Msgf("%s <- (%s) Download Progress: %.2f%%", debridTorrent.Debrid, debridTorrent.Name, debridTorrent.Progress)
 		dbT, err := client.CheckStatus(debridTorrent, isSymlink)
@@ -216,7 +216,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	if debridTorrent == nil {
 		return t
 	}
-	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
+	_db := service.GetDebrid().GetClient(debridTorrent.Debrid)
 	if debridTorrent.Status != "downloaded" {
 		_ = _db.UpdateTorrent(debridTorrent)
 	}

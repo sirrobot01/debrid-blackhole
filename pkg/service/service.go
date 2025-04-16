@@ -19,6 +19,7 @@ var (
 )
 
 func New() *Service {
+	once = sync.Once{}
 	once.Do(func() {
 		arrs := arr.NewStorage()
 		deb := debrid.NewEngine()

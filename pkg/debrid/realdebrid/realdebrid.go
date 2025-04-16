@@ -84,7 +84,7 @@ func New(dc config.Debrid) *RealDebrid {
 
 	return &RealDebrid{
 		Name:               "realdebrid",
-		Host:               dc.Host,
+		Host:               "https://api.real-debrid.com/rest/1.0",
 		APIKey:             dc.APIKey,
 		DownloadKeys:       accounts,
 		DownloadUncached:   dc.DownloadUncached,

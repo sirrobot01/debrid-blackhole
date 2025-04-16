@@ -15,12 +15,20 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/decypharr/pkg/arr"
 	"github.com/sirrobot01/decypharr/pkg/version"
 )
+
+var restartFunc func()
+
+// SetRestartFunc allows setting a callback to restart services
+func SetRestartFunc(fn func()) {
+	restartFunc = fn
+}
 
 type AddRequest struct {
 	Url        string   `json:"url"`
@@ -51,7 +59,7 @@ type RepairRequest struct {
 	AutoProcess bool     `json:"autoProcess"`
 }
 
-//go:embed web/*
+//go:embed templates/*
 var content embed.FS
 
 type Handler struct {
@@ -67,20 +75,20 @@ func New(qbit *qbit.QBit) *Handler {
 }
 
 var (
-	store     = sessions.NewCookieStore([]byte("your-secret-key")) // Change this to a secure key
+	store     = sessions.NewCookieStore([]byte("your-secret-key"))
 	templates *template.Template
 )
 
 func init() {
 	templates = template.Must(template.ParseFS(
 		content,
-		"web/layout.html",
-		"web/index.html",
-		"web/download.html",
-		"web/repair.html",
-		"web/config.html",
-		"web/login.html",
-		"web/setup.html",
+		"templates/layout.html",
+		"templates/index.html",
+		"templates/download.html",
+		"templates/repair.html",
+		"templates/config.html",
+		"templates/login.html",
+		"templates/setup.html",
 	))
 
 	store.Options = &sessions.Options{
@@ -94,8 +102,8 @@ func (ui *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if setup is needed
 		cfg := config.Get()
-		if cfg.NeedsSetup() && r.URL.Path != "/setup" {
-			http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		if cfg.NeedsAuth() && r.URL.Path != "/auth" {
+			http.Redirect(w, r, "/auth", http.StatusSeeOther)
 			return
 		}
 
@@ -105,7 +113,7 @@ func (ui *Handler) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Skip auth check for setup page
-		if r.URL.Path == "/setup" {
+		if r.URL.Path == "/auth" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -195,8 +203,8 @@ func (ui *Handler) SetupHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" {
 		data := map[string]interface{}{
-			"Page":  "setup",
-			"Title": "Setup",
+			"Page":  "auth",
+			"Title": "Auth Setup",
 		}
 		_ = templates.ExecuteTemplate(w, "layout", data)
 		return
@@ -404,22 +412,24 @@ func (ui *Handler) handleGetTorrents(w http.ResponseWriter, r *http.Request) {
 func (ui *Handler) handleDeleteTorrent(w http.ResponseWriter, r *http.Request) {
 	hash := chi.URLParam(r, "hash")
 	category := r.URL.Query().Get("category")
+	removeFromDebrid := r.URL.Query().Get("removeFromDebrid") == "true"
 	if hash == "" {
 		http.Error(w, "No hash provided", http.StatusBadRequest)
 		return
 	}
-	ui.qbit.Storage.Delete(hash, category)
+	ui.qbit.Storage.Delete(hash, category, removeFromDebrid)
 	w.WriteHeader(http.StatusOK)
 }
 
 func (ui *Handler) handleDeleteTorrents(w http.ResponseWriter, r *http.Request) {
 	hashesStr := r.URL.Query().Get("hashes")
+	removeFromDebrid := r.URL.Query().Get("removeFromDebrid") == "true"
 	if hashesStr == "" {
 		http.Error(w, "No hashes provided", http.StatusBadRequest)
 		return
 	}
 	hashes := strings.Split(hashesStr, ",")
-	ui.qbit.Storage.DeleteMultiple(hashes)
+	ui.qbit.Storage.DeleteMultiple(hashes, removeFromDebrid)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -439,6 +449,70 @@ func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.Arrs = arrCfgs
 	request.JSONResponse(w, cfg, http.StatusOK)
+}
+
+func (ui *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	// Decode the JSON body
+	var updatedConfig config.Config
+	if err := json.NewDecoder(r.Body).Decode(&updatedConfig); err != nil {
+		ui.logger.Error().Err(err).Msg("Failed to decode config update request")
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get the current configuration
+	currentConfig := config.Get()
+
+	// Update fields that can be changed
+	currentConfig.LogLevel = updatedConfig.LogLevel
+	currentConfig.MinFileSize = updatedConfig.MinFileSize
+	currentConfig.MaxFileSize = updatedConfig.MaxFileSize
+	currentConfig.AllowedExt = updatedConfig.AllowedExt
+	currentConfig.DiscordWebhook = updatedConfig.DiscordWebhook
+
+	// Update QBitTorrent config
+	currentConfig.QBitTorrent = updatedConfig.QBitTorrent
+
+	// Update Repair config
+	currentConfig.Repair = updatedConfig.Repair
+
+	// Update Debrids
+	if len(updatedConfig.Debrids) > 0 {
+		currentConfig.Debrids = updatedConfig.Debrids
+		// Clear legacy single debrid if using array
+
+	}
+
+	// Update Arrs through the service
+	svc := service.GetService()
+	svc.Arr.Clear() // Clear existing arrs
+
+	for _, a := range updatedConfig.Arrs {
+		svc.Arr.AddOrUpdate(&arr.Arr{
+			Name:             a.Name,
+			Host:             a.Host,
+			Token:            a.Token,
+			Cleanup:          a.Cleanup,
+			SkipRepair:       a.SkipRepair,
+			DownloadUncached: a.DownloadUncached,
+		})
+	}
+	if err := currentConfig.Save(); err != nil {
+		http.Error(w, "Error saving config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if restartFunc != nil {
+		go func() {
+			// Small delay to ensure the response is sent
+			time.Sleep(500 * time.Millisecond)
+			restartFunc()
+		}()
+	}
+
+	// Return success
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 func (ui *Handler) handleGetRepairJobs(w http.ResponseWriter, r *http.Request) {

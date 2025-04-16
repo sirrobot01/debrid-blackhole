@@ -57,7 +57,7 @@ func New(dc config.Debrid) *AllDebrid {
 	}
 	return &AllDebrid{
 		Name:             "alldebrid",
-		Host:             dc.Host,
+		Host:             "http://api.alldebrid.com/v4.1",
 		APIKey:           dc.APIKey,
 		DownloadKeys:     accounts,
 		DownloadUncached: dc.DownloadUncached,

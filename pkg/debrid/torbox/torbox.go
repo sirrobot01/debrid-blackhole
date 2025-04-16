@@ -62,7 +62,7 @@ func New(dc config.Debrid) *Torbox {
 
 	return &Torbox{
 		Name:             "torbox",
-		Host:             dc.Host,
+		Host:             "https://api.torbox.app/v1",
 		APIKey:           dc.APIKey,
 		DownloadKeys:     accounts,
 		DownloadUncached: dc.DownloadUncached,

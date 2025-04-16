@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -44,7 +45,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// Register logs
 	s.router.Get("/logs", s.getLogs)
 	s.router.Get("/stats", s.getStats)
-	port := fmt.Sprintf(":%s", cfg.QBitTorrent.Port)
+	p := cmp.Or(cfg.QBitTorrent.Port, "8282")
+	port := fmt.Sprintf(":%s", p)
 	s.logger.Info().Msgf("Server started on %s", port)
 	srv := &http.Server{
 		Addr:    port,
@@ -86,7 +88,7 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {
-			s.logger.Debug().Err(err).Msg("Error closing log file")
+			s.logger.Error().Err(err).Msg("Error closing log file")
 		}
 	}(file)
 
@@ -100,7 +102,7 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 	// Stream the file
 	_, err = io.Copy(w, file)
 	if err != nil {
-		s.logger.Debug().Err(err).Msg("Error streaming log file")
+		s.logger.Error().Err(err).Msg("Error streaming log file")
 		http.Error(w, "Error streaming log file", http.StatusInternalServerError)
 		return
 	}

@@ -240,7 +240,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), "metadataOnly", true)
 		r = r.WithContext(ctx)
 		cleanPath := path.Clean(r.URL.Path)
-		r.Header.Set("Depth", "1")
 		if r.Header.Get("Depth") == "" {
 			r.Header.Set("Depth", "1")
 		}
@@ -257,7 +256,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// - If the path is exactly the parent folder (which changes frequently),
 		//   use a short TTL.
 		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
-		ttl := 30 * time.Minute
+		ttl := 1 * time.Minute
 		if h.isParentPath(r.URL.Path) {
 			ttl = 30 * time.Second
 		}
@@ -312,7 +311,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		f, err := h.OpenFile(r.Context(), r.URL.Path, os.O_RDONLY, 0)
 		if err != nil {
-			h.logger.Debug().Err(err).Str("path", r.URL.Path).Msg("Failed to open file")
+			h.logger.Error().Err(err).Str("path", r.URL.Path).Msg("Failed to open file")
 			http.NotFound(w, r)
 			return
 		}

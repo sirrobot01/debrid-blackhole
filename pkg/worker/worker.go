@@ -12,20 +12,16 @@ import (
 
 var (
 	_logInstance zerolog.Logger
-	once         sync.Once
 )
 
 func getLogger() zerolog.Logger {
-
-	once.Do(func() {
-		_logInstance = logger.New("worker")
-	})
 	return _logInstance
 }
 
 func Start(ctx context.Context) error {
 	cfg := config.Get()
 	// Start Arr Refresh Worker
+	_logInstance = logger.New("worker")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -71,7 +67,7 @@ func cleanUpQueues() {
 		}
 		_logger.Trace().Msgf("Cleaning up queue for %s", a.Name)
 		if err := a.CleanupQueue(); err != nil {
-			_logger.Debug().Err(err).Msg("Error cleaning up queue")
+			_logger.Error().Err(err).Msg("Error cleaning up queue")
 		}
 	}
 }
