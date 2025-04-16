@@ -179,7 +179,7 @@ func (q *QBit) UpdateTorrentMin(t *Torrent, debridTorrent *debrid.Torrent) *Torr
 		addedOn = time.Now()
 	}
 	totalSize := debridTorrent.Bytes
-	progress := cmp.Or(debridTorrent.Progress, 100)
+	progress := cmp.Or(debridTorrent.Progress, 0.0)
 	progress = progress / 100.0
 	sizeCompleted := int64(float64(totalSize) * progress)
 
