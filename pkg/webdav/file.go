@@ -1,81 +1,213 @@
 package webdav
 
 import (
+	"crypto/tls"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/cache"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/decypharr/pkg/debrid/debrid"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
+var sharedClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		MaxConnsPerHost:       50,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableKeepAlives:     false,
+	},
+	Timeout: 60 * time.Second,
+}
+
 type File struct {
-	cache         *cache.Cache
-	cachedTorrent *cache.CachedTorrent
-	file          *torrent.File
-	offset        int64
-	isDir         bool
-	children      []os.FileInfo
-	reader        io.ReadCloser
+	cache     *debrid.Cache
+	fileId    string
+	torrentId string
+
+	modTime time.Time
+
+	size         int64
+	offset       int64
+	isDir        bool
+	children     []os.FileInfo
+	reader       io.ReadCloser
+	seekPending  bool
+	content      []byte
+	name         string
+	metadataOnly bool
+
+	downloadLink string
+	link         string
 }
 
 // File interface implementations for File
 
 func (f *File) Close() error {
+	if f.reader != nil {
+		f.reader.Close()
+		f.reader = nil
+	}
 	return nil
 }
 
-func (f *File) GetDownloadLink() string {
-	file := f.file
-	link, err := f.cache.GetFileDownloadLink(f.cachedTorrent, file)
-	if err != nil {
-		return ""
+func (f *File) getDownloadLink() string {
+	// Check if we already have a final URL cached
+
+	if f.downloadLink != "" && isValidURL(f.downloadLink) {
+		return f.downloadLink
 	}
-	return link
+	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link)
+	if downloadLink != "" && isValidURL(downloadLink) {
+		f.downloadLink = downloadLink
+		return downloadLink
+	}
+	return ""
+}
+
+func (f *File) stream() (*http.Response, error) {
+	client := sharedClient // Might be replaced with the custom client
+	_log := f.cache.GetLogger()
+	var (
+		err          error
+		downloadLink string
+	)
+
+	downloadLink = f.getDownloadLink() // Uses the first API key
+	if downloadLink == "" {
+		_log.Error().Msgf("Failed to get download link for %s. Empty download link", f.name)
+		return nil, fmt.Errorf("failed to get download link")
+	}
+
+	req, err := http.NewRequest("GET", downloadLink, nil)
+	if err != nil {
+		_log.Error().Msgf("Failed to create HTTP request: %s", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	if f.offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, fmt.Errorf("HTTP request error: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+
+		f.downloadLink = ""
+
+		closeResp := func() {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			b, _ := io.ReadAll(resp.Body)
+			err := resp.Body.Close()
+			if err != nil {
+				return nil, err
+			}
+			if strings.Contains(string(b), "You can not download this file because you have exceeded your traffic on this hoster") {
+				_log.Error().Msgf("Failed to get download link for %s. Download link expired", f.name)
+				f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "bandwidth_exceeded")
+				// Retry with a different API key if it's available
+				return f.stream()
+			} else {
+				return resp, fmt.Errorf("link not found")
+			}
+
+		} else if resp.StatusCode == http.StatusNotFound {
+			closeResp()
+			// Mark download link as not found
+			// Regenerate a new download link
+			f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "link_not_found")
+			// Generate a new download link
+			downloadLink = f.getDownloadLink()
+			if downloadLink == "" {
+				_log.Error().Msgf("Failed to get download link for %s", f.name)
+				return nil, fmt.Errorf("failed to get download link")
+			}
+			req, err = http.NewRequest("GET", downloadLink, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+			}
+			if f.offset > 0 {
+				req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
+			}
+
+			resp, err = client.Do(req)
+			if err != nil {
+				return resp, fmt.Errorf("HTTP request error: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+				closeResp()
+				// Read the body to consume the response
+				f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "link_not_found")
+				return resp, fmt.Errorf("link not found")
+			}
+			return resp, nil
+
+		} else {
+			closeResp()
+			return resp, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
+		}
+
+	}
+	return resp, nil
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-	// Directories cannot be read as a byte stream.
 	if f.isDir {
 		return 0, os.ErrInvalid
 	}
-
-	// If we haven't started streaming the file yet, open the HTTP connection.
-	if f.reader == nil {
-		// Create an HTTP GET request to the file's URL.
-		req, err := http.NewRequest("GET", f.GetDownloadLink(), nil)
-		if err != nil {
-			return 0, fmt.Errorf("failed to create HTTP request: %w", err)
+	if f.metadataOnly {
+		return 0, io.EOF
+	}
+	// If file content is preloaded, read from memory.
+	if f.content != nil {
+		if f.offset >= int64(len(f.content)) {
+			return 0, io.EOF
 		}
-
-		// If we've already read some data (f.offset > 0), request only the remaining bytes.
-		if f.offset > 0 {
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", f.offset))
-		}
-
-		// Execute the HTTP request.
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return 0, fmt.Errorf("HTTP request error: %w", err)
-		}
-
-		// Accept a 200 (OK) or 206 (Partial Content) status.
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-			resp.Body.Close()
-			return 0, fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
-		}
-
-		// Store the response body as our reader.
-		f.reader = resp.Body
+		n = copy(p, f.content[f.offset:])
+		f.offset += int64(n)
+		return n, nil
 	}
 
-	// Read data from the HTTP stream.
+	// If we haven't started streaming the file yet or need to reposition
+	if f.reader == nil || f.seekPending {
+		if f.reader != nil && f.seekPending {
+			f.reader.Close()
+			f.reader = nil
+		}
+
+		// Make the request to get the file
+		resp, err := f.stream()
+		if err != nil {
+			return 0, err
+		}
+		if resp == nil {
+			return 0, fmt.Errorf("failed to get response")
+		}
+
+		f.reader = resp.Body
+		f.seekPending = false
+	}
+
 	n, err = f.reader.Read(p)
 	f.offset += int64(n)
 
-	// When we reach the end of the stream, close the reader.
 	if err == io.EOF {
+		f.reader.Close()
+		f.reader = nil
+	} else if err != nil {
 		f.reader.Close()
 		f.reader = nil
 	}
@@ -88,25 +220,69 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 		return 0, os.ErrInvalid
 	}
 
+	newOffset := f.offset
 	switch whence {
 	case io.SeekStart:
-		f.offset = offset
+		newOffset = offset
 	case io.SeekCurrent:
-		f.offset += offset
+		newOffset += offset
 	case io.SeekEnd:
-		f.offset = f.file.Size - offset
+		newOffset = f.size + offset
 	default:
 		return 0, os.ErrInvalid
 	}
 
-	if f.offset < 0 {
-		f.offset = 0
+	if newOffset < 0 {
+		newOffset = 0
 	}
-	if f.offset > f.file.Size {
-		f.offset = f.file.Size
+	if newOffset > f.size {
+		newOffset = f.size
 	}
 
+	// Only mark seek as pending if position actually changed
+	if newOffset != f.offset {
+		f.offset = newOffset
+		f.seekPending = true
+	}
 	return f.offset, nil
+}
+
+func (f *File) Stat() (os.FileInfo, error) {
+	if f.isDir {
+		return &FileInfo{
+			name:    f.name,
+			size:    0,
+			mode:    0755 | os.ModeDir,
+			modTime: f.modTime,
+			isDir:   true,
+		}, nil
+	}
+
+	return &FileInfo{
+		name:    f.name,
+		size:    f.size,
+		mode:    0644,
+		modTime: f.modTime,
+		isDir:   false,
+	}, nil
+}
+
+func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
+	// Save current position
+
+	// Seek to requested position
+	_, err = f.Seek(off, io.SeekStart)
+	if err != nil {
+		return 0, err
+	}
+
+	// Read the data
+	n, err = f.Read(p)
+	return n, err
+}
+
+func (f *File) Write(p []byte) (n int, err error) {
+	return 0, os.ErrPermission
 }
 
 func (f *File) Readdir(count int) ([]os.FileInfo, error) {
@@ -129,32 +305,4 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 	files := f.children[:count]
 	f.children = f.children[count:]
 	return files, nil
-}
-
-func (f *File) Stat() (os.FileInfo, error) {
-	if f.isDir {
-		name := "/"
-		if f.cachedTorrent != nil {
-			name = f.cachedTorrent.Name
-		}
-		return &FileInfo{
-			name:    name,
-			size:    0,
-			mode:    0755 | os.ModeDir,
-			modTime: time.Now(),
-			isDir:   true,
-		}, nil
-	}
-
-	return &FileInfo{
-		name:    f.file.Name,
-		size:    f.file.Size,
-		mode:    0644,
-		modTime: time.Now(),
-		isDir:   false,
-	}, nil
-}
-
-func (f *File) Write(p []byte) (n int, err error) {
-	return 0, os.ErrPermission
 }

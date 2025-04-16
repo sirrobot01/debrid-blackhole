@@ -3,15 +3,15 @@ package decypharr
 import (
 	"context"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/proxy"
-	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
-	"github.com/sirrobot01/debrid-blackhole/pkg/server"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
-	"github.com/sirrobot01/debrid-blackhole/pkg/version"
-	"github.com/sirrobot01/debrid-blackhole/pkg/web"
-	"github.com/sirrobot01/debrid-blackhole/pkg/worker"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/pkg/qbit"
+	"github.com/sirrobot01/decypharr/pkg/server"
+	"github.com/sirrobot01/decypharr/pkg/service"
+	"github.com/sirrobot01/decypharr/pkg/version"
+	"github.com/sirrobot01/decypharr/pkg/web"
+	"github.com/sirrobot01/decypharr/pkg/webdav"
+	"github.com/sirrobot01/decypharr/pkg/worker"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -28,25 +28,28 @@ func Start(ctx context.Context) error {
 		SetUmask(int(umask))
 	}
 
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	var wg sync.WaitGroup
 	errChan := make(chan error)
 
 	_log := logger.GetDefaultLogger()
 
-	_log.Info().Msgf("Version: %s", version.GetInfo().String())
-	_log.Debug().Msgf("Config Loaded: %s", cfg.JsonFile())
+	_log.Info().Msgf("Starting Decypher (%s)", version.GetInfo().String())
 	_log.Info().Msgf("Default Log Level: %s", cfg.LogLevel)
 
 	svc := service.New()
 	_qbit := qbit.New()
 	srv := server.New()
-	webRoutes := web.New(_qbit).Routes()
+	_webdav := webdav.New()
+
+	ui := web.New(_qbit).Routes()
+	webdavRoutes := _webdav.Routes()
 	qbitRoutes := _qbit.Routes()
 
 	// Register routes
-	srv.Mount("/", webRoutes)
+	srv.Mount("/", ui)
 	srv.Mount("/api/v2", qbitRoutes)
+	srv.Mount("/webdav", webdavRoutes)
 
 	safeGo := func(f func() error) {
 		wg.Add(1)
@@ -71,11 +74,9 @@ func Start(ctx context.Context) error {
 		}()
 	}
 
-	if cfg.Proxy.Enabled {
-		safeGo(func() error {
-			return proxy.NewProxy().Start(ctx)
-		})
-	}
+	safeGo(func() error {
+		return _webdav.Start(ctx)
+	})
 
 	safeGo(func() error {
 		return srv.Start(ctx)

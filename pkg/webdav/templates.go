@@ -73,6 +73,8 @@ const directoryTemplate = `
             display: block;
             border: 1px solid #eee;
             border-radius: 4px;
+            position: relative;
+            padding-left: 50px; /* Make room for the number */
         }
         a:hover {
             background-color: #f7f9fa;
@@ -85,23 +87,40 @@ const directoryTemplate = `
         .parent-dir {
             background-color: #f8f9fa;
         }
+        .file-number {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            width: 30px;
+            color: #777;
+            font-weight: bold;
+            text-align: right;
+        }
+        .file-name {
+            display: inline-block;
+            max-width: 70%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
     <h1>Index of {{.Path}}</h1>
     <ul>
         {{if .ShowParent}}
-            <li><a href="{{.ParentPath}}" class="parent-dir">Parent Directory</a></li>
+            <li><a href="{{urlpath .ParentPath}}" class="parent-dir"><span class="file-number"></span>Parent Directory</a></li>
         {{end}}
-        {{range .Children}}
+        {{range $index, $file := .Children}}
             <li>
-                <a href="{{$.Path}}/{{.Name}}">
-                    {{.Name}}{{if .IsDir}}/{{end}}
+                <a href="{{urlpath (printf "%s/%s" $.Path $file.Name)}}">
+                    <span class="file-number">{{add $index 1}}.</span>
+                    <span class="file-name">{{$file.Name}}{{if $file.IsDir}}/{{end}}</span>
                     <span class="file-info">
-                        {{if not .IsDir}}
-                            {{.Size}} bytes
+                        {{if not $file.IsDir}}
+                            {{formatSize $file.Size}}
                         {{end}}
-                        {{.ModTime.Format "2006-01-02 15:04:05"}}
+                        {{$file.ModTime.Format "2006-01-02 15:04:05"}}
                     </span>
                 </a>
             </li>

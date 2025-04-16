@@ -4,12 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	db "github.com/sirrobot01/debrid-blackhole/pkg/debrid"
-	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	db "github.com/sirrobot01/decypharr/pkg/debrid/debrid"
+	debrid "github.com/sirrobot01/decypharr/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"io"
 	"mime/multipart"
 	"os"
@@ -50,7 +50,7 @@ func (q *QBit) AddTorrent(ctx context.Context, fileHeader *multipart.FileHeader,
 
 func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category string) error {
 	svc := service.GetService()
-	torrent := CreateTorrentFromMagnet(magnet, category, "auto")
+	torrent := createTorrentFromMagnet(magnet, category, "auto")
 	a, ok := ctx.Value("arr").(*arr.Arr)
 	if !ok {
 		return fmt.Errorf("arr not found in context")
@@ -60,7 +60,9 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 	if err != nil || debridTorrent == nil {
 		if debridTorrent != nil {
 			dbClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
-			go dbClient.DeleteTorrent(debridTorrent)
+			go func() {
+				_ = dbClient.DeleteTorrent(debridTorrent.Id)
+			}()
 		}
 		if err == nil {
 			err = fmt.Errorf("failed to process torrent")
@@ -74,13 +76,19 @@ func (q *QBit) Process(ctx context.Context, magnet *utils.Magnet, category strin
 }
 
 func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr *arr.Arr, isSymlink bool) {
-	debridClient := service.GetDebrid().GetByName(debridTorrent.Debrid)
+	svc := service.GetService()
+	client := svc.Debrid.GetByName(debridTorrent.Debrid)
 	for debridTorrent.Status != "downloaded" {
 		q.logger.Debug().Msgf("%s <- (%s) Download Progress: %.2f%%", debridTorrent.Debrid, debridTorrent.Name, debridTorrent.Progress)
-		dbT, err := debridClient.CheckStatus(debridTorrent, isSymlink)
+		dbT, err := client.CheckStatus(debridTorrent, isSymlink)
 		if err != nil {
 			q.logger.Error().Msgf("Error checking status: %v", err)
-			go debridClient.DeleteTorrent(debridTorrent)
+			go func() {
+				err := client.DeleteTorrent(debridTorrent.Id)
+				if err != nil {
+					q.logger.Error().Msgf("Error deleting torrent: %v", err)
+				}
+			}()
 			q.MarkAsFailed(torrent)
 			if err := arr.Refresh(); err != nil {
 				q.logger.Error().Msgf("Error refreshing arr: %v", err)
@@ -92,7 +100,7 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		torrent = q.UpdateTorrentMin(torrent, debridTorrent)
 
 		// Exit the loop for downloading statuses to prevent memory buildup
-		if !slices.Contains(debridClient.GetDownloadingStatus(), debridTorrent.Status) {
+		if !slices.Contains(client.GetDownloadingStatus(), debridTorrent.Status) {
 			break
 		}
 		time.Sleep(time.Duration(q.RefreshInterval) * time.Second)
@@ -102,14 +110,39 @@ func (q *QBit) ProcessFiles(torrent *Torrent, debridTorrent *debrid.Torrent, arr
 		err                error
 	)
 	debridTorrent.Arr = arr
+
+	// File is done downloading at this stage
+
+	// Check if debrid supports webdav by checking cache
 	if isSymlink {
-		torrentSymlinkPath, err = q.ProcessSymlink(torrent) // /mnt/symlinks/{category}/MyTVShow/
+		cache, ok := svc.Debrid.Caches[debridTorrent.Debrid]
+		if ok {
+			q.logger.Info().Msgf("Using internal webdav for %s", debridTorrent.Debrid)
+			// Use webdav to download the file
+			if err := cache.AddTorrent(debridTorrent); err != nil {
+				q.logger.Error().Msgf("Error adding torrent to cache: %v", err)
+				q.MarkAsFailed(torrent)
+				return
+			}
+			rclonePath := filepath.Join(debridTorrent.MountPath, cache.GetTorrentFolder(debridTorrent)) // /mnt/remote/realdebrid/MyTVShow
+			torrentFolderNoExt := utils.RemoveExtension(debridTorrent.Name)
+			torrentSymlinkPath, err = q.createSymlinks(debridTorrent, rclonePath, torrentFolderNoExt) // /mnt/symlinks/{category}/MyTVShow/
+
+		} else {
+			// User is using either zurg or debrid webdav
+			torrentSymlinkPath, err = q.ProcessSymlink(torrent) // /mnt/symlinks/{category}/MyTVShow/
+		}
 	} else {
 		torrentSymlinkPath, err = q.ProcessManualFile(torrent)
 	}
 	if err != nil {
 		q.MarkAsFailed(torrent)
-		go debridClient.DeleteTorrent(debridTorrent)
+		go func() {
+			err := client.DeleteTorrent(debridTorrent.Id)
+			if err != nil {
+				q.logger.Error().Msgf("Error deleting torrent: %v", err)
+			}
+		}()
 		q.logger.Info().Msgf("Error: %v", err)
 		return
 	}
@@ -185,7 +218,7 @@ func (q *QBit) UpdateTorrent(t *Torrent, debridTorrent *debrid.Torrent) *Torrent
 	}
 	_db := service.GetDebrid().GetByName(debridTorrent.Debrid)
 	if debridTorrent.Status != "downloaded" {
-		debridTorrent, _ = _db.GetTorrent(debridTorrent)
+		_ = _db.UpdateTorrent(debridTorrent)
 	}
 	t = q.UpdateTorrentMin(t, debridTorrent)
 	t.ContentPath = t.TorrentPath + string(os.PathSeparator)
@@ -231,8 +264,8 @@ func (q *QBit) RefreshTorrent(t *Torrent) bool {
 func (q *QBit) GetTorrentProperties(t *Torrent) *TorrentProperties {
 	return &TorrentProperties{
 		AdditionDate:           t.AddedOn,
-		Comment:                "Debrid Blackhole <https://github.com/sirrobot01/debrid-blackhole>",
-		CreatedBy:              "Debrid Blackhole <https://github.com/sirrobot01/debrid-blackhole>",
+		Comment:                "Debrid Blackhole <https://github.com/sirrobot01/decypharr>",
+		CreatedBy:              "Debrid Blackhole <https://github.com/sirrobot01/decypharr>",
 		CreationDate:           t.AddedOn,
 		DlLimit:                -1,
 		UpLimit:                -1,

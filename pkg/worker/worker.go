@@ -3,10 +3,9 @@ package worker
 import (
 	"context"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
-	"os"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"sync"
 	"time"
 )
@@ -19,14 +18,13 @@ var (
 func getLogger() zerolog.Logger {
 
 	once.Do(func() {
-		cfg := config.GetConfig()
-		_logInstance = logger.NewLogger("worker", cfg.LogLevel, os.Stdout)
+		_logInstance = logger.New("worker")
 	})
 	return _logInstance
 }
 
 func Start(ctx context.Context) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	// Start Arr Refresh Worker
 
 	var wg sync.WaitGroup
@@ -38,24 +36,6 @@ func Start(ctx context.Context) error {
 	wg.Wait()
 	return nil
 }
-
-//func arrRefreshWorker(ctx context.Context, cfg *config.Config) {
-//	// Start Arr Refresh Worker
-//	_logger := getLogger()
-//	_logger.Debug().Msg("Refresh Worker started")
-//	refreshCtx := context.WithValue(ctx, "worker", "refresh")
-//	refreshTicker := time.NewTicker(time.Duration(cfg.QBitTorrent.RefreshInterval) * time.Second)
-//
-//	for {
-//		select {
-//		case <-refreshCtx.Done():
-//			_logger.Debug().Msg("Refresh Worker stopped")
-//			return
-//		case <-refreshTicker.C:
-//			refreshArrs()
-//		}
-//	}
-//}
 
 func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 	// Start Clean up Queues Worker
@@ -81,17 +61,6 @@ func cleanUpQueuesWorker(ctx context.Context, cfg *config.Config) {
 		}
 	}
 }
-
-//func refreshArrs() {
-//	for _, a := range service.GetService().Arr.GetAll() {
-//		err := a.Refresh()
-//		if err != nil {
-//			_logger := getLogger()
-//			_logger.Debug().Err(err).Msg("Error refreshing arr")
-//			return
-//		}
-//	}
-//}
 
 func cleanUpQueues() {
 	// Clean up queues

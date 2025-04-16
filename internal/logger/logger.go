@@ -3,7 +3,7 @@ package logger
 import (
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/decypharr/internal/config"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"path/filepath"
@@ -17,7 +17,7 @@ var (
 )
 
 func GetLogPath() string {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	logsDir := filepath.Join(cfg.Path, "logs")
 
 	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
@@ -29,7 +29,9 @@ func GetLogPath() string {
 	return filepath.Join(logsDir, "decypharr.log")
 }
 
-func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
+func New(prefix string) zerolog.Logger {
+
+	level := config.Get().LogLevel
 
 	rotatingLogFile := &lumberjack.Logger{
 		Filename: GetLogPath(),
@@ -39,7 +41,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 	}
 
 	consoleWriter := zerolog.ConsoleWriter{
-		Out:        output,
+		Out:        os.Stdout,
 		TimeFormat: "2006-01-02 15:04:05",
 		NoColor:    false, // Set to true if you don't want colors
 		FormatLevel: func(i interface{}) string {
@@ -71,6 +73,7 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 		Level(zerolog.InfoLevel)
 
 	// Set the log level
+	level = strings.ToLower(level)
 	switch level {
 	case "debug":
 		logger = logger.Level(zerolog.DebugLevel)
@@ -80,14 +83,15 @@ func NewLogger(prefix string, level string, output *os.File) zerolog.Logger {
 		logger = logger.Level(zerolog.WarnLevel)
 	case "error":
 		logger = logger.Level(zerolog.ErrorLevel)
+	case "trace":
+		logger = logger.Level(zerolog.TraceLevel)
 	}
 	return logger
 }
 
 func GetDefaultLogger() zerolog.Logger {
 	once.Do(func() {
-		cfg := config.GetConfig()
-		logger = NewLogger("decypharr", cfg.LogLevel, os.Stdout)
+		logger = New("decypharr")
 	})
 	return logger
 }

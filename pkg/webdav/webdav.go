@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"html/template"
 	"net/http"
 	"sync"
@@ -11,31 +12,48 @@ import (
 
 type WebDav struct {
 	Handlers []*Handler
+	ready    chan struct{}
 }
 
 func New() *WebDav {
-	//svc := service.GetService()
-	//cfg := config.GetConfig()
+	svc := service.GetService()
 	w := &WebDav{
 		Handlers: make([]*Handler, 0),
+		ready:    make(chan struct{}),
 	}
-	//for name, c := range svc.DebridCache.GetCaches() {
-	//	h := NewHandler(name, c, logger.NewLogger(fmt.Sprintf("%s-webdav", name), cfg.LogLevel, os.Stdout))
-	//	w.Handlers = append(w.Handlers, h)
-	//}
+	for name, c := range svc.Debrid.Caches {
+		h := NewHandler(name, c, c.GetLogger())
+		w.Handlers = append(w.Handlers, h)
+	}
 	return w
 }
 
 func (wd *WebDav) Routes() http.Handler {
 	chi.RegisterMethod("PROPFIND")
 	chi.RegisterMethod("PROPPATCH")
-	chi.RegisterMethod("MKCOL") // Note: it was "MKOL" in your example, should be "MKCOL"
+	chi.RegisterMethod("MKCOL")
 	chi.RegisterMethod("COPY")
 	chi.RegisterMethod("MOVE")
 	chi.RegisterMethod("LOCK")
 	chi.RegisterMethod("UNLOCK")
 	wr := chi.NewRouter()
 	wr.Use(wd.commonMiddleware)
+
+	// Create a readiness check middleware
+	readinessMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-wd.ready:
+				// WebDAV is ready, proceed
+				next.ServeHTTP(w, r)
+			default:
+				// WebDAV is still initializing
+				w.Header().Set("Retry-After", "10")
+				http.Error(w, "WebDAV service is initializing, please try again shortly", http.StatusServiceUnavailable)
+			}
+		})
+	}
+	wr.Use(readinessMiddleware)
 
 	wd.setupRootHandler(wr)
 	wd.mountHandlers(wr)
@@ -51,7 +69,7 @@ func (wd *WebDav) Start(ctx context.Context) error {
 		wg.Add(1)
 		go func(h *Handler) {
 			defer wg.Done()
-			if err := h.cache.Start(); err != nil {
+			if err := h.cache.Start(ctx); err != nil {
 				select {
 				case errChan <- err:
 				default:
@@ -64,6 +82,9 @@ func (wd *WebDav) Start(ctx context.Context) error {
 	go func() {
 		wg.Wait()
 		close(errChan)
+
+		// Signal that WebDAV is ready
+		close(wd.ready)
 	}()
 
 	// Collect all errors

@@ -1,93 +1,42 @@
 package webdav
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/cache"
-	"github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/pkg/debrid/debrid"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/pkg/version"
 	"golang.org/x/net/webdav"
 	"html/template"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
-	"path"
+	path "path/filepath"
+	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
 type Handler struct {
-	Name         string
-	logger       zerolog.Logger
-	cache        *cache.Cache
-	rootListing  atomic.Value
-	lastRefresh  time.Time
-	refreshMutex sync.Mutex
-	RootPath     string
+	Name     string
+	logger   zerolog.Logger
+	cache    *debrid.Cache
+	RootPath string
 }
 
-func NewHandler(name string, cache *cache.Cache, logger zerolog.Logger) *Handler {
+func NewHandler(name string, cache *debrid.Cache, logger zerolog.Logger) *Handler {
 	h := &Handler{
 		Name:     name,
 		cache:    cache,
 		logger:   logger,
 		RootPath: fmt.Sprintf("/%s", name),
 	}
-
-	h.refreshRootListing()
-
-	// Start background refresh
-	go h.backgroundRefresh()
-
 	return h
-}
-
-func (h *Handler) backgroundRefresh() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		h.refreshRootListing()
-	}
-}
-
-func (h *Handler) refreshRootListing() {
-	h.refreshMutex.Lock()
-	defer h.refreshMutex.Unlock()
-
-	if time.Since(h.lastRefresh) < time.Minute {
-		return
-	}
-
-	var files []os.FileInfo
-	h.cache.GetTorrents().Range(func(key, value interface{}) bool {
-		cachedTorrent := value.(*cache.CachedTorrent)
-		if cachedTorrent != nil && cachedTorrent.Torrent != nil {
-			files = append(files, &FileInfo{
-				name:    cachedTorrent.Torrent.Name,
-				size:    0,
-				mode:    0755 | os.ModeDir,
-				modTime: time.Now(),
-				isDir:   true,
-			})
-		}
-		return true
-	})
-
-	h.rootListing.Store(files)
-	h.lastRefresh = time.Now()
-}
-
-func (h *Handler) getParentRootPath() string {
-	return fmt.Sprintf("/webdav/%s", h.Name)
-}
-
-func (h *Handler) getRootFileInfos() []os.FileInfo {
-	if listing := h.rootListing.Load(); listing != nil {
-		return listing.([]os.FileInfo)
-	}
-	return []os.FileInfo{}
 }
 
 // Mkdir implements webdav.FileSystem
@@ -97,7 +46,23 @@ func (h *Handler) Mkdir(ctx context.Context, name string, perm os.FileMode) erro
 
 // RemoveAll implements webdav.FileSystem
 func (h *Handler) RemoveAll(ctx context.Context, name string) error {
-	return os.ErrPermission // Read-only filesystem
+	name = path.Clean("/" + name)
+
+	rootDir := h.getRootPath()
+
+	if name == rootDir {
+		return os.ErrPermission
+	}
+
+	torrentName, _ := getName(rootDir, name)
+	cachedTorrent := h.cache.GetTorrentByName(torrentName)
+	if cachedTorrent == nil {
+		h.logger.Debug().Msgf("Torrent not found: %s", torrentName)
+		return nil // It's possible that the torrent was removed
+	}
+
+	h.cache.OnRemove(cachedTorrent.Id)
+	return nil
 }
 
 // Rename implements webdav.FileSystem
@@ -105,55 +70,134 @@ func (h *Handler) Rename(ctx context.Context, oldName, newName string) error {
 	return os.ErrPermission // Read-only filesystem
 }
 
+func (h *Handler) getRootPath() string {
+	return fmt.Sprintf("/webdav/%s", h.Name)
+}
+
+func (h *Handler) getTorrentsFolders() []os.FileInfo {
+	return h.cache.GetListing()
+}
+
+func (h *Handler) getParentItems() []string {
+	return []string{"__all__", "torrents", "version.txt"}
+}
+
+func (h *Handler) getParentFiles() []os.FileInfo {
+	now := time.Now()
+	rootFiles := make([]os.FileInfo, 0, len(h.getParentItems()))
+	for _, item := range h.getParentItems() {
+		f := &FileInfo{
+			name:    item,
+			size:    0,
+			mode:    0755 | os.ModeDir,
+			modTime: now,
+			isDir:   true,
+		}
+		if item == "version.txt" {
+			f.isDir = false
+			f.size = int64(len(version.GetInfo().String()))
+		}
+		rootFiles = append(rootFiles, f)
+	}
+	return rootFiles
+}
+
 func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	name = path.Clean("/" + name)
+	rootDir := h.getRootPath()
 
-	// Fast path for root directory
-	if name == h.getParentRootPath() {
+	metadataOnly := ctx.Value("metadataOnly") != nil
+
+	now := time.Now()
+
+	// Fast path optimization with a map lookup instead of string comparisons
+	switch name {
+	case rootDir:
 		return &File{
-			cache:    h.cache,
-			isDir:    true,
-			children: h.getRootFileInfos(),
+			cache:        h.cache,
+			isDir:        true,
+			children:     h.getParentFiles(),
+			name:         "/",
+			metadataOnly: true,
+			modTime:      now,
+		}, nil
+	case path.Join(rootDir, "version.txt"):
+		versionInfo := version.GetInfo().String()
+		return &File{
+			cache:        h.cache,
+			isDir:        false,
+			content:      []byte(versionInfo),
+			name:         "version.txt",
+			size:         int64(len(versionInfo)),
+			metadataOnly: metadataOnly,
+			modTime:      now,
 		}, nil
 	}
 
-	// Remove root directory from path
-	name = strings.TrimPrefix(name, h.getParentRootPath())
-	name = strings.TrimPrefix(name, "/")
-	parts := strings.SplitN(name, "/", 2)
+	// Single check for top-level folders
+	if h.isParentPath(name) {
+		folderName := strings.TrimPrefix(name, rootDir)
+		folderName = strings.TrimPrefix(folderName, "/")
 
-	// Get torrent from cache using sync.Map
-	cachedTorrent := h.cache.GetTorrentByName(parts[0])
-	if cachedTorrent == nil {
-		h.logger.Debug().Msgf("Torrent not found: %s", parts[0])
-		return nil, os.ErrNotExist
-	}
+		// Only fetch the torrent folders once
+		children := h.getTorrentsFolders()
 
-	if len(parts) == 1 {
 		return &File{
-			cache:         h.cache,
-			cachedTorrent: cachedTorrent,
-			isDir:         true,
-			children:      h.getTorrentFileInfos(cachedTorrent.Torrent),
+			cache:        h.cache,
+			isDir:        true,
+			children:     children,
+			name:         folderName,
+			size:         0,
+			metadataOnly: metadataOnly,
+			modTime:      now,
 		}, nil
 	}
 
-	// Use a map for faster file lookup
-	fileMap := make(map[string]*torrent.File, len(cachedTorrent.Torrent.Files))
-	for i := range cachedTorrent.Torrent.Files {
-		fileMap[cachedTorrent.Torrent.Files[i].Name] = &cachedTorrent.Torrent.Files[i]
+	_path := strings.TrimPrefix(name, rootDir)
+	parts := strings.Split(strings.TrimPrefix(_path, "/"), "/")
+
+	if len(parts) >= 2 && (slices.Contains(h.getParentItems(), parts[0])) {
+
+		torrentName := parts[1]
+		cachedTorrent := h.cache.GetTorrentByName(torrentName)
+		if cachedTorrent == nil {
+			h.logger.Debug().Msgf("Torrent not found: %s", torrentName)
+			return nil, os.ErrNotExist
+		}
+
+		if len(parts) == 2 {
+			// Torrent folder level
+			return &File{
+				cache:        h.cache,
+				torrentId:    cachedTorrent.Id,
+				isDir:        true,
+				children:     h.getFileInfos(cachedTorrent.Torrent),
+				name:         cachedTorrent.Name,
+				size:         cachedTorrent.Size,
+				metadataOnly: metadataOnly,
+				modTime:      cachedTorrent.AddedOn,
+			}, nil
+		}
+
+		// Torrent file level
+		filename := strings.Join(parts[2:], "/")
+		if file, ok := cachedTorrent.Files[filename]; ok {
+			fi := &File{
+				cache:        h.cache,
+				torrentId:    cachedTorrent.Id,
+				fileId:       file.Id,
+				isDir:        false,
+				name:         file.Name,
+				size:         file.Size,
+				link:         file.Link,
+				metadataOnly: metadataOnly,
+				modTime:      cachedTorrent.AddedOn,
+			}
+			return fi, nil
+		}
 	}
 
-	if file, ok := fileMap[parts[1]]; ok {
-		return &File{
-			cache:         h.cache,
-			cachedTorrent: cachedTorrent,
-			file:          file,
-			isDir:         false,
-		}, nil
-	}
-
-	h.logger.Debug().Msgf("File not found: %s", name)
+	h.logger.Info().Msgf("File not found: %s", name)
 	return nil, os.ErrNotExist
 }
 
@@ -166,14 +210,15 @@ func (h *Handler) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	return f.Stat()
 }
 
-func (h *Handler) getTorrentFileInfos(torrent *torrent.Torrent) []os.FileInfo {
+func (h *Handler) getFileInfos(torrent *types.Torrent) []os.FileInfo {
 	files := make([]os.FileInfo, 0, len(torrent.Files))
+	now := time.Now()
 	for _, file := range torrent.Files {
 		files = append(files, &FileInfo{
 			name:    file.Name,
 			size:    file.Size,
 			mode:    0644,
-			modTime: time.Now(),
+			modTime: now,
 			isDir:   false,
 		})
 	}
@@ -181,13 +226,133 @@ func (h *Handler) getTorrentFileInfos(torrent *torrent.Torrent) []os.FileInfo {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
 	// Handle OPTIONS
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// Create WebDAV handler
+	// Cache PROPFIND responses for a short time to reduce load.
+	if r.Method == "PROPFIND" {
+		// Determine the Depth; default to "1" if not provided.
+		// Set metadata only
+		ctx := context.WithValue(r.Context(), "metadataOnly", true)
+		r = r.WithContext(ctx)
+		cleanPath := path.Clean(r.URL.Path)
+		r.Header.Set("Depth", "1")
+		if r.Header.Get("Depth") == "" {
+			r.Header.Set("Depth", "1")
+		}
+
+		// Reject "infinity" depth
+		if r.Header.Get("Depth") == "infinity" {
+			r.Header.Set("Depth", "1")
+		}
+		depth := r.Header.Get("Depth")
+		// Use both path and Depth header to form the cache key.
+		cacheKey := fmt.Sprintf("propfind:%s:%s", cleanPath, depth)
+
+		// Determine TTL based on the requested folder:
+		// - If the path is exactly the parent folder (which changes frequently),
+		//   use a short TTL.
+		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
+		ttl := 30 * time.Minute
+		if h.isParentPath(r.URL.Path) {
+			ttl = 30 * time.Second
+		}
+
+		if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {
+			return
+		}
+
+		// No valid cache entry; process the PROPFIND request.
+		responseRecorder := httptest.NewRecorder()
+		handler := &webdav.Handler{
+			FileSystem: h,
+			LockSystem: webdav.NewMemLS(),
+			Logger: func(r *http.Request, err error) {
+				if err != nil {
+					h.logger.Error().Err(err).Msg("WebDAV error")
+				}
+			},
+		}
+		handler.ServeHTTP(responseRecorder, r)
+		responseData := responseRecorder.Body.Bytes()
+		gzippedData := request.Gzip(responseData)
+
+		// Create compressed version
+
+		h.cache.PropfindResp.Store(cacheKey, debrid.PropfindResponse{
+			Data:        responseData,
+			GzippedData: gzippedData,
+			Ts:          time.Now(),
+		})
+
+		// Forward the captured response to the client.
+		for k, v := range responseRecorder.Header() {
+			w.Header()[k] = v
+		}
+
+		if acceptsGzip(r) {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(gzippedData)))
+			w.WriteHeader(responseRecorder.Code)
+			_, _ = w.Write(gzippedData)
+		} else {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(responseData)))
+			w.WriteHeader(responseRecorder.Code)
+			_, _ = w.Write(responseData)
+		}
+		return
+	}
+
+	// Handle GET requests for file/directory content
+	if r.Method == "GET" {
+		f, err := h.OpenFile(r.Context(), r.URL.Path, os.O_RDONLY, 0)
+		if err != nil {
+			h.logger.Debug().Err(err).Str("path", r.URL.Path).Msg("Failed to open file")
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+
+		fi, err := f.Stat()
+		if err != nil {
+			h.logger.Error().Err(err).Msg("Failed to stat file")
+			http.Error(w, "Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// If the target is a directory, use your directory listing logic.
+		if fi.IsDir() {
+			h.serveDirectory(w, r, f)
+			return
+		}
+
+		rs, ok := f.(io.ReadSeeker)
+		if !ok {
+			// If not, read the entire file into memory as a fallback.
+			buf, err := io.ReadAll(f)
+			if err != nil {
+				h.logger.Error().Err(err).Msg("Failed to read file content")
+				http.Error(w, "Server Error", http.StatusInternalServerError)
+				return
+			}
+			rs = bytes.NewReader(buf)
+		}
+		fileName := fi.Name()
+		contentType := getContentType(fileName)
+		w.Header().Set("Content-Type", contentType)
+
+		// Serve the file with the correct modification time.
+		// http.ServeContent automatically handles Range requests.
+		http.ServeContent(w, r, fileName, fi.ModTime(), rs)
+		return
+	}
+
+	// Fallback: for other methods, use the standard WebDAV handler.
 	handler := &webdav.Handler{
 		FileSystem: h,
 		LockSystem: webdav.NewMemLS(),
@@ -201,18 +366,69 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		},
 	}
+	handler.ServeHTTP(w, r)
+}
 
-	// Special handling for GET requests on directories
-	if r.Method == "GET" {
-		if f, err := h.OpenFile(r.Context(), r.URL.Path, os.O_RDONLY, 0); err == nil {
-			if fi, err := f.Stat(); err == nil && fi.IsDir() {
-				h.serveDirectory(w, r, f)
-				return
-			}
-			f.Close()
+func getContentType(fileName string) string {
+	contentType := "application/octet-stream"
+
+	// Determine content type based on file extension
+	switch {
+	case strings.HasSuffix(fileName, ".mp4"):
+		contentType = "video/mp4"
+	case strings.HasSuffix(fileName, ".mkv"):
+		contentType = "video/x-matroska"
+	case strings.HasSuffix(fileName, ".avi"):
+		contentType = "video/x-msvideo"
+	case strings.HasSuffix(fileName, ".mov"):
+		contentType = "video/quicktime"
+	case strings.HasSuffix(fileName, ".m4v"):
+		contentType = "video/x-m4v"
+	case strings.HasSuffix(fileName, ".ts"):
+		contentType = "video/mp2t"
+	case strings.HasSuffix(fileName, ".srt"):
+		contentType = "application/x-subrip"
+	case strings.HasSuffix(fileName, ".vtt"):
+		contentType = "text/vtt"
+	}
+	return contentType
+}
+
+func (h *Handler) isParentPath(_path string) bool {
+	rootPath := h.getRootPath()
+	parents := h.getParentItems()
+	for _, p := range parents {
+		if path.Clean(_path) == path.Clean(path.Join(rootPath, p)) {
+			return true
 		}
 	}
-	handler.ServeHTTP(w, r)
+	return false
+}
+
+func (h *Handler) serveFromCacheIfValid(w http.ResponseWriter, r *http.Request, cacheKey string, ttl time.Duration) bool {
+	respCache, ok := h.cache.PropfindResp.Load(cacheKey)
+	if !ok {
+		return false
+	}
+
+	if time.Since(respCache.Ts) >= ttl {
+		// Remove expired cache entry
+		return false
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	if acceptsGzip(r) && len(respCache.GzippedData) > 0 {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.GzippedData)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respCache.GzippedData)
+	} else {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respCache.Data)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(respCache.Data)
+	}
+	return true
 }
 
 func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file webdav.File) {
@@ -247,7 +463,54 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 	}
 
 	// Parse and execute template
-	tmpl, err := template.New("directory").Parse(directoryTemplate)
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"urlpath": func(p string) string {
+			segments := strings.Split(p, "/")
+			for i, segment := range segments {
+				segments[i] = url.PathEscape(segment)
+			}
+			return strings.Join(segments, "/")
+		},
+		"formatSize": func(bytes int64) string {
+			const (
+				KB = 1024
+				MB = 1024 * KB
+				GB = 1024 * MB
+				TB = 1024 * GB
+			)
+
+			var size float64
+			var unit string
+
+			switch {
+			case bytes >= TB:
+				size = float64(bytes) / TB
+				unit = "TB"
+			case bytes >= GB:
+				size = float64(bytes) / GB
+				unit = "GB"
+			case bytes >= MB:
+				size = float64(bytes) / MB
+				unit = "MB"
+			case bytes >= KB:
+				size = float64(bytes) / KB
+				unit = "KB"
+			default:
+				size = float64(bytes)
+				unit = "bytes"
+			}
+
+			// Format to 2 decimal places for larger units, no decimals for bytes
+			if unit == "bytes" {
+				return fmt.Sprintf("%.0f %s", size, unit)
+			}
+			return fmt.Sprintf("%.2f %s", size, unit)
+		},
+	}
+	tmpl, err := template.New("directory").Funcs(funcMap).Parse(directoryTemplate)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Failed to parse directory template")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

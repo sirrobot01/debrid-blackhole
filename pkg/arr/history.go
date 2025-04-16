@@ -1,7 +1,7 @@
 package arr
 
 import (
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"io"
 	"net/http"
 	gourl "net/url"
@@ -134,6 +134,10 @@ func (a *Arr) CleanupQueue() error {
 			if len(messages) > 0 {
 				for _, m := range messages {
 					if strings.Contains(strings.Join(m.Messages, " "), "No files found are eligible for import in") {
+						isMessedUp = true
+						break
+					}
+					if strings.Contains(m.Title, "One or more episodes expected in this release were not imported or missing from the release") {
 						isMessedUp = true
 						break
 					}

@@ -1,6 +1,24 @@
 {
   "debrids": [
     {
+      "name": "realdebrid",
+      "host": "https://api.real-debrid.com/rest/1.0",
+      "api_key": "realdebrid_key",
+      "folder": "/mnt/remote/realdebrid/__all__/",
+      "download_api_keys": [],
+      "proxy": "",
+      "rate_limit": "250/minute",
+      "download_uncached": false,
+      "check_cached": false,
+      "use_webdav": true,
+      "torrents_refresh_interval": "15s",
+      "folder_naming": "original_no_ext",
+      "auto_expire_links_after": "3d",
+      "rc_url": "http://your-ip-address:9990",
+      "rc_user": "your_rclone_rc_user",
+      "rc_pass": "your_rclone_rc_pass"
+    },
+    {
       "name": "torbox",
       "host": "https://api.torbox.app/v1",
       "api_key": "torbox_api_key",
@@ -8,15 +26,6 @@
       "rate_limit": "250/minute",
       "download_uncached": false,
       "check_cached": true
-    },
-    {
-      "name": "realdebrid",
-      "host": "https://api.real-debrid.com/rest/1.0",
-      "api_key": "realdebrid_key",
-      "folder": "/mnt/remote/realdebrid/__all__/",
-      "rate_limit": "250/minute",
-      "download_uncached": false,
-      "check_cached": false
     },
     {
       "name": "debridlink",
@@ -37,14 +46,6 @@
       "check_cached": false
     }
   ],
-  "proxy": {
-    "enabled": true,
-    "port": "8100",
-    "log_level": "info",
-    "username": "username",
-    "password": "password",
-    "cached_only": true
-  },
   "max_cache_size": 1000,
   "qbittorrent": {
     "port": "8282",
@@ -82,7 +83,8 @@
     "enabled": false,
     "interval": "12h",
     "run_on_start": false,
-    "zurg_url": "http://zurg:9999",
+    "zurg_url": "",
+    "use_webdav": false,
     "auto_process": false
   },
   "log_level": "info",
@@ -90,5 +92,5 @@
   "max_file_size": "",
   "allowed_file_types": [],
   "use_auth": false,
-  "discord_webhook_url": "https://discord.com/api/webhooks/...",
+  "discord_webhook_url": "https://discord.com/api/webhooks/..."
 }

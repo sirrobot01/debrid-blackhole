@@ -2,25 +2,24 @@ package web
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/gorilla/sessions"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
-	"github.com/sirrobot01/debrid-blackhole/internal/request"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	"github.com/sirrobot01/debrid-blackhole/pkg/qbit"
-	"github.com/sirrobot01/debrid-blackhole/pkg/service"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	"github.com/sirrobot01/decypharr/pkg/qbit"
+	"github.com/sirrobot01/decypharr/pkg/service"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/pkg/arr"
-	"github.com/sirrobot01/debrid-blackhole/pkg/version"
+	"github.com/sirrobot01/decypharr/pkg/arr"
+	"github.com/sirrobot01/decypharr/pkg/version"
 )
 
 type AddRequest struct {
@@ -61,10 +60,9 @@ type Handler struct {
 }
 
 func New(qbit *qbit.QBit) *Handler {
-	cfg := config.GetConfig()
 	return &Handler{
 		qbit:   qbit,
-		logger: logger.NewLogger("ui", cfg.LogLevel, os.Stdout),
+		logger: logger.New("ui"),
 	}
 }
 
@@ -95,7 +93,7 @@ func init() {
 func (ui *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if setup is needed
-		cfg := config.GetConfig()
+		cfg := config.Get()
 		if cfg.NeedsSetup() && r.URL.Path != "/setup" {
 			http.Redirect(w, r, "/setup", http.StatusSeeOther)
 			return
@@ -129,7 +127,7 @@ func (ui *Handler) verifyAuth(username, password string) bool {
 	if username == "" {
 		return false
 	}
-	auth := config.GetConfig().GetAuth()
+	auth := config.Get().GetAuth()
 	if auth == nil {
 		return false
 	}
@@ -146,9 +144,7 @@ func (ui *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			"Page":  "login",
 			"Title": "Login",
 		}
-		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		_ = templates.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -189,7 +185,7 @@ func (ui *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ui *Handler) SetupHandler(w http.ResponseWriter, r *http.Request) {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	authCfg := cfg.GetAuth()
 
 	if !cfg.NeedsSetup() {
@@ -202,9 +198,7 @@ func (ui *Handler) SetupHandler(w http.ResponseWriter, r *http.Request) {
 			"Page":  "setup",
 			"Title": "Setup",
 		}
-		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		_ = templates.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -251,10 +245,7 @@ func (ui *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "index",
 		"Title": "Torrents",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
@@ -262,10 +253,7 @@ func (ui *Handler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "download",
 		"Title": "Download",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) RepairHandler(w http.ResponseWriter, r *http.Request) {
@@ -273,10 +261,7 @@ func (ui *Handler) RepairHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "repair",
 		"Title": "Repair",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -284,10 +269,7 @@ func (ui *Handler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "config",
 		"Title": "Config",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) handleGetArrs(w http.ResponseWriter, r *http.Request) {
@@ -324,9 +306,13 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, url := range urlList {
-			importReq := qbit.NewImportRequest(url, _arr, !notSymlink, downloadUncached)
-			err := importReq.Process(ui.qbit)
+			magnet, err := utils.GetMagnetFromUrl(url)
 			if err != nil {
+				errs = append(errs, fmt.Sprintf("Failed to parse URL %s: %v", url, err))
+				continue
+			}
+			importReq := qbit.NewImportRequest(magnet, _arr, !notSymlink, downloadUncached)
+			if err := importReq.Process(ui.qbit); err != nil {
 				errs = append(errs, fmt.Sprintf("URL %s: %v", url, err))
 				continue
 			}
@@ -349,7 +335,7 @@ func (ui *Handler) handleAddContent(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			importReq := qbit.NewImportRequest(magnet.Link, _arr, !notSymlink, downloadUncached)
+			importReq := qbit.NewImportRequest(magnet, _arr, !notSymlink, downloadUncached)
 			err = importReq.Process(ui.qbit)
 			if err != nil {
 				errs = append(errs, fmt.Sprintf("File %s: %v", fileHeader.Filename, err))
@@ -377,15 +363,20 @@ func (ui *Handler) handleRepairMedia(w http.ResponseWriter, r *http.Request) {
 
 	svc := service.GetService()
 
-	_arr := svc.Arr.Get(req.ArrName)
-	if _arr == nil {
-		http.Error(w, "No Arrs found to repair", http.StatusNotFound)
-		return
+	var arrs []string
+
+	if req.ArrName != "" {
+		_arr := svc.Arr.Get(req.ArrName)
+		if _arr == nil {
+			http.Error(w, "No Arrs found to repair", http.StatusNotFound)
+			return
+		}
+		arrs = append(arrs, req.ArrName)
 	}
 
 	if req.Async {
 		go func() {
-			if err := svc.Repair.AddJob([]string{req.ArrName}, req.MediaIds, req.AutoProcess, false); err != nil {
+			if err := svc.Repair.AddJob(arrs, req.MediaIds, req.AutoProcess, false); err != nil {
 				ui.logger.Error().Err(err).Msg("Failed to repair media")
 			}
 		}()
@@ -433,7 +424,7 @@ func (ui *Handler) handleDeleteTorrents(w http.ResponseWriter, r *http.Request) 
 }
 
 func (ui *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	arrCfgs := make([]config.Arr, 0)
 	svc := service.GetService()
 	for _, a := range svc.Arr.GetAll() {
@@ -461,12 +452,10 @@ func (ui *Handler) handleProcessRepairJob(w http.ResponseWriter, r *http.Request
 		http.Error(w, "No job ID provided", http.StatusBadRequest)
 		return
 	}
-	go func() {
-		svc := service.GetService()
-		if err := svc.Repair.ProcessJob(id); err != nil {
-			ui.logger.Error().Err(err).Msg("Failed to process repair job")
-		}
-	}()
+	svc := service.GetService()
+	if err := svc.Repair.ProcessJob(id); err != nil {
+		ui.logger.Error().Err(err).Msg("Failed to process repair job")
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

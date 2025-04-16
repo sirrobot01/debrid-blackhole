@@ -2,6 +2,7 @@ package repair
 
 import (
 	"fmt"
+	"github.com/sirrobot01/decypharr/pkg/arr"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -128,4 +129,21 @@ func checkFileStart(filePath string) error {
 		return err
 	}
 	return nil
+}
+
+func collectFiles(media arr.Content) map[string][]arr.ContentFile {
+	uniqueParents := make(map[string][]arr.ContentFile)
+	files := media.Files
+	for _, file := range files {
+		target := getSymlinkTarget(file.Path)
+		if target != "" {
+			file.IsSymlink = true
+			dir, f := filepath.Split(target)
+			torrentNamePath := filepath.Clean(dir)
+			// Set target path folder/file.mkv
+			file.TargetPath = f
+			uniqueParents[torrentNamePath] = append(uniqueParents[torrentNamePath], file)
+		}
+	}
+	return uniqueParents
 }

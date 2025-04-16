@@ -1,18 +1,26 @@
 package request
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
 	"crypto/tls"
-	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
+	"github.com/rs/zerolog"
+	"github.com/sirrobot01/decypharr/internal/logger"
+	"golang.org/x/net/proxy"
 	"golang.org/x/time/rate"
 	"io"
-	"log"
+	"math"
+	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,103 +43,299 @@ func JoinURL(base string, paths ...string) (string, error) {
 	return joined, nil
 }
 
-type RLHTTPClient struct {
-	client      *http.Client
-	Ratelimiter *rate.Limiter
-	Headers     map[string]string
+var (
+	once     sync.Once
+	instance *Client
+)
+
+type ClientOption func(*Client)
+
+// Client represents an HTTP client with additional capabilities
+type Client struct {
+	client          *http.Client
+	rateLimiter     *rate.Limiter
+	headers         map[string]string
+	headersMu       sync.RWMutex
+	maxRetries      int
+	timeout         time.Duration
+	skipTLSVerify   bool
+	retryableStatus map[int]struct{}
+	logger          zerolog.Logger
+	proxy           string
 }
 
-func (c *RLHTTPClient) Doer(req *http.Request) (*http.Response, error) {
-	if c.Ratelimiter != nil {
-		err := c.Ratelimiter.Wait(req.Context())
-		if err != nil {
-			return nil, err
+// WithMaxRetries sets the maximum number of retry attempts
+func WithMaxRetries(maxRetries int) ClientOption {
+	return func(c *Client) {
+		c.maxRetries = maxRetries
+	}
+}
+
+// WithTimeout sets the request timeout
+func WithTimeout(timeout time.Duration) ClientOption {
+	return func(c *Client) {
+		c.timeout = timeout
+	}
+}
+
+func WithRedirectPolicy(policy func(req *http.Request, via []*http.Request) error) ClientOption {
+	return func(c *Client) {
+		c.client.CheckRedirect = policy
+	}
+}
+
+// WithRateLimiter sets a rate limiter
+func WithRateLimiter(rl *rate.Limiter) ClientOption {
+	return func(c *Client) {
+		c.rateLimiter = rl
+	}
+}
+
+// WithHeaders sets default headers
+func WithHeaders(headers map[string]string) ClientOption {
+	return func(c *Client) {
+		c.headersMu.Lock()
+		c.headers = headers
+		c.headersMu.Unlock()
+	}
+}
+
+func (c *Client) SetHeader(key, value string) {
+	c.headersMu.Lock()
+	c.headers[key] = value
+	c.headersMu.Unlock()
+}
+
+func WithLogger(logger zerolog.Logger) ClientOption {
+	return func(c *Client) {
+		c.logger = logger
+	}
+}
+
+func WithTransport(transport *http.Transport) ClientOption {
+	return func(c *Client) {
+		c.client.Transport = transport
+	}
+}
+
+// WithRetryableStatus adds status codes that should trigger a retry
+func WithRetryableStatus(statusCodes ...int) ClientOption {
+	return func(c *Client) {
+		for _, code := range statusCodes {
+			c.retryableStatus[code] = struct{}{}
 		}
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
 }
 
-func (c *RLHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	var resp *http.Response
+func WithProxy(proxyURL string) ClientOption {
+	return func(c *Client) {
+		c.proxy = proxyURL
+	}
+}
+
+// doRequest performs a single HTTP request with rate limiting
+func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
+	if c.rateLimiter != nil {
+		err := c.rateLimiter.Wait(req.Context())
+		if err != nil {
+			return nil, fmt.Errorf("rate limiter wait: %w", err)
+		}
+	}
+
+	return c.client.Do(req)
+}
+
+// Do performs an HTTP request with retries for certain status codes
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	// Save the request body for reuse in retries
+	var bodyBytes []byte
 	var err error
-	backoff := time.Millisecond * 500
 
-	for i := 0; i < 3; i++ {
-		resp, err = c.Doer(req)
+	if req.Body != nil {
+		bodyBytes, err = io.ReadAll(req.Body)
 		if err != nil {
+			return nil, fmt.Errorf("reading request body: %w", err)
+		}
+		req.Body.Close()
+	}
+
+	backoff := time.Millisecond * 500
+	var resp *http.Response
+
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		// Reset the request body if it exists
+		if bodyBytes != nil {
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+
+		// Apply headers
+		c.headersMu.RLock()
+		if c.headers != nil {
+			for key, value := range c.headers {
+				req.Header.Set(key, value)
+			}
+		}
+		c.headersMu.RUnlock()
+
+		resp, err = c.doRequest(req)
+		if err != nil {
+			// Check if this is a network error that might be worth retrying
+			if attempt < c.maxRetries {
+				// Apply backoff with jitter
+				jitter := time.Duration(rand.Int63n(int64(backoff / 4)))
+				sleepTime := backoff + jitter
+
+				select {
+				case <-req.Context().Done():
+					return nil, req.Context().Err()
+				case <-time.After(sleepTime):
+					// Continue to next retry attempt
+				}
+
+				// Exponential backoff
+				backoff *= 2
+				continue
+			}
 			return nil, err
 		}
 
-		if resp.StatusCode != http.StatusTooManyRequests {
+		// Check if the status code is retryable
+		if _, ok := c.retryableStatus[resp.StatusCode]; !ok || attempt == c.maxRetries {
 			return resp, nil
 		}
 
-		// Close the response body to prevent resource leakage
+		// Close the response body before retrying
 		resp.Body.Close()
 
-		// Wait for the backoff duration before retrying
-		time.Sleep(backoff)
+		// Apply backoff with jitter
+		jitter := time.Duration(rand.Int63n(int64(backoff / 4)))
+		sleepTime := backoff + jitter
+
+		select {
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		case <-time.After(sleepTime):
+			// Continue to next retry attempt
+		}
 
 		// Exponential backoff
 		backoff *= 2
 	}
 
-	return resp, fmt.Errorf("max retries exceeded")
+	return nil, fmt.Errorf("max retries exceeded")
 }
 
-func (c *RLHTTPClient) MakeRequest(req *http.Request) ([]byte, error) {
-	if c.Headers != nil {
-		for key, value := range c.Headers {
-			req.Header.Set(key, value)
-		}
-	}
-
+// MakeRequest performs an HTTP request and returns the response body as bytes
+func (c *Client) MakeRequest(req *http.Request) ([]byte, error) {
 	res, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println(err)
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			c.logger.Printf("Failed to close response body: %v", err)
 		}
-	}(res.Body)
+	}()
 
-	b, err := io.ReadAll(res.Body)
+	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
-	}
-	statusOk := res.StatusCode >= 200 && res.StatusCode < 300
-	if !statusOk {
-		// Add status code error to the body
-		b = append(b, []byte(fmt.Sprintf("\nstatus code: %d", res.StatusCode))...)
-		return nil, errors.New(string(b))
+		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	return b, nil
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("HTTP error %d: %s", res.StatusCode, string(bodyBytes))
+	}
+
+	return bodyBytes, nil
 }
 
-func NewRLHTTPClient(rl *rate.Limiter, headers map[string]string) *RLHTTPClient {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+func (c *Client) Get(url string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating GET request: %w", err)
 	}
-	c := &RLHTTPClient{
-		client: &http.Client{
-			Transport: tr,
+
+	return c.Do(req)
+}
+
+// New creates a new HTTP client with the specified options
+func New(options ...ClientOption) *Client {
+	client := &Client{
+		maxRetries:    3,
+		skipTLSVerify: true,
+		retryableStatus: map[int]struct{}{
+			http.StatusTooManyRequests:     struct{}{},
+			http.StatusInternalServerError: struct{}{},
+			http.StatusBadGateway:          struct{}{},
+			http.StatusServiceUnavailable:  struct{}{},
+			http.StatusGatewayTimeout:      struct{}{},
 		},
+		logger:  logger.New("request"),
+		timeout: 60 * time.Second,
+		proxy:   "",
+		headers: make(map[string]string),
 	}
-	if rl != nil {
-		c.Ratelimiter = rl
+
+	// default http client
+	client.client = &http.Client{
+		Timeout: client.timeout,
 	}
-	if headers != nil {
-		c.Headers = headers
+
+	// Apply options before configuring transport
+	for _, option := range options {
+		option(client)
 	}
-	return c
+
+	// Check if transport was set by WithTransport option
+	if client.client.Transport == nil {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: client.skipTLSVerify,
+			},
+		}
+
+		// Configure proxy if needed
+		if client.proxy != "" {
+			if strings.HasPrefix(client.proxy, "socks5://") {
+				// Handle SOCKS5 proxy
+				socksURL, err := url.Parse(client.proxy)
+				if err != nil {
+					client.logger.Error().Msgf("Failed to parse SOCKS5 proxy URL: %v", err)
+				} else {
+					auth := &proxy.Auth{}
+					if socksURL.User != nil {
+						auth.User = socksURL.User.Username()
+						password, _ := socksURL.User.Password()
+						auth.Password = password
+					}
+
+					dialer, err := proxy.SOCKS5("tcp", socksURL.Host, auth, proxy.Direct)
+					if err != nil {
+						client.logger.Error().Msgf("Failed to create SOCKS5 dialer: %v", err)
+					} else {
+						transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+							return dialer.Dial(network, addr)
+						}
+					}
+				}
+			} else {
+				proxyURL, err := url.Parse(client.proxy)
+				if err != nil {
+					client.logger.Error().Msgf("Failed to parse proxy URL: %v", err)
+				} else {
+					transport.Proxy = http.ProxyURL(proxyURL)
+				}
+			}
+		} else {
+			transport.Proxy = http.ProxyFromEnvironment
+		}
+
+		// Set the transport to the client
+		client.client.Transport = transport
+	}
+
+	return client
 }
 
 func ParseRateLimit(rateStr string) *rate.Limiter {
@@ -153,9 +357,11 @@ func ParseRateLimit(rateStr string) *rate.Limiter {
 	switch unit {
 	case "minute":
 		reqsPerSecond := float64(count) / 60.0
-		return rate.NewLimiter(rate.Limit(reqsPerSecond), 5)
+		burstSize := int(math.Max(30, float64(count)*0.25))
+		return rate.NewLimiter(rate.Limit(reqsPerSecond), burstSize)
 	case "second":
-		return rate.NewLimiter(rate.Limit(float64(count)), 5)
+		burstSize := int(math.Max(30, float64(count)*5))
+		return rate.NewLimiter(rate.Limit(float64(count)), burstSize)
 	default:
 		return nil
 	}
@@ -168,4 +374,29 @@ func JSONResponse(w http.ResponseWriter, data interface{}, code int) {
 	if err != nil {
 		return
 	}
+}
+
+func Gzip(body []byte) []byte {
+
+	var b bytes.Buffer
+	if len(body) == 0 {
+		return nil
+	}
+	gz := gzip.NewWriter(&b)
+	_, err := gz.Write(body)
+	if err != nil {
+		return nil
+	}
+	err = gz.Close()
+	if err != nil {
+		return nil
+	}
+	return b.Bytes()
+}
+
+func Default() *Client {
+	once.Do(func() {
+		instance = New()
+	})
+	return instance
 }

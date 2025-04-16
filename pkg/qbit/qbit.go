@@ -3,8 +3,8 @@ package qbit
 import (
 	"cmp"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
 	"os"
 	"path/filepath"
 )
@@ -23,7 +23,7 @@ type QBit struct {
 }
 
 func New() *QBit {
-	_cfg := config.GetConfig()
+	_cfg := config.Get()
 	cfg := _cfg.QBitTorrent
 	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8282")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
@@ -34,7 +34,7 @@ func New() *QBit {
 		DownloadFolder:  cfg.DownloadFolder,
 		Categories:      cfg.Categories,
 		Storage:         NewTorrentStorage(filepath.Join(_cfg.Path, "torrents.json")),
-		logger:          logger.NewLogger("qbit", _cfg.LogLevel, os.Stdout),
+		logger:          logger.New("qbit"),
 		RefreshInterval: refreshInterval,
 		SkipPreCache:    cfg.SkipPreCache,
 	}

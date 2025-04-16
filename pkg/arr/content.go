@@ -1,8 +1,10 @@
 package arr
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"github.com/goccy/go-json"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,28 +61,34 @@ func (a *Arr) GetMedia(mediaId string) ([]Content, error) {
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
+		var ct Content
 		var seriesFiles []seriesFile
-		if err = json.NewDecoder(resp.Body).Decode(&seriesFiles); err != nil {
-			continue
-		}
-		ct := Content{
-			Title: d.Title,
-			Id:    d.Id,
-		}
+		episodeFileIDMap := make(map[int]int)
+		func() {
+			defer resp.Body.Close()
+			if err = json.NewDecoder(resp.Body).Decode(&seriesFiles); err != nil {
+				return
+			}
+			ct = Content{
+				Title: d.Title,
+				Id:    d.Id,
+			}
+		}()
 		resp, err = a.Request(http.MethodGet, fmt.Sprintf("api/v3/episode?seriesId=%d", d.Id), nil)
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
-		var episodes []episode
-		if err = json.NewDecoder(resp.Body).Decode(&episodes); err != nil {
-			continue
-		}
-		episodeFileIDMap := make(map[int]int)
-		for _, e := range episodes {
-			episodeFileIDMap[e.EpisodeFileID] = e.Id
-		}
+		func() {
+			defer resp.Body.Close()
+			var episodes []episode
+			if err = json.NewDecoder(resp.Body).Decode(&episodes); err != nil {
+				return
+			}
+
+			for _, e := range episodes {
+				episodeFileIDMap[e.EpisodeFileID] = e.Id
+			}
+		}()
 		files := make([]ContentFile, 0)
 		for _, file := range seriesFiles {
 			eId, ok := episodeFileIDMap[file.Id]
@@ -126,15 +134,16 @@ func GetMovies(a *Arr, tvId string) ([]Content, error) {
 	}
 	contents := make([]Content, 0)
 	for _, movie := range movies {
+		if movie.MovieFile.Id == 0 || movie.MovieFile.Path == "" {
+			// Skip movies without files
+			continue
+		}
 		ct := Content{
 			Title: movie.Title,
 			Id:    movie.Id,
 		}
 		files := make([]ContentFile, 0)
-		if movie.MovieFile.Id == 0 || movie.MovieFile.Path == "" {
-			// Skip movies without files
-			continue
-		}
+
 		files = append(files, ContentFile{
 			FileId: movie.MovieFile.Id,
 			Id:     movie.Id,
@@ -155,20 +164,32 @@ func (a *Arr) searchSonarr(files []ContentFile) error {
 		id := fmt.Sprintf("%d-%d", f.Id, f.SeasonNumber)
 		ids[id] = nil
 	}
-	errs := make(chan error, len(ids))
+
+	g, ctx := errgroup.WithContext(context.Background())
+
+	// Limit concurrent goroutines
+	g.SetLimit(10)
 	for id := range ids {
-		go func() {
+		id := id
+		g.Go(func() error {
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			parts := strings.Split(id, "-")
 			if len(parts) != 2 {
-				return
+				return fmt.Errorf("invalid id: %s", id)
 			}
 			seriesId, err := strconv.Atoi(parts[0])
 			if err != nil {
-				return
+				return err
 			}
 			seasonNumber, err := strconv.Atoi(parts[1])
 			if err != nil {
-				return
+				return err
 			}
 			payload := sonarrSearch{
 				Name:         "SeasonSearch",
@@ -177,20 +198,16 @@ func (a *Arr) searchSonarr(files []ContentFile) error {
 			}
 			resp, err := a.Request(http.MethodPost, "api/v3/command", payload)
 			if err != nil {
-				errs <- fmt.Errorf("failed to automatic search: %v", err)
-				return
+				return fmt.Errorf("failed to automatic search: %v", err)
 			}
 			if resp.StatusCode >= 300 || resp.StatusCode < 200 {
-				errs <- fmt.Errorf("failed to automatic search. Status Code: %s", resp.Status)
-				return
+				return fmt.Errorf("failed to automatic search. Status Code: %s", resp.Status)
 			}
-		}()
+			return nil
+		})
 	}
-	for range ids {
-		err := <-errs
-		if err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 	return nil
 }

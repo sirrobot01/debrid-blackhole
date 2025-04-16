@@ -1,8 +1,8 @@
 package qbit
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"os"
 	"sort"
 	"sync"

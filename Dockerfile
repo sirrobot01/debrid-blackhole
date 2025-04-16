@@ -19,8 +19,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath \
-    -ldflags="-w -s -X github.com/sirrobot01/debrid-blackhole/pkg/version.Version=${VERSION} -X github.com/sirrobot01/debrid-blackhole/pkg/version.Channel=${CHANNEL}" \
-    -o /blackhole
+    -ldflags="-w -s -X github.com/sirrobot01/decypharr/pkg/version.Version=${VERSION} -X github.com/sirrobot01/decypharr/pkg/version.Channel=${CHANNEL}" \
+    -o /decypharr
 
 # Build healthcheck (optimized)
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Stage 2: Create directory structure
 FROM alpine:3.19 as dirsetup
 RUN mkdir -p /app/logs && \
+    mkdir -p /app/cache && \
     chmod 777 /app/logs && \
     touch /app/logs/decypharr.log && \
     chmod 666 /app/logs/decypharr.log
@@ -41,13 +42,13 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 LABEL version = "${VERSION}-${CHANNEL}"
 
-LABEL org.opencontainers.image.source = "https://github.com/sirrobot01/debrid-blackhole"
-LABEL org.opencontainers.image.title = "debrid-blackhole"
+LABEL org.opencontainers.image.source = "https://github.com/sirrobot01/decypharr"
+LABEL org.opencontainers.image.title = "decypharr"
 LABEL org.opencontainers.image.authors = "sirrobot01"
-LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/debrid-blackhole/blob/main/README.md"
+LABEL org.opencontainers.image.documentation = "https://github.com/sirrobot01/decypharr/blob/main/README.md"
 
 # Copy binaries
-COPY --from=builder --chown=nonroot:nonroot /blackhole /usr/bin/blackhole
+COPY --from=builder --chown=nonroot:nonroot /decypharr /usr/bin/decypharr
 COPY --from=builder --chown=nonroot:nonroot /healthcheck /usr/bin/healthcheck
 
 # Copy pre-made directory structure
@@ -60,6 +61,6 @@ EXPOSE 8181 8282
 VOLUME ["/app"]
 USER nonroot:nonroot
 
-HEALTHCHECK CMD ["/usr/bin/healthcheck"]
+HEALTHCHECK --retries=3 CMD ["/usr/bin/healthcheck", "--config", "/app"]
 
-CMD ["/usr/bin/blackhole", "--config", "/app"]
+CMD ["/usr/bin/decypharr", "--config", "/app"]

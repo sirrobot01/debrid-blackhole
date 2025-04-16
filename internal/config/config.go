@@ -1,9 +1,10 @@
 package config
 
 import (
-	"encoding/json"
+	"cmp"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,22 +17,18 @@ var (
 )
 
 type Debrid struct {
-	Name             string `json:"name"`
-	Host             string `json:"host"`
-	APIKey           string `json:"api_key"`
-	Folder           string `json:"folder"`
-	DownloadUncached bool   `json:"download_uncached"`
-	CheckCached      bool   `json:"check_cached"`
-	RateLimit        string `json:"rate_limit"` // 200/minute or 10/second
-}
+	Name             string   `json:"name"`
+	Host             string   `json:"host"`
+	APIKey           string   `json:"api_key"`
+	DownloadAPIKeys  []string `json:"download_api_keys"`
+	Folder           string   `json:"folder"`
+	DownloadUncached bool     `json:"download_uncached"`
+	CheckCached      bool     `json:"check_cached"`
+	RateLimit        string   `json:"rate_limit"` // 200/minute or 10/second
+	Proxy            string   `json:"proxy"`
 
-type Proxy struct {
-	Port       string `json:"port"`
-	Enabled    bool   `json:"enabled"`
-	LogLevel   string `json:"log_level"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	CachedOnly bool   `json:"cached_only"`
+	UseWebDav bool `json:"use_webdav"`
+	WebDav
 }
 
 type QBitTorrent struct {
@@ -59,6 +56,8 @@ type Repair struct {
 	RunOnStart  bool   `json:"run_on_start"`
 	ZurgURL     string `json:"zurg_url"`
 	AutoProcess bool   `json:"auto_process"`
+	UseWebDav   bool   `json:"use_webdav"`
+	Workers     int    `json:"workers"`
 }
 
 type Auth struct {
@@ -66,15 +65,29 @@ type Auth struct {
 	Password string `json:"password"`
 }
 
+type WebDav struct {
+	TorrentsRefreshInterval      string `json:"torrents_refresh_interval"`
+	DownloadLinksRefreshInterval string `json:"download_links_refresh_interval"`
+	Workers                      int    `json:"workers"`
+	AutoExpireLinksAfter         string `json:"auto_expire_links_after"`
+
+	// Folder
+	FolderNaming string `json:"folder_naming"`
+
+	// Rclone
+	RcUrl  string `json:"rc_url"`
+	RcUser string `json:"rc_user"`
+	RcPass string `json:"rc_pass"`
+}
+
 type Config struct {
 	LogLevel       string      `json:"log_level"`
-	Debrid         Debrid      `json:"debrid"`
 	Debrids        []Debrid    `json:"debrids"`
-	Proxy          Proxy       `json:"proxy"`
 	MaxCacheSize   int         `json:"max_cache_size"`
 	QBitTorrent    QBitTorrent `json:"qbittorrent"`
 	Arrs           []Arr       `json:"arrs"`
 	Repair         Repair      `json:"repair"`
+	WebDav         WebDav      `json:"webdav"`
 	AllowedExt     []string    `json:"allowed_file_types"`
 	MinFileSize    string      `json:"min_file_size"` // Minimum file size to download, 10MB, 1GB, etc
 	MaxFileSize    string      `json:"max_file_size"` // Maximum file size to download (0 means no limit)
@@ -106,8 +119,8 @@ func (c *Config) loadConfig() error {
 		return fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
-	if c.Debrid.Name != "" {
-		c.Debrids = append(c.Debrids, c.Debrid)
+	for i, debrid := range c.Debrids {
+		c.Debrids[i] = c.updateDebrid(debrid)
 	}
 
 	if len(c.AllowedExt) == 0 {
@@ -145,7 +158,7 @@ func validateDebrids(debrids []Debrid) error {
 			return errors.New("debrid folder is required")
 		}
 
-		// Check folder existence concurrently
+		// Check folder existence
 		//wg.Add(1)
 		//go func(folder string) {
 		//	defer wg.Done()
@@ -169,44 +182,31 @@ func validateDebrids(debrids []Debrid) error {
 	return nil
 }
 
-func validateQbitTorrent(config *QBitTorrent) error {
-	if config.DownloadFolder == "" {
-		return errors.New("qbittorent download folder is required")
-	}
-	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
-		return errors.New("qbittorent download folder does not exist")
-	}
-	return nil
-}
+//func validateQbitTorrent(config *QBitTorrent) error {
+//	if config.DownloadFolder == "" {
+//		return errors.New("qbittorent download folder is required")
+//	}
+//	if _, err := os.Stat(config.DownloadFolder); os.IsNotExist(err) {
+//		return fmt.Errorf("qbittorent download folder(%s) does not exist", config.DownloadFolder)
+//	}
+//	return nil
+//}
 
 func validateConfig(config *Config) error {
 	// Run validations concurrently
-	errChan := make(chan error, 2)
 
-	go func() {
-		errChan <- validateDebrids(config.Debrids)
-	}()
-
-	go func() {
-		errChan <- validateQbitTorrent(&config.QBitTorrent)
-	}()
-
-	// Check for errors
-	for i := 0; i < 2; i++ {
-		if err := <-errChan; err != nil {
-			return err
-		}
+	if err := validateDebrids(config.Debrids); err != nil {
+		return fmt.Errorf("debrids validation error: %w", err)
 	}
 
 	return nil
 }
 
-func SetConfigPath(path string) error {
+func SetConfigPath(path string) {
 	configPath = path
-	return nil
 }
 
-func GetConfig() *Config {
+func Get() *Config {
 	once.Do(func() {
 		instance = &Config{} // Initialize instance first
 		if err := instance.loadConfig(); err != nil {
@@ -284,4 +284,32 @@ func (c *Config) NeedsSetup() bool {
 		return c.GetAuth().Username == ""
 	}
 	return false
+}
+
+func (c *Config) updateDebrid(d Debrid) Debrid {
+
+	if len(d.DownloadAPIKeys) == 0 {
+		d.DownloadAPIKeys = append(d.DownloadAPIKeys, d.APIKey)
+	}
+
+	if !d.UseWebDav {
+		return d
+	}
+
+	if d.TorrentsRefreshInterval == "" {
+		d.TorrentsRefreshInterval = cmp.Or(c.WebDav.TorrentsRefreshInterval, "15s") // 15 seconds
+	}
+	if d.WebDav.DownloadLinksRefreshInterval == "" {
+		d.DownloadLinksRefreshInterval = cmp.Or(c.WebDav.DownloadLinksRefreshInterval, "40m") // 40 minutes
+	}
+	if d.Workers == 0 {
+		d.Workers = cmp.Or(c.WebDav.Workers, 30) // 30 workers
+	}
+	if d.FolderNaming == "" {
+		d.FolderNaming = cmp.Or(c.WebDav.FolderNaming, "original_no_ext")
+	}
+	if d.AutoExpireLinksAfter == "" {
+		d.AutoExpireLinksAfter = cmp.Or(c.WebDav.AutoExpireLinksAfter, "3d") // 2 days
+	}
+	return d
 }

@@ -1,13 +1,12 @@
 package qbit
 
 import (
-	"crypto/tls"
 	"fmt"
 	"github.com/cavaliergopher/grab/v3"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
-	debrid "github.com/sirrobot01/debrid-blackhole/pkg/debrid/torrent"
+	"github.com/sirrobot01/decypharr/internal/request"
+	"github.com/sirrobot01/decypharr/internal/utils"
+	debrid "github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -52,7 +51,7 @@ Loop:
 
 func (q *QBit) ProcessManualFile(torrent *Torrent) (string, error) {
 	debridTorrent := torrent.DebridTorrent
-	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.DownloadLinks))
+	q.logger.Info().Msgf("Downloading %d files...", len(debridTorrent.Files))
 	torrentPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, utils.RemoveExtension(debridTorrent.OriginalFilename))
 	torrentPath = utils.RemoveInvalidChars(torrentPath)
 	err := os.MkdirAll(torrentPath, os.ModePerm)
@@ -92,32 +91,25 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 		}
 		q.UpdateTorrentMin(torrent, debridTorrent)
 	}
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		Proxy:           http.ProxyFromEnvironment,
-	}
 	client := &grab.Client{
-		UserAgent: "qBitTorrent",
-		HTTPClient: &http.Client{
-			Transport: tr,
-		},
+		UserAgent:  "qBitTorrent",
+		HTTPClient: request.New(request.WithTimeout(0)),
 	}
-	for _, link := range debridTorrent.DownloadLinks {
-		if link.DownloadLink == "" {
-			q.logger.Info().Msgf("No download link found for %s", link.Filename)
+	for _, file := range debridTorrent.Files {
+		if file.DownloadLink == nil {
+			q.logger.Info().Msgf("No download link found for %s", file.Name)
 			continue
 		}
 		wg.Add(1)
 		semaphore <- struct{}{}
-		go func(link debrid.DownloadLinks) {
+		go func(file debrid.File) {
 			defer wg.Done()
 			defer func() { <-semaphore }()
-			filename := link.Filename
+			filename := file.Link
 
 			err := Download(
 				client,
-				link.DownloadLink,
+				file.DownloadLink.DownloadLink,
 				filepath.Join(parent, filename),
 				progressCallback,
 			)
@@ -127,7 +119,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 			} else {
 				q.logger.Info().Msgf("Downloaded %s", filename)
 			}
-		}(link)
+		}(file)
 	}
 	wg.Wait()
 	q.logger.Info().Msgf("Downloaded all files for %s", debridTorrent.Name)
@@ -154,8 +146,13 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 		torrentFolder = utils.RemoveExtension(torrentFolder)
 		torrentRclonePath = rCloneBase // /mnt/rclone/magnets/  // Remove the filename since it's in the root folder
 	}
-	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
-	err = os.MkdirAll(torrentSymlinkPath, os.ModePerm)
+	return q.createSymlinks(debridTorrent, torrentRclonePath, torrentFolder) // verify cos we're using external webdav
+}
+
+func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrentFolder string) (string, error) {
+	files := debridTorrent.Files
+	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder)
+	err := os.MkdirAll(torrentSymlinkPath, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("failed to create directory: %s: %v", torrentSymlinkPath, err)
 	}
@@ -164,20 +161,36 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	for _, file := range files {
 		pending[file.Path] = file
 	}
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	filePaths := make([]string, 0, len(pending))
 
 	for len(pending) > 0 {
 		<-ticker.C
 		for path, file := range pending {
-			fullFilePath := filepath.Join(torrentRclonePath, file.Path)
+			fullFilePath := filepath.Join(rclonePath, file.Path)
 			if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
 				q.logger.Info().Msgf("File is ready: %s", file.Path)
-				q.createSymLink(torrentSymlinkPath, torrentRclonePath, file)
+				_filePath := q.createSymLink(torrentSymlinkPath, rclonePath, file)
+				filePaths = append(filePaths, _filePath)
 				delete(pending, path)
 			}
 		}
 	}
+
+	if q.SkipPreCache {
+		return torrentSymlinkPath, nil
+	}
+
+	go func() {
+
+		if err := q.preCacheFile(debridTorrent.Name, filePaths); err != nil {
+			q.logger.Error().Msgf("Failed to pre-cache file: %s", err)
+		} else {
+			q.logger.Debug().Msgf("Pre-cached %d files", len(filePaths))
+		}
+	}() // Pre-cache the files in the background
+	// Pre-cache the first 256KB and 1MB of the file
 	return torrentSymlinkPath, nil
 }
 
@@ -192,7 +205,7 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 	}
 }
 
-func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.File) {
+func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.File) string {
 
 	// Combine the directory and filename to form a full path
 	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
@@ -203,29 +216,29 @@ func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.F
 		// It's okay if the symlink already exists
 		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fullPath, err)
 	}
-	if q.SkipPreCache {
-		return
-	}
-	go func() {
-		err := q.preCacheFile(torrentFilePath)
-		if err != nil {
-			q.logger.Debug().Msgf("Failed to pre-cache file: %s: %v", torrentFilePath, err)
-		}
-	}()
+	return torrentFilePath
 }
 
-func (q *QBit) preCacheFile(filePath string) error {
-	q.logger.Trace().Msgf("Pre-caching file: %s", filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("error opening file: %v", err)
+func (q *QBit) preCacheFile(name string, filePaths []string) error {
+	q.logger.Trace().Msgf("Pre-caching file: %s", name)
+	if len(filePaths) == 0 {
+		return fmt.Errorf("no file paths provided")
 	}
-	defer file.Close()
 
-	// Pre-cache the file header (first 256KB) using 16KB chunks.
-	q.readSmallChunks(file, 0, 256*1024, 16*1024)
-	q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
+	for _, filePath := range filePaths {
+		func(f string) {
 
+			file, err := os.Open(f)
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			// Pre-cache the file header (first 256KB) using 16KB chunks.
+			q.readSmallChunks(file, 0, 256*1024, 16*1024)
+			q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
+		}(filePath)
+	}
 	return nil
 }
 
@@ -254,5 +267,4 @@ func (q *QBit) readSmallChunks(file *os.File, startPos int64, totalToRead int, c
 
 		bytesRemaining -= n
 	}
-	return
 }

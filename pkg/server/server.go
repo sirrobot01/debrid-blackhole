@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
-	"github.com/sirrobot01/debrid-blackhole/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/internal/logger"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 )
 
@@ -22,8 +24,7 @@ type Server struct {
 }
 
 func New() *Server {
-	cfg := config.GetConfig()
-	l := logger.NewLogger("http", cfg.LogLevel, os.Stdout)
+	l := logger.New("http")
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -35,15 +36,16 @@ func New() *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	// Register routes
 	// Register webhooks
 	s.router.Post("/webhooks/tautulli", s.handleTautulli)
 
 	// Register logs
 	s.router.Get("/logs", s.getLogs)
+	s.router.Get("/stats", s.getStats)
 	port := fmt.Sprintf(":%s", cfg.QBitTorrent.Port)
-	s.logger.Info().Msgf("Starting server on %s", port)
+	s.logger.Info().Msgf("Server started on %s", port)
 	srv := &http.Server{
 		Addr:    port,
 		Handler: s.router,
@@ -101,5 +103,31 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 		s.logger.Debug().Err(err).Msg("Error streaming log file")
 		http.Error(w, "Error streaming log file", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (s *Server) getStats(w http.ResponseWriter, r *http.Request) {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	stats := map[string]interface{}{
+		// Memory stats
+		"heap_alloc_mb":  fmt.Sprintf("%.2fMB", float64(memStats.HeapAlloc)/1024/1024),
+		"total_alloc_mb": fmt.Sprintf("%.2fMB", float64(memStats.TotalAlloc)/1024/1024),
+		"sys_mb":         fmt.Sprintf("%.2fMB", float64(memStats.Sys)/1024/1024),
+
+		// GC stats
+		"gc_cycles": memStats.NumGC,
+		// Goroutine stats
+		"goroutines": runtime.NumGoroutine(),
+
+		// System info
+		"num_cpu": runtime.NumCPU(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to encode stats")
 	}
 }

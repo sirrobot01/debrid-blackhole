@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/sirrobot01/decypharr/internal/request"
 	"io"
 	"log"
 	"net/http"
@@ -24,20 +25,37 @@ type Magnet struct {
 	InfoHash string
 	Size     int64
 	Link     string
+	File     []byte
+}
+
+func (m *Magnet) IsTorrent() bool {
+	return m.File != nil
 }
 
 func GetMagnetFromFile(file io.Reader, filePath string) (*Magnet, error) {
+	var (
+		m   *Magnet
+		err error
+	)
 	if filepath.Ext(filePath) == ".torrent" {
 		torrentData, err := io.ReadAll(file)
 		if err != nil {
 			return nil, err
 		}
-		return GetMagnetFromBytes(torrentData)
+		m, err = GetMagnetFromBytes(torrentData)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// .magnet file
 		magnetLink := ReadMagnetFile(file)
-		return GetMagnetInfo(magnetLink)
+		m, err = GetMagnetInfo(magnetLink)
+		if err != nil {
+			return nil, err
+		}
 	}
+	m.Name = strings.TrimSuffix(filePath, filepath.Ext(filePath))
+	return m, nil
 }
 
 func GetMagnetFromUrl(url string) (*Magnet, error) {
@@ -67,6 +85,7 @@ func GetMagnetFromBytes(torrentData []byte) (*Magnet, error) {
 		Name:     info.Name,
 		Size:     info.Length,
 		Link:     mi.Magnet(&hash, &info).String(),
+		File:     torrentData,
 	}
 	return magnet, nil
 }
@@ -198,20 +217,21 @@ func GetInfohashFromURL(url string) (string, error) {
 	var magnetLink string
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 3 {
-				return fmt.Errorf("stopped after 3 redirects")
-			}
-			if strings.HasPrefix(req.URL.String(), "magnet:") {
-				// Stop the redirect chain
-				magnetLink = req.URL.String()
-				return http.ErrUseLastResponse
-			}
-			return nil
-		},
+	redirectFunc := func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("stopped after 3 redirects")
+		}
+		if strings.HasPrefix(req.URL.String(), "magnet:") {
+			// Stop the redirect chain
+			magnetLink = req.URL.String()
+			return http.ErrUseLastResponse
+		}
+		return nil
 	}
+	client := request.New(
+		request.WithTimeout(30*time.Second),
+		request.WithRedirectPolicy(redirectFunc),
+	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -232,4 +252,16 @@ func GetInfohashFromURL(url string) (string, error) {
 	hash := mi.HashInfoBytes()
 	infoHash := hash.HexString()
 	return infoHash, nil
+}
+
+func ConstructMagnet(infoHash, name string) *Magnet {
+	// Create a magnet link from the infohash and name
+	name = url.QueryEscape(strings.TrimSpace(name))
+	magnetUri := fmt.Sprintf("magnet:?xt=urn:btih:%s&dn=%s", infoHash, name)
+	return &Magnet{
+		InfoHash: infoHash,
+		Name:     name,
+		Size:     0,
+		Link:     magnetUri,
+	}
 }

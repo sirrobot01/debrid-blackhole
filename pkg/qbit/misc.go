@@ -2,11 +2,11 @@ package qbit
 
 import (
 	"github.com/google/uuid"
-	"github.com/sirrobot01/debrid-blackhole/internal/utils"
+	"github.com/sirrobot01/decypharr/internal/utils"
 	"strings"
 )
 
-func CreateTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
+func createTorrentFromMagnet(magnet *utils.Magnet, category, source string) *Torrent {
 	torrent := &Torrent{
 		ID:        uuid.NewString(),
 		Hash:      strings.ToLower(magnet.InfoHash),

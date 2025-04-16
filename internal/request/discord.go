@@ -2,9 +2,9 @@ package request
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/goccy/go-json"
+	"github.com/sirrobot01/decypharr/internal/config"
 	"io"
 	"net/http"
 	"strings"
@@ -56,7 +56,7 @@ func getDiscordHeader(event string) string {
 }
 
 func SendDiscordMessage(event string, status string, message string) error {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 	webhookURL := cfg.DiscordWebhook
 	if webhookURL == "" {
 		return nil

@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/sirrobot01/debrid-blackhole/cmd/decypharr"
-	"github.com/sirrobot01/debrid-blackhole/internal/config"
+	"github.com/sirrobot01/decypharr/cmd/decypharr"
+	"github.com/sirrobot01/decypharr/internal/config"
 	"log"
+	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 )
 
 func main() {
@@ -19,14 +22,14 @@ func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config", "/data", "path to the data folder")
 	flag.Parse()
+	config.SetConfigPath(configPath)
+	config.Get()
 
-	if err := config.SetConfigPath(configPath); err != nil {
-		log.Fatal(err)
-	}
-	config.GetConfig()
-	ctx := context.Background()
+	// Create a context that's cancelled on SIGINT/SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	if err := decypharr.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
-
 }
