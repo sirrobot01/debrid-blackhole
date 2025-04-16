@@ -552,7 +552,7 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 
 	if !isComplete(t.Files) {
 		c.logger.Debug().Msgf("Torrent %s is still not complete. Triggering a reinsert(disabled)", t.Id)
-		//ct, err := c.reInsertTorrent(t)
+		//err := c.reInsertTorrent(t)
 		//if err != nil {
 		//	c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", t.Id)
 		//	return err
@@ -605,8 +605,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	if file.Link == "" {
 		c.logger.Debug().Msgf("File link is empty for %s. Release is probably nerfed", filename)
 		// Try to reinsert the torrent?
-		ct, err := c.reInsertTorrent(ct)
-		if err != nil {
+		if err := c.reInsertTorrent(ct); err != nil {
 			c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
 			return ""
 		}
@@ -619,7 +618,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
 			c.logger.Error().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
-			ct, err := c.reInsertTorrent(ct)
+			err := c.reInsertTorrent(ct)
 			if err != nil {
 				c.logger.Error().Err(err).Msgf("Failed to reinsert torrent %s", ct.Name)
 				return ""

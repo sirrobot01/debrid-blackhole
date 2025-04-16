@@ -511,8 +511,7 @@ func (ui *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return success
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	request.JSONResponse(w, map[string]string{"status": "success"}, http.StatusOK)
 }
 
 func (ui *Handler) handleGetRepairJobs(w http.ResponseWriter, r *http.Request) {

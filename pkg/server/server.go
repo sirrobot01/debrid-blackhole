@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/goccy/go-json"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/internal/logger"
+	"github.com/sirrobot01/decypharr/internal/request"
 	"io"
 	"net/http"
 	"os"
@@ -126,10 +126,5 @@ func (s *Server) getStats(w http.ResponseWriter, r *http.Request) {
 		// System info
 		"num_cpu": runtime.NumCPU(),
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(stats); err != nil {
-		s.logger.Error().Err(err).Msg("Failed to encode stats")
-	}
+	request.JSONResponse(w, stats, http.StatusOK)
 }
