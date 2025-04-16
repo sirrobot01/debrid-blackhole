@@ -54,7 +54,7 @@ You can mount the WebDAV server locally using Rclone. Example configuration:
 ```conf
 [decypharr]
 type = webdav
-url = http://localhost:8080/webdav/realdebrid
+url = http://localhost:8282/webdav/realdebrid
 vendor = other
 ```
 For a complete Rclone configuration example, see our [sample rclone.conf](../extras/rclone.conf).

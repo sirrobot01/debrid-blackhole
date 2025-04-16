@@ -144,9 +144,7 @@ func (ui *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			"Page":  "login",
 			"Title": "Login",
 		}
-		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		_ = templates.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -200,9 +198,7 @@ func (ui *Handler) SetupHandler(w http.ResponseWriter, r *http.Request) {
 			"Page":  "setup",
 			"Title": "Setup",
 		}
-		if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		_ = templates.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -249,10 +245,7 @@ func (ui *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "index",
 		"Title": "Torrents",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
@@ -260,10 +253,7 @@ func (ui *Handler) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "download",
 		"Title": "Download",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) RepairHandler(w http.ResponseWriter, r *http.Request) {
@@ -271,10 +261,7 @@ func (ui *Handler) RepairHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "repair",
 		"Title": "Repair",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -282,10 +269,7 @@ func (ui *Handler) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 		"Page":  "config",
 		"Title": "Config",
 	}
-	if err := templates.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = templates.ExecuteTemplate(w, "layout", data)
 }
 
 func (ui *Handler) handleGetArrs(w http.ResponseWriter, r *http.Request) {

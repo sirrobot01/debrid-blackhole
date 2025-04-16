@@ -62,23 +62,6 @@ type Client struct {
 	retryableStatus map[int]struct{}
 	logger          zerolog.Logger
 	proxy           string
-
-	// cooldown
-	statusCooldowns   map[int]time.Duration
-	statusCooldownsMu sync.RWMutex
-	lastStatusTime    map[int]time.Time
-	lastStatusTimeMu  sync.RWMutex
-}
-
-func WithStatusCooldown(statusCode int, cooldown time.Duration) ClientOption {
-	return func(c *Client) {
-		c.statusCooldownsMu.Lock()
-		if c.statusCooldowns == nil {
-			c.statusCooldowns = make(map[int]time.Duration)
-		}
-		c.statusCooldowns[statusCode] = cooldown
-		c.statusCooldownsMu.Unlock()
-	}
 }
 
 // WithMaxRetries sets the maximum number of retry attempts
@@ -194,40 +177,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 		c.headersMu.RUnlock()
 
-		if attempt > 0 && resp != nil {
-			c.statusCooldownsMu.RLock()
-			cooldown, exists := c.statusCooldowns[resp.StatusCode]
-			c.statusCooldownsMu.RUnlock()
-
-			if exists {
-				c.lastStatusTimeMu.RLock()
-				lastTime, timeExists := c.lastStatusTime[resp.StatusCode]
-				c.lastStatusTimeMu.RUnlock()
-
-				if timeExists {
-					elapsed := time.Since(lastTime)
-					if elapsed < cooldown {
-						// We need to wait longer for this status code
-						waitTime := cooldown - elapsed
-						select {
-						case <-req.Context().Done():
-							return nil, req.Context().Err()
-						case <-time.After(waitTime):
-							// Continue after waiting
-						}
-					}
-				}
-			}
-		}
-
 		resp, err = c.doRequest(req)
-
-		if err == nil {
-			c.lastStatusTimeMu.Lock()
-			c.lastStatusTime[resp.StatusCode] = time.Now()
-			c.lastStatusTimeMu.Unlock()
-		}
-
 		if err != nil {
 			// Check if this is a network error that might be worth retrying
 			if attempt < c.maxRetries {
@@ -321,12 +271,10 @@ func New(options ...ClientOption) *Client {
 			http.StatusServiceUnavailable:  struct{}{},
 			http.StatusGatewayTimeout:      struct{}{},
 		},
-		logger:          logger.New("request"),
-		timeout:         60 * time.Second,
-		proxy:           "",
-		headers:         make(map[string]string), // Initialize headers map
-		statusCooldowns: make(map[int]time.Duration),
-		lastStatusTime:  make(map[int]time.Time),
+		logger:  logger.New("request"),
+		timeout: 60 * time.Second,
+		proxy:   "",
+		headers: make(map[string]string),
 	}
 
 	// default http client
@@ -345,28 +293,6 @@ func New(options ...ClientOption) *Client {
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: client.skipTLSVerify,
 			},
-			// Connection pooling
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 50,
-			MaxConnsPerHost:     100,
-
-			// Timeouts
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-
-			// TCP keep-alive
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-
-			// Enable HTTP/2
-			ForceAttemptHTTP2: true,
-
-			// Disable compression to save CPU
-			DisableCompression: false,
 		}
 
 		// Configure proxy if needed

@@ -262,15 +262,13 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func(file types.File) {
 			defer wg.Done()
-			link, accountId, err := ad.GetDownloadLink(t, &file)
+			link, err := ad.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
 			}
 			file.DownloadLink = link
-			file.Generated = time.Now()
-			file.AccountId = accountId
-			if link == "" {
+			if link != nil {
 				errCh <- fmt.Errorf("error getting download links %w", err)
 				return
 			}
@@ -298,7 +296,7 @@ func (ad *AllDebrid) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
+func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (*types.DownloadLink, error) {
 	url := fmt.Sprintf("%s/link/unlock", ad.Host)
 	query := gourl.Values{}
 	query.Add("link", file.Link)
@@ -306,17 +304,25 @@ func (ad *AllDebrid) GetDownloadLink(t *types.Torrent, file *types.File) (string
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := ad.client.MakeRequest(req)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	var data DownloadLink
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return "", "", err
+		return nil, err
 	}
 	link := data.Data.Link
 	if link == "" {
-		return "", "", fmt.Errorf("error getting download links %s", data.Error.Message)
+		return nil, fmt.Errorf("error getting download links %s", data.Error.Message)
 	}
-	return link, "0", nil
+	return &types.DownloadLink{
+		Link:         file.Link,
+		DownloadLink: link,
+		Id:           data.Data.Id,
+		Size:         file.Size,
+		Filename:     file.Name,
+		Generated:    time.Now(),
+		AccountId:    "0",
+	}, nil
 }
 
 func (ad *AllDebrid) GetCheckCached() bool {
@@ -355,7 +361,7 @@ func (ad *AllDebrid) GetTorrents() ([]*types.Torrent, error) {
 	return torrents, nil
 }
 
-func (ad *AllDebrid) GetDownloads() (map[string]types.DownloadLinks, error) {
+func (ad *AllDebrid) GetDownloads() (map[string]types.DownloadLink, error) {
 	return nil, nil
 }
 
@@ -380,4 +386,7 @@ func (ad *AllDebrid) DisableAccount(accountId string) {
 
 func (ad *AllDebrid) ResetActiveDownloadKeys() {
 
+}
+func (ad *AllDebrid) DeleteDownloadLink(linkId string) error {
+	return nil
 }

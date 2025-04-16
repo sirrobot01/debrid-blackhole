@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Torbox struct {
@@ -291,13 +292,12 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	for _, file := range t.Files {
 		go func() {
 			defer wg.Done()
-			link, accountId, err := tb.GetDownloadLink(t, &file)
+			link, err := tb.GetDownloadLink(t, &file)
 			if err != nil {
 				errCh <- err
 				return
 			}
 			file.DownloadLink = link
-			file.AccountId = accountId
 			filesCh <- file
 		}()
 	}
@@ -324,7 +324,7 @@ func (tb *Torbox) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
+func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (*types.DownloadLink, error) {
 	url := fmt.Sprintf("%s/api/torrents/requestdl/", tb.Host)
 	query := gourl.Values{}
 	query.Add("torrent_id", t.Id)
@@ -334,17 +334,26 @@ func (tb *Torbox) GetDownloadLink(t *types.Torrent, file *types.File) (string, s
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	resp, err := tb.client.MakeRequest(req)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	var data DownloadLinksResponse
 	if err = json.Unmarshal(resp, &data); err != nil {
-		return "", "", err
+		return nil, err
 	}
 	if data.Data == nil {
-		return "", "", fmt.Errorf("error getting download links")
+		return nil, fmt.Errorf("error getting download links")
 	}
 	link := *data.Data
-	return link, "0", nil
+	if link == "" {
+		return nil, fmt.Errorf("error getting download links")
+	}
+	return &types.DownloadLink{
+		Link:         file.Link,
+		DownloadLink: link,
+		Id:           file.Id,
+		AccountId:    "0",
+		Generated:    time.Now(),
+	}, nil
 }
 
 func (tb *Torbox) GetDownloadingStatus() []string {
@@ -363,7 +372,7 @@ func (tb *Torbox) GetDownloadUncached() bool {
 	return tb.DownloadUncached
 }
 
-func (tb *Torbox) GetDownloads() (map[string]types.DownloadLinks, error) {
+func (tb *Torbox) GetDownloads() (map[string]types.DownloadLink, error) {
 	return nil, nil
 }
 
@@ -380,4 +389,8 @@ func (tb *Torbox) DisableAccount(accountId string) {
 
 func (tb *Torbox) ResetActiveDownloadKeys() {
 
+}
+
+func (tb *Torbox) DeleteDownloadLink(linkId string) error {
+	return nil
 }

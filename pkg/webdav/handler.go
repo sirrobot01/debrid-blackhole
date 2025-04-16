@@ -95,8 +95,7 @@ func (h *Handler) getParentFiles() []os.FileInfo {
 		}
 		if item == "version.txt" {
 			f.isDir = false
-			versionInfo := version.GetInfo().String()
-			f.size = int64(len(versionInfo))
+			f.size = int64(len(version.GetInfo().String()))
 		}
 		rootFiles = append(rootFiles, f)
 	}
@@ -107,10 +106,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 	name = path.Clean("/" + name)
 	rootDir := h.getRootPath()
 
-	metadataOnly := false
-	if ctx.Value("metadataOnly") != nil {
-		metadataOnly = true
-	}
+	metadataOnly := ctx.Value("metadataOnly") != nil
 
 	now := time.Now()
 
@@ -122,7 +118,7 @@ func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.F
 			isDir:        true,
 			children:     h.getParentFiles(),
 			name:         "/",
-			metadataOnly: metadataOnly,
+			metadataOnly: true,
 			modTime:      now,
 		}, nil
 	case path.Join(rootDir, "version.txt"):
@@ -244,10 +240,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), "metadataOnly", true)
 		r = r.WithContext(ctx)
 		cleanPath := path.Clean(r.URL.Path)
-		depth := r.Header.Get("Depth")
-		if depth == "" {
-			depth = "1"
+		r.Header.Set("Depth", "1")
+		if r.Header.Get("Depth") == "" {
+			r.Header.Set("Depth", "1")
 		}
+
+		// Reject "infinity" depth
+		if r.Header.Get("Depth") == "infinity" {
+			r.Header.Set("Depth", "1")
+		}
+		depth := r.Header.Get("Depth")
 		// Use both path and Depth header to form the cache key.
 		cacheKey := fmt.Sprintf("propfind:%s:%s", cleanPath, depth)
 

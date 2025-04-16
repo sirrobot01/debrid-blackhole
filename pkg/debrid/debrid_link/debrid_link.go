@@ -137,12 +137,18 @@ func (dl *DebridLink) UpdateTorrent(t *types.Torrent) error {
 			continue
 		}
 		file := types.File{
-			Id:           f.ID,
-			Name:         f.Name,
-			Size:         f.Size,
-			Path:         f.Name,
-			DownloadLink: f.DownloadURL,
-			Link:         f.DownloadURL,
+			Id:   f.ID,
+			Name: f.Name,
+			Size: f.Size,
+			Path: f.Name,
+			DownloadLink: &types.DownloadLink{
+				Filename:     f.Name,
+				Link:         f.DownloadURL,
+				DownloadLink: f.DownloadURL,
+				Generated:    time.Now(),
+				AccountId:    "0",
+			},
+			Link: f.DownloadURL,
 		}
 		t.Files[f.Name] = file
 	}
@@ -183,13 +189,19 @@ func (dl *DebridLink) SubmitMagnet(t *types.Torrent) (*types.Torrent, error) {
 	t.Debrid = dl.Name
 	for _, f := range data.Files {
 		file := types.File{
-			Id:           f.ID,
-			Name:         f.Name,
-			Size:         f.Size,
-			Path:         f.Name,
-			Link:         f.DownloadURL,
-			DownloadLink: f.DownloadURL,
-			Generated:    time.Now(),
+			Id:   f.ID,
+			Name: f.Name,
+			Size: f.Size,
+			Path: f.Name,
+			Link: f.DownloadURL,
+			DownloadLink: &types.DownloadLink{
+				Filename:     f.Name,
+				Link:         f.DownloadURL,
+				DownloadLink: f.DownloadURL,
+				Generated:    time.Now(),
+				AccountId:    "0",
+			},
+			Generated: time.Now(),
 		}
 		t.Files[f.Name] = file
 	}
@@ -241,12 +253,12 @@ func (dl *DebridLink) GenerateDownloadLinks(t *types.Torrent) error {
 	return nil
 }
 
-func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLinks, error) {
+func (dl *DebridLink) GetDownloads() (map[string]types.DownloadLink, error) {
 	return nil, nil
 }
 
-func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (string, string, error) {
-	return file.DownloadLink, "0", nil
+func (dl *DebridLink) GetDownloadLink(t *types.Torrent, file *types.File) (*types.DownloadLink, error) {
+	return file.DownloadLink, nil
 }
 
 func (dl *DebridLink) GetDownloadingStatus() []string {
@@ -358,12 +370,18 @@ func (dl *DebridLink) getTorrents(page, perPage int) ([]*types.Torrent, error) {
 				continue
 			}
 			file := types.File{
-				Id:           f.ID,
-				Name:         f.Name,
-				Size:         f.Size,
-				Path:         f.Name,
-				DownloadLink: f.DownloadURL,
-				Link:         f.DownloadURL,
+				Id:   f.ID,
+				Name: f.Name,
+				Size: f.Size,
+				Path: f.Name,
+				DownloadLink: &types.DownloadLink{
+					Filename:     f.Name,
+					Link:         f.DownloadURL,
+					DownloadLink: f.DownloadURL,
+					Generated:    time.Now(),
+					AccountId:    "0",
+				},
+				Link: f.DownloadURL,
 			}
 			torrent.Files[f.Name] = file
 		}
@@ -384,4 +402,8 @@ func (dl *DebridLink) DisableAccount(accountId string) {
 }
 
 func (dl *DebridLink) ResetActiveDownloadKeys() {
+}
+
+func (dl *DebridLink) DeleteDownloadLink(linkId string) error {
+	return nil
 }

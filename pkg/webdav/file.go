@@ -7,13 +7,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
 var sharedClient = &http.Client{
 	Transport: &http.Transport{
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-		Proxy:                 http.ProxyFromEnvironment,
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   20,
 		MaxConnsPerHost:       50,
@@ -47,8 +47,6 @@ type File struct {
 	link         string
 }
 
-// You can not download this file because you have exceeded your traffic on this hoster
-
 // File interface implementations for File
 
 func (f *File) Close() error {
@@ -67,6 +65,7 @@ func (f *File) getDownloadLink() string {
 	}
 	downloadLink := f.cache.GetDownloadLink(f.torrentId, f.name, f.link)
 	if downloadLink != "" && isValidURL(downloadLink) {
+		f.downloadLink = downloadLink
 		return downloadLink
 	}
 	return ""
@@ -103,17 +102,27 @@ func (f *File) stream() (*http.Response, error) {
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 
+		f.downloadLink = ""
+
 		closeResp := func() {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
 
 		if resp.StatusCode == http.StatusServiceUnavailable {
-			closeResp()
-			// Read the body to consume the response
-			f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "bandwidth_exceeded")
-			// Retry with a different API key if it's available
-			return f.stream()
+			b, _ := io.ReadAll(resp.Body)
+			err := resp.Body.Close()
+			if err != nil {
+				return nil, err
+			}
+			if strings.Contains(string(b), "You can not download this file because you have exceeded your traffic on this hoster") {
+				_log.Error().Msgf("Failed to get download link for %s. Download link expired", f.name)
+				f.cache.MarkDownloadLinkAsInvalid(f.link, downloadLink, "bandwidth_exceeded")
+				// Retry with a different API key if it's available
+				return f.stream()
+			} else {
+				return resp, fmt.Errorf("link not found")
+			}
 
 		} else if resp.StatusCode == http.StatusNotFound {
 			closeResp()
@@ -269,10 +278,6 @@ func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
 
 	// Read the data
 	n, err = f.Read(p)
-
-	// Don't restore position for Infuse compatibility
-	// Infuse expects sequential reads after the initial seek
-
 	return n, err
 }
 

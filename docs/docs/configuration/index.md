@@ -13,7 +13,8 @@ Here's a minimal configuration to get started:
       "name": "realdebrid",
       "host": "https://api.real-debrid.com/rest/1.0",
       "api_key": "realdebrid_key",
-      "folder": "/mnt/remote/realdebrid/__all__/"
+      "folder": "/mnt/remote/realdebrid/__all__/",
+      "use_webdav": true
     }
   ],
   "qbittorrent": {

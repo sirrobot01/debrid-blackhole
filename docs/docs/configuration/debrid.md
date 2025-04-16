@@ -43,7 +43,17 @@ Each Debrid provider accepts the following configuration options:
 - `download_uncached`: Whether to download uncached torrents (disabled by default)
 - `check_cached`: Whether to check if torrents are cached (disabled by default)
 - `use_webdav`: Whether to create a WebDAV server for this Debrid provider (disabled by default)
-
+- `torrents_refresh_interval`: Interval for refreshing torrent data (e.g., `15s`, `1m`, `1h`).
+- `download_links_refresh_interval`: Interval for refreshing download links (e.g., `40m`, `1h`).
+- `workers`: Number of concurrent workers for processing requests.
+- folder_naming: Naming convention for folders:
+    - `original_no_ext`: Original file name without extension
+    - `original`: Original file name with extension
+    - `filename`: Torrent filename
+    - `filename_no_ext`: Torrent filename without extension
+    - `id`: Torrent ID
+- `auto_expire_links_after`: Time after which download links will expire (e.g., `3d`, `1w`).
+- `rc_url`, `rc_user`, `rc_pass`: Rclone RC configuration for VFS refreshes
 
 ### Using Multiple API Keys
 For services that support it, you can provide multiple download API keys for better load balancing:

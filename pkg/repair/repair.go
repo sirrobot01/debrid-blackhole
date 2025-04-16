@@ -604,6 +604,7 @@ func (r *Repair) getWebdavBrokenFiles(media arr.Content) []arr.ContentFile {
 		torrent := cache.GetTorrentByName(torrentName)
 		if torrent == nil {
 			r.logger.Debug().Msgf("No torrent found for %s. Skipping", torrentName)
+			brokenFiles = append(brokenFiles, f...)
 			continue
 		}
 		files := make([]string, 0)

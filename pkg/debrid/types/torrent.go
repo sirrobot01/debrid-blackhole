@@ -39,13 +39,18 @@ type Torrent struct {
 	DownloadUncached bool       `json:"-"`
 }
 
-type DownloadLinks struct {
+type DownloadLink struct {
 	Filename     string    `json:"filename"`
 	Link         string    `json:"link"`
 	DownloadLink string    `json:"download_link"`
 	Generated    time.Time `json:"generated"`
 	Size         int64     `json:"size"`
 	Id           string    `json:"id"`
+	AccountId    string    `json:"account_id"`
+}
+
+func (d *DownloadLink) String() string {
+	return d.DownloadLink
 }
 
 func (t *Torrent) GetSymlinkFolder(parent string) string {
@@ -72,14 +77,14 @@ func (t *Torrent) GetMountFolder(rClonePath string) (string, error) {
 }
 
 type File struct {
-	Id           string    `json:"id"`
-	Name         string    `json:"name"`
-	Size         int64     `json:"size"`
-	Path         string    `json:"path"`
-	Link         string    `json:"link"`
-	DownloadLink string    `json:"download_link"`
-	AccountId    string    `json:"account_id"`
-	Generated    time.Time `json:"generated"`
+	Id           string        `json:"id"`
+	Name         string        `json:"name"`
+	Size         int64         `json:"size"`
+	Path         string        `json:"path"`
+	Link         string        `json:"link"`
+	DownloadLink *DownloadLink `json:"-"`
+	AccountId    string        `json:"account_id"`
+	Generated    time.Time     `json:"generated"`
 }
 
 func (f *File) IsValid() bool {

@@ -5,10 +5,7 @@ import (
 	"flag"
 	"github.com/sirrobot01/decypharr/cmd/decypharr"
 	"github.com/sirrobot01/decypharr/internal/config"
-	"github.com/sirrobot01/decypharr/pkg/version"
 	"log"
-	"net/http"
-	_ "net/http/pprof" // registers pprof handlers
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -22,23 +19,10 @@ func main() {
 			debug.PrintStack()
 		}
 	}()
-
-	if version.GetInfo().Channel == "dev" {
-		log.Println("Running in dev mode")
-		go func() {
-			if err := http.ListenAndServe(":6060", nil); err != nil {
-				log.Fatalf("pprof server failed: %v", err)
-			}
-		}()
-	}
 	var configPath string
 	flag.StringVar(&configPath, "config", "/data", "path to the data folder")
 	flag.Parse()
-
-	if err := config.SetConfigPath(configPath); err != nil {
-		log.Fatal(err)
-	}
-
+	config.SetConfigPath(configPath)
 	config.Get()
 
 	// Create a context that's cancelled on SIGINT/SIGTERM

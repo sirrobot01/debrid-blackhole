@@ -39,7 +39,7 @@ Each Arr application supports the following options:
 #### Sonarr/Radarr/Lidarr
 
 1. Go to Sonarr > Settings > General
-2. Look for "API Key" in the "General" section
+2. Look for "API Key" in the "Security" section
 3. Copy the API key
 
 ### Multiple Arr Applications

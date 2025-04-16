@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- Add WebDAV support for all debrid providers
+- Some refactors and code cleanup
+- Fixes
+    - Fix Alldebrid not downloading torrents
+    - Fix Alldebrid not downloading uncached torrents
+    - Fix uncached torrents not being downloaded for RealDebrid
+- Add support for multiple download API keys for debrid providers
+
+
 ## 0.5.0
 
 - A more refined repair worker (with more control)

@@ -45,6 +45,7 @@ type CachedTorrent struct {
 }
 
 type downloadLinkCache struct {
+	Id        string
 	Link      string
 	AccountId string
 	ExpiresAt time.Time
@@ -619,7 +620,7 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 	}
 
 	c.logger.Trace().Msgf("Getting download link for %s", filename)
-	downloadLink, accountId, err := c.client.GetDownloadLink(ct.Torrent, &file)
+	downloadLink, err := c.client.GetDownloadLink(ct.Torrent, &file)
 	if err != nil {
 		if errors.Is(err, request.HosterUnavailableError) {
 			c.logger.Debug().Err(err).Msgf("Hoster is unavailable. Triggering repair for %s", ct.Name)
@@ -631,41 +632,32 @@ func (c *Cache) GetDownloadLink(torrentId, filename, fileLink string) string {
 			c.logger.Debug().Msgf("Reinserted torrent %s", ct.Name)
 			file = ct.Files[filename]
 			// Retry getting the download link
-			downloadLink, accountId, err = c.client.GetDownloadLink(ct.Torrent, &file)
+			downloadLink, err = c.client.GetDownloadLink(ct.Torrent, &file)
 			if err != nil {
 				c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
 				return ""
 			}
-			if downloadLink == "" {
+			if downloadLink == nil {
 				c.logger.Debug().Msgf("Download link is empty for %s", file.Link)
 				return ""
 			}
-			file.DownloadLink = downloadLink
-			file.Generated = time.Now()
-			file.AccountId = accountId
-			ct.Files[filename] = file
-			go func() {
-				c.updateDownloadLink(file.Link, downloadLink, accountId)
-				c.setTorrent(ct)
-			}()
-			return file.DownloadLink
+			c.updateDownloadLink(downloadLink)
+			return downloadLink.DownloadLink
 		} else if errors.Is(err, request.TrafficExceededError) {
 			// This is likely a fair usage limit error
+			c.logger.Debug().Err(err).Msgf("Traffic exceeded for %s", ct.Name)
 		} else {
 			c.logger.Debug().Err(err).Msgf("Failed to get download link for %s", file.Link)
 			return ""
 		}
 	}
-	file.DownloadLink = downloadLink
-	file.Generated = time.Now()
-	file.AccountId = accountId
-	ct.Files[filename] = file
 
-	go func() {
-		c.updateDownloadLink(file.Link, downloadLink, file.AccountId)
-		c.setTorrent(ct)
-	}()
-	return file.DownloadLink
+	if downloadLink == nil {
+		c.logger.Debug().Msgf("Download link is empty for %s", file.Link)
+		return ""
+	}
+	c.updateDownloadLink(downloadLink)
+	return downloadLink.DownloadLink
 }
 
 func (c *Cache) GenerateDownloadLinks(t *CachedTorrent) {
@@ -673,7 +665,10 @@ func (c *Cache) GenerateDownloadLinks(t *CachedTorrent) {
 		c.logger.Error().Err(err).Msg("Failed to generate download links")
 	}
 	for _, file := range t.Files {
-		c.updateDownloadLink(file.Link, file.DownloadLink, file.AccountId)
+		if file.DownloadLink != nil {
+			c.updateDownloadLink(file.DownloadLink)
+		}
+
 	}
 
 	c.SaveTorrent(t)
@@ -701,11 +696,12 @@ func (c *Cache) AddTorrent(t *types.Torrent) error {
 
 }
 
-func (c *Cache) updateDownloadLink(link, downloadLink string, accountId string) {
-	c.downloadLinks.Store(link, downloadLinkCache{
-		Link:      downloadLink,
+func (c *Cache) updateDownloadLink(dl *types.DownloadLink) {
+	c.downloadLinks.Store(dl.Link, downloadLinkCache{
+		Id:        dl.Id,
+		Link:      dl.DownloadLink,
 		ExpiresAt: time.Now().Add(c.autoExpiresLinksAfter),
-		AccountId: accountId,
+		AccountId: dl.AccountId,
 	})
 }
 
@@ -728,7 +724,18 @@ func (c *Cache) MarkDownloadLinkAsInvalid(link, downloadLink, reason string) {
 			}
 		}
 	}
-	c.downloadLinks.Delete(link) // Remove the download link from cache
+	c.removeDownloadLink(link)
+}
+
+func (c *Cache) removeDownloadLink(link string) {
+	if dl, ok := c.downloadLinks.Load(link); ok {
+		// Delete dl from cache
+		c.downloadLinks.Delete(link)
+		// Delete dl from debrid
+		if dl.Id != "" {
+			_ = c.client.DeleteDownloadLink(dl.Id)
+		}
+	}
 }
 
 func (c *Cache) IsDownloadLinkInvalid(downloadLink string) bool {

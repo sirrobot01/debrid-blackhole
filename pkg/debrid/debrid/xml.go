@@ -10,6 +10,36 @@ import (
 	"time"
 )
 
+// resetPropfindResponse resets the propfind response cache for the specified parent directories.
+func (c *Cache) resetPropfindResponse() error {
+	// Right now, parents are hardcoded
+	parents := []string{"__all__", "torrents"}
+	// Reset only the parent directories
+	// Convert the parents to a keys
+	// This is a bit hacky, but it works
+	// Instead of deleting all the keys, we only delete the parent keys, e.g __all__/ or torrents/
+	keys := make([]string, 0, len(parents))
+	for _, p := range parents {
+		// Construct the key
+		// construct url
+		url := path.Clean(path.Join("/webdav", c.client.GetName(), p))
+		key0 := fmt.Sprintf("propfind:%s:0", url)
+		key1 := fmt.Sprintf("propfind:%s:1", url)
+		keys = append(keys, key0, key1)
+	}
+
+	// Delete the keys
+	for _, k := range keys {
+		c.PropfindResp.Delete(k)
+	}
+
+	if err := c.RefreshRclone(); err != nil {
+		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
+	}
+	c.logger.Trace().Msgf("Reset XML cache for %s", c.client.GetName())
+	return nil
+}
+
 func (c *Cache) refreshXml() error {
 	parents := []string{"__all__", "torrents"}
 	torrents := c.GetListing()
@@ -17,6 +47,9 @@ func (c *Cache) refreshXml() error {
 		if err := c.refreshParentXml(torrents, parent); err != nil {
 			return fmt.Errorf("failed to refresh XML for %s: %v", parent, err)
 		}
+	}
+	if err := c.RefreshRclone(); err != nil {
+		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
 	}
 	c.logger.Trace().Msgf("Refreshed XML cache for %s", c.client.GetName())
 	return nil

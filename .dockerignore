@@ -10,3 +10,4 @@ torrents.json
 **/dist/
 *.json
 .ven/**
+docs/**

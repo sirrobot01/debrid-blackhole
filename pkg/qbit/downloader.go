@@ -96,7 +96,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 		HTTPClient: request.New(request.WithTimeout(0)),
 	}
 	for _, file := range debridTorrent.Files {
-		if file.DownloadLink == "" {
+		if file.DownloadLink == nil {
 			q.logger.Info().Msgf("No download link found for %s", file.Name)
 			continue
 		}
@@ -109,7 +109,7 @@ func (q *QBit) downloadFiles(torrent *Torrent, parent string) {
 
 			err := Download(
 				client,
-				file.DownloadLink,
+				file.DownloadLink.DownloadLink,
 				filepath.Join(parent, filename),
 				progressCallback,
 			)
@@ -186,6 +186,8 @@ func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrent
 
 		if err := q.preCacheFile(debridTorrent.Name, filePaths); err != nil {
 			q.logger.Error().Msgf("Failed to pre-cache file: %s", err)
+		} else {
+			q.logger.Debug().Msgf("Pre-cached %d files", len(filePaths))
 		}
 	}() // Pre-cache the files in the background
 	// Pre-cache the first 256KB and 1MB of the file
@@ -222,21 +224,21 @@ func (q *QBit) preCacheFile(name string, filePaths []string) error {
 	if len(filePaths) == 0 {
 		return fmt.Errorf("no file paths provided")
 	}
+
 	for _, filePath := range filePaths {
-		func() {
-			file, err := os.Open(filePath)
-			defer func(file *os.File) {
-				_ = file.Close()
-			}(file)
+		func(f string) {
+
+			file, err := os.Open(f)
 			if err != nil {
 				return
 			}
+			defer file.Close()
+
 			// Pre-cache the file header (first 256KB) using 16KB chunks.
 			q.readSmallChunks(file, 0, 256*1024, 16*1024)
 			q.readSmallChunks(file, 1024*1024, 64*1024, 16*1024)
-		}()
+		}(filePath)
 	}
-
 	return nil
 }
 

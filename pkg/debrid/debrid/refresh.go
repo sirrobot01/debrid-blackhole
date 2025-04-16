@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -61,25 +60,17 @@ func (c *Cache) refreshListings() {
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
 	_ = c.refreshXml()
-	if err := c.RefreshRclone(); err != nil {
-		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
-	}
 }
 
 func (c *Cache) refreshTorrents() {
+	// Use a mutex to prevent concurrent refreshes
 	if c.torrentsRefreshMu.TryLock() {
 		defer c.torrentsRefreshMu.Unlock()
 	} else {
 		return
 	}
-	// Create a copy of the current torrents to avoid concurrent issues
-	torrents := make(map[string]string, c.torrents.Size()) // a mpa of id and name
-	c.torrents.Range(func(key string, t *CachedTorrent) bool {
-		torrents[t.Id] = t.Name
-		return true
-	})
 
-	// Get new torrents from the debrid service
+	// Get all torrents from the debrid service
 	debTorrents, err := c.client.GetTorrents()
 	if err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to get torrents")
@@ -91,38 +82,26 @@ func (c *Cache) refreshTorrents() {
 		return
 	}
 
-	// Get the newly added torrents only
-	_newTorrents := make([]*types.Torrent, 0)
-	idStore := make(map[string]struct{}, len(debTorrents))
+	currentTorrentIds := make(map[string]struct{}, len(debTorrents))
 	for _, t := range debTorrents {
-		idStore[t.Id] = struct{}{}
-		if _, ok := torrents[t.Id]; !ok {
-			_newTorrents = append(_newTorrents, t)
-		}
+		currentTorrentIds[t.Id] = struct{}{}
 	}
 
-	// Check for deleted torrents
-	deletedTorrents := make([]string, 0)
-	for id := range torrents {
-		if _, ok := idStore[id]; !ok {
-			deletedTorrents = append(deletedTorrents, id)
-		}
-	}
+	// Because of how fast AddTorrent is, a torrent might be added before we check
+	// So let's disable the deletion of torrents for now
+	// Deletion now moved to the cleanupWorker
+
 	newTorrents := make([]*types.Torrent, 0)
-	for _, t := range _newTorrents {
-		if !slices.Contains(deletedTorrents, t.Id) {
+	for _, t := range debTorrents {
+		if _, exists := c.torrents.Load(t.Id); !exists {
 			newTorrents = append(newTorrents, t)
 		}
-	}
-
-	if len(deletedTorrents) > 0 {
-		c.DeleteTorrents(deletedTorrents)
 	}
 
 	if len(newTorrents) == 0 {
 		return
 	}
-	c.logger.Info().Msgf("Found %d new torrents", len(newTorrents))
+	c.logger.Debug().Msgf("Found %d new torrents", len(newTorrents))
 
 	workChan := make(chan *types.Torrent, min(100, len(newTorrents)))
 	errChan := make(chan error, len(newTorrents))
@@ -236,6 +215,8 @@ func (c *Cache) refreshDownloadLinks() {
 		timeSince := time.Since(v.Generated)
 		if timeSince < c.autoExpiresLinksAfter {
 			c.downloadLinks.Store(k, downloadLinkCache{
+				Id:        v.Id,
+				AccountId: v.AccountId,
 				Link:      v.DownloadLink,
 				ExpiresAt: v.Generated.Add(c.autoExpiresLinksAfter - timeSince),
 			})

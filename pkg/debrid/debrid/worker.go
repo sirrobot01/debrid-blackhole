@@ -4,9 +4,10 @@ import "time"
 
 func (c *Cache) Refresh() error {
 	// For now, we just want to refresh the listing and download links
-	//go c.refreshDownloadLinksWorker()
+	go c.refreshDownloadLinksWorker()
 	go c.refreshTorrentsWorker()
 	go c.resetInvalidLinksWorker()
+	go c.cleanupWorker()
 	return nil
 }
 
@@ -71,5 +72,38 @@ func (c *Cache) resetInvalidLinksWorker() {
 
 	for range refreshTicker.C {
 		c.resetInvalidLinks()
+	}
+}
+
+func (c *Cache) cleanupWorker() {
+	// Cleanup every hour
+	// Removes deleted torrents from the cache
+
+	ticker := time.NewTicker(1 * time.Hour)
+
+	for range ticker.C {
+		torrents, err := c.client.GetTorrents()
+		if err != nil {
+			c.logger.Error().Err(err).Msg("Failed to get torrents")
+			continue
+		}
+
+		idStore := make(map[string]struct{})
+		for _, t := range torrents {
+			idStore[t.Id] = struct{}{}
+		}
+
+		deletedTorrents := make([]string, 0)
+		c.torrents.Range(func(key string, _ *CachedTorrent) bool {
+			if _, exists := idStore[key]; !exists {
+				deletedTorrents = append(deletedTorrents, key)
+			}
+			return true
+		})
+
+		if len(deletedTorrents) > 0 {
+			c.DeleteTorrents(deletedTorrents)
+			c.logger.Info().Msgf("Deleted %d torrents", len(deletedTorrents))
+		}
 	}
 }

@@ -202,9 +202,8 @@ func validateConfig(config *Config) error {
 	return nil
 }
 
-func SetConfigPath(path string) error {
+func SetConfigPath(path string) {
 	configPath = path
-	return nil
 }
 
 func Get() *Config {
