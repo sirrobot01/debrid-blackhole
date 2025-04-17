@@ -12,7 +12,7 @@
                     </button>
                     <select class="form-select form-select-sm d-inline-block w-auto me-2" id="stateFilter" style="flex-shrink: 0;">
                         <option value="">All States</option>
-                        <option value="pausedup">Completed</option>
+                        <option value="pausedUP">PausedUP(Completed)</option>
                         <option value="downloading">Downloading</option>
                         <option value="error">Error</option>
                     </select>
@@ -80,7 +80,7 @@
             torrents: [],
             selectedTorrents: new Set(),
             categories: new Set(),
-            states: new Set('downloading', 'pausedup', 'error'),
+            states: new Set('downloading', 'pausedUP', 'error'),
             selectedCategory: refs.categoryFilter?.value || '',
             selectedState: refs.stateFilter?.value || '',
             sortBy: refs.sortSelector?.value || 'added_on',
