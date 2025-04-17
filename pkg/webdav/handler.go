@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	path "path/filepath"
 	"slices"
@@ -104,12 +103,6 @@ func (h *Handler) getParentFiles() []os.FileInfo {
 
 func (h *Handler) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	name = path.Clean("/" + name)
-	// unescape the path
-	name, err := url.PathUnescape(name)
-	if err != nil {
-		h.logger.Error().Err(err).Msg("Failed to unescape path")
-		return nil, err
-	}
 	rootDir := h.getRootPath()
 
 	metadataOnly := ctx.Value("metadataOnly") != nil

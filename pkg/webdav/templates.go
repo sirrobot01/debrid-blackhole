@@ -113,9 +113,9 @@ const directoryTemplate = `
         {{end}}
         {{range $index, $file := .Children}}
             <li>
-                <a href="{{(printf "%s/%s" $.Path $file.Name)}}">
+                <a href="{{(printf "%s/%s" $.Path $file.RawName )}}">
                     <span class="file-number">{{add $index 1}}.</span>
-                    <span class="file-name">{{$file.RawName}}{{if $file.IsDir}}/{{end}}</span>
+                    <span class="file-name">{{$file.Name}}{{if $file.IsDir}}/{{end}}</span>
                     <span class="file-info">
                         {{if not $file.IsDir}}
                             {{formatSize $file.Size}}
