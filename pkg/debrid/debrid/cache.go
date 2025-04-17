@@ -14,7 +14,7 @@ import (
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"os"
-	"path/filepath"
+	path "path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -111,7 +111,7 @@ func New(dc config.Debrid, client types.Client) *Cache {
 		autoExpiresLinksAfter = time.Hour * 24
 	}
 	return &Cache{
-		dir:                          filepath.Join(cfg.Path, "cache", dc.Name), // path to save cache files
+		dir:                          path.Join(cfg.Path, "cache", dc.Name), // path to save cache files
 		torrents:                     xsync.NewMapOf[string, *CachedTorrent](),
 		torrentsNames:                xsync.NewMapOf[string, *CachedTorrent](),
 		invalidDownloadLinks:         xsync.NewMapOf[string, string](),
@@ -174,7 +174,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 	// Get only json files
 	var jsonFiles []os.DirEntry
 	for _, file := range files {
-		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
+		if !file.IsDir() && path.Ext(file.Name()) == ".json" {
 			jsonFiles = append(jsonFiles, file)
 		}
 	}
@@ -203,7 +203,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 				}
 
 				fileName := file.Name()
-				filePath := filepath.Join(c.dir, fileName)
+				filePath := path.Join(c.dir, fileName)
 				data, err := os.ReadFile(filePath)
 				if err != nil {
 					c.logger.Error().Err(err).Msgf("Failed to read file: %s", filePath)
@@ -233,6 +233,7 @@ func (c *Cache) load() (map[string]*CachedTorrent, error) {
 						}
 						ct.AddedOn = addedOn
 						ct.IsComplete = true
+						ct.Name = path.Clean(ct.Name)
 						results.Store(ct.Id, &ct)
 					}
 				}
@@ -383,17 +384,17 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 func (c *Cache) GetTorrentFolder(torrent *types.Torrent) string {
 	switch c.folderNaming {
 	case WebDavUseFileName:
-		return torrent.Filename
+		return path.Clean(torrent.Filename)
 	case WebDavUseOriginalName:
-		return torrent.OriginalFilename
+		return path.Clean(torrent.OriginalFilename)
 	case WebDavUseFileNameNoExt:
-		return utils.RemoveExtension(torrent.Filename)
+		return path.Clean(utils.RemoveExtension(torrent.Filename))
 	case WebDavUseOriginalNameNoExt:
-		return utils.RemoveExtension(torrent.OriginalFilename)
+		return path.Clean(utils.RemoveExtension(torrent.OriginalFilename))
 	case WebDavUseID:
 		return torrent.Id
 	default:
-		return torrent.Filename
+		return path.Clean(torrent.Filename)
 	}
 }
 
@@ -488,7 +489,7 @@ func (c *Cache) SaveTorrent(ct *CachedTorrent) {
 func (c *Cache) saveTorrent(id string, data []byte) {
 
 	fileName := id + ".json"
-	filePath := filepath.Join(c.dir, fileName)
+	filePath := path.Join(c.dir, fileName)
 
 	// Use a unique temporary filename for concurrent safety
 	tmpFile := filePath + ".tmp." + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -773,7 +774,7 @@ func (c *Cache) DeleteTorrents(ids []string) {
 
 func (c *Cache) removeFromDB(torrentId string) {
 	// Moves the torrent file to the trash
-	filePath := filepath.Join(c.dir, torrentId+".json")
+	filePath := path.Join(c.dir, torrentId+".json")
 
 	// Check if the file exists
 	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
@@ -781,8 +782,8 @@ func (c *Cache) removeFromDB(torrentId string) {
 	}
 
 	// Move the file to the trash
-	trashPath := filepath.Join(c.dir, "trash", torrentId+".json")
-	if err := os.MkdirAll(filepath.Dir(trashPath), 0755); err != nil {
+	trashPath := path.Join(c.dir, "trash", torrentId+".json")
+	if err := os.MkdirAll(path.Dir(trashPath), 0755); err != nil {
 		return
 	}
 	if err := os.Rename(filePath, trashPath); err != nil {
