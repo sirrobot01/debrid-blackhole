@@ -1,6 +1,7 @@
 package webdav
 
 import (
+	"net/url"
 	"os"
 	"time"
 )
@@ -14,7 +15,8 @@ type FileInfo struct {
 	isDir   bool
 }
 
-func (fi *FileInfo) Name() string       { return fi.name }
+func (fi *FileInfo) Name() string       { return url.PathEscape(fi.name) }
+func (fi *FileInfo) RawName() string    { return fi.name }
 func (fi *FileInfo) Size() int64        { return fi.size }
 func (fi *FileInfo) Mode() os.FileMode  { return fi.mode }
 func (fi *FileInfo) ModTime() time.Time { return fi.modTime }

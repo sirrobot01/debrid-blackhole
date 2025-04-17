@@ -7,6 +7,7 @@ import (
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -22,7 +23,8 @@ type fileInfo struct {
 	isDir   bool
 }
 
-func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Name() string       { return url.PathEscape(fi.name) }
+func (fi *fileInfo) RawName() string    { return fi.name }
 func (fi *fileInfo) Size() int64        { return fi.size }
 func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
 func (fi *fileInfo) ModTime() time.Time { return fi.modTime }

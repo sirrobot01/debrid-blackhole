@@ -35,6 +35,42 @@
                             </div>
                             <div class="col-md-6 mt-3">
                                 <div class="form-group">
+                                    <label for="urlBase">URL Base</label>
+                                    <input type="text"
+                                           disabled
+                                           class="form-control"
+                                           id="urlBase"
+                                           name="url_base"
+                                           placeholder="/">
+                                    <small class="form-text text-muted">URL base for the application</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mt-3">
+                                <div class="form-group">
+                                    <label for="bindAddress">Bind Address</label>
+                                    <input type="text"
+                                             disabled
+                                           class="form-control"
+                                           id="bindAddress"
+                                           name="bind_address"
+                                           placeholder="">
+                                    <small class="form-text text-muted">Bind address for the application(default is all interface)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-2 mt-3">
+                                <div class="form-group">
+                                    <label for="port">Port</label>
+                                    <input type="text"
+                                           disabled
+                                           class="form-control"
+                                           id="port"
+                                           name="port"
+                                           placeholder="8282">
+                                    <small class="form-text text-muted">Port</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <div class="form-group">
                                     <label for="discordWebhookUrl">Discord Webhook URL</label>
                                     <div class="input-group">
                                         <textarea
@@ -69,7 +105,6 @@
                                     <small class="form-text text-muted">Minimum file size to download (0 for no limit)</small>
                                 </div>
                             </div>
-
                             <div class="col-md-6 mt-3">
                                 <div class="form-group">
                                     <label for="maxFileSize">Maximum File Size</label>
@@ -105,10 +140,6 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="qbit.password">Password</label>
                                 <input type="password" class="form-control" name="qbit.password" id="qbit.password">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="qbit.port">Port</label>
-                                <input type="text" class="form-control" name="qbit.port" id="qbit.port" placeholder="e.g., 8080">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="qbit.download_folder">Symlink/Download Folder</label>
@@ -369,6 +400,15 @@
                     if (config.discord_webhook_url) {
                         document.querySelector('[name="discord_webhook_url"]').value = config.discord_webhook_url;
                     }
+                    if (config.url_base) {
+                        document.querySelector('[name="url_base"]').value = config.url_base;
+                    }
+                    if (config.bind_address) {
+                        document.querySelector('[name="bind_address"]').value = config.bind_address;
+                    }
+                    if (config.port) {
+                        document.querySelector('[name="port"]').value = config.port;
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading configuration:', error);
@@ -532,7 +572,6 @@
                     qbittorrent: {
                         username: document.querySelector('[name="qbit.username"]').value,
                         password: document.querySelector('[name="qbit.password"]').value,
-                        port: document.querySelector('[name="qbit.port"]').value,
                         download_folder: document.querySelector('[name="qbit.download_folder"]').value,
                         refresh_interval: parseInt(document.querySelector('[name="qbit.refresh_interval"]').value || '0', 10)
                     },

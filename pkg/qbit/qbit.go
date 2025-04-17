@@ -25,7 +25,7 @@ type QBit struct {
 func New() *QBit {
 	_cfg := config.Get()
 	cfg := _cfg.QBitTorrent
-	port := cmp.Or(cfg.Port, os.Getenv("QBIT_PORT"), "8282")
+	port := cmp.Or(_cfg.Port, os.Getenv("QBIT_PORT"), "8282")
 	refreshInterval := cmp.Or(cfg.RefreshInterval, 10)
 	return &QBit{
 		Username:        cfg.Username,

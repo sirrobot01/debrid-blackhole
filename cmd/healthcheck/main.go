@@ -26,7 +26,7 @@ func main() {
 	config.SetConfigPath(configPath)
 	cfg := config.Get()
 	// Get port from environment variable or use default
-	qbitPort := getEnvOrDefault("QBIT_PORT", cfg.QBitTorrent.Port)
+	port := getEnvOrDefault("QBIT_PORT", cfg.Port)
 	webdavPath := ""
 	for _, debrid := range cfg.Debrids {
 		if debrid.UseWebDav {
@@ -47,18 +47,18 @@ func main() {
 	defer cancel()
 
 	// Check qBittorrent API
-	if checkQbitAPI(ctx, qbitPort) {
+	if checkQbitAPI(ctx, port) {
 		status.QbitAPI = true
 	}
 
 	// Check Web UI
-	if checkWebUI(ctx, qbitPort) {
+	if checkWebUI(ctx, port) {
 		status.WebUI = true
 	}
 
 	// Check WebDAV if enabled
 	if webdavPath != "" {
-		if checkWebDAV(ctx, qbitPort, webdavPath) {
+		if checkWebDAV(ctx, port, webdavPath) {
 			status.WebDAVService = true
 		}
 	} else {

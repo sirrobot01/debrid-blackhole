@@ -1,7 +1,6 @@
 package server
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	path "path/filepath"
 	"runtime"
 	"syscall"
 )
@@ -24,32 +24,47 @@ type Server struct {
 	logger zerolog.Logger
 }
 
-func New() *Server {
+func New(handlers map[string]http.Handler) *Server {
 	l := logger.New("http")
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	return &Server{
-		router: r,
+	cfg := config.Get()
+
+	s := &Server{
 		logger: l,
 	}
+
+	r.Handle(path.Join(cfg.URLBase, "static")+"/*",
+		http.StripPrefix(path.Join(cfg.URLBase, "static"), http.FileServer(http.Dir("static"))),
+	)
+
+	r.Route(cfg.URLBase, func(r chi.Router) {
+		for pattern, handler := range handlers {
+			r.Mount(pattern, handler)
+		}
+
+		//logs
+		r.Get("/logs", s.getLogs)
+
+		//stats
+		r.Get("/stats", s.getStats)
+
+		//webhooks
+		r.Post("/webhooks/tautulli", s.handleTautulli)
+
+	})
+	s.router = r
+	return s
 }
 
 func (s *Server) Start(ctx context.Context) error {
 	cfg := config.Get()
-	// Register routes
-	// Register webhooks
-	s.router.Post("/webhooks/tautulli", s.handleTautulli)
 
-	// Register logs
-	s.router.Get("/logs", s.getLogs)
-	s.router.Get("/stats", s.getStats)
-	p := cmp.Or(cfg.QBitTorrent.Port, "8282")
-	port := fmt.Sprintf(":%s", p)
-	s.logger.Info().Msgf("Server started on %s", port)
+	addr := fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.Port)
+	s.logger.Info().Msgf("Starting server on %s%s", addr, cfg.URLBase)
 	srv := &http.Server{
-		Addr:    port,
+		Addr:    addr,
 		Handler: s.router,
 	}
 
@@ -66,10 +81,6 @@ func (s *Server) Start(ctx context.Context) error {
 	<-ctx.Done()
 	s.logger.Info().Msg("Shutting down gracefully...")
 	return srv.Shutdown(context.Background())
-}
-
-func (s *Server) AddRoutes(routes func(r chi.Router) http.Handler) {
-	routes(s.router)
 }
 
 func (s *Server) Mount(pattern string, handler http.Handler) {

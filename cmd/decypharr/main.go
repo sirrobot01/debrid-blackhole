@@ -8,9 +8,11 @@ import (
 	"github.com/sirrobot01/decypharr/pkg/qbit"
 	"github.com/sirrobot01/decypharr/pkg/server"
 	"github.com/sirrobot01/decypharr/pkg/service"
+	"github.com/sirrobot01/decypharr/pkg/version"
 	"github.com/sirrobot01/decypharr/pkg/web"
 	"github.com/sirrobot01/decypharr/pkg/webdav"
 	"github.com/sirrobot01/decypharr/pkg/worker"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -111,7 +113,7 @@ func startServices(ctx context.Context) error {
 +-------------------------------------------------------+
 |                                                       |
 |  ╔╦╗╔═╗╔═╗╦ ╦╔═╗╦ ╦╔═╗╦═╗╦═╗                          |
-|   ║║║╣ ║  └┬┘╠═╝╠═╣╠═╣╠╦╝╠╦╝                          |
+|   ║║║╣ ║  └┬┘╠═╝╠═╣╠═╣╠╦╝╠╦╝ (%s)		|
 |  ═╩╝╚═╝╚═╝ ┴ ╩  ╩ ╩╩ ╩╩╚═╩╚═                          |
 |                                                       |
 +-------------------------------------------------------+
@@ -119,11 +121,10 @@ func startServices(ctx context.Context) error {
 +-------------------------------------------------------+
 `
 
-	_log.Info().Msgf(asciiArt, cfg.LogLevel)
+	fmt.Printf(asciiArt, version.GetInfo(), cfg.LogLevel)
 
 	svc := service.New()
 	_qbit := qbit.New()
-	srv := server.New()
 	_webdav := webdav.New()
 
 	ui := web.New(_qbit).Routes()
@@ -131,9 +132,12 @@ func startServices(ctx context.Context) error {
 	qbitRoutes := _qbit.Routes()
 
 	// Register routes
-	srv.Mount("/", ui)
-	srv.Mount("/api/v2", qbitRoutes)
-	srv.Mount("/webdav", webdavRoutes)
+	handlers := map[string]http.Handler{
+		"/":       ui,
+		"/api/v2": qbitRoutes,
+		"/webdav": webdavRoutes,
+	}
+	srv := server.New(handlers)
 
 	safeGo := func(f func() error) {
 		wg.Add(1)

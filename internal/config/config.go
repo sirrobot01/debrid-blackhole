@@ -34,7 +34,7 @@ type Debrid struct {
 type QBitTorrent struct {
 	Username        string   `json:"username,omitempty"`
 	Password        string   `json:"password,omitempty"`
-	Port            string   `json:"port,omitempty"`
+	Port            string   `json:"port,omitempty"` // deprecated
 	DownloadFolder  string   `json:"download_folder,omitempty"`
 	Categories      []string `json:"categories,omitempty"`
 	RefreshInterval int      `json:"refresh_interval,omitempty"`
@@ -81,6 +81,11 @@ type WebDav struct {
 }
 
 type Config struct {
+	// server
+	BindAddress string `json:"bind_address,omitempty"`
+	URLBase     string `json:"url_base,omitempty"`
+	Port        string `json:"port,omitempty"`
+
 	LogLevel       string      `json:"log_level,omitempty"`
 	Debrids        []Debrid    `json:"debrids,omitempty"`
 	MaxCacheSize   int         `json:"max_cache_size,omitempty"`
@@ -125,6 +130,16 @@ func (c *Config) loadConfig() error {
 
 	if len(c.AllowedExt) == 0 {
 		c.AllowedExt = getDefaultExtensions()
+	}
+
+	c.Port = cmp.Or(c.Port, c.QBitTorrent.Port)
+
+	if c.URLBase == "" {
+		c.URLBase = "/"
+	}
+	// validate url base starts with /
+	if c.URLBase[0] != '/' {
+		c.URLBase = "/" + c.URLBase
 	}
 
 	// Load the auth file

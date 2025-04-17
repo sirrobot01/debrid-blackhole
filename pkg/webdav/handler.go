@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	path "path/filepath"
 	"slices"
@@ -465,13 +464,6 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request, file we
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int {
 			return a + b
-		},
-		"urlpath": func(p string) string {
-			segments := strings.Split(p, "/")
-			for i, segment := range segments {
-				segments[i] = url.PathEscape(segment)
-			}
-			return strings.Join(segments, "/")
 		},
 		"formatSize": func(bytes int64) string {
 			const (

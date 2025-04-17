@@ -109,13 +109,13 @@ const directoryTemplate = `
     <h1>Index of {{.Path}}</h1>
     <ul>
         {{if .ShowParent}}
-            <li><a href="{{urlpath .ParentPath}}" class="parent-dir"><span class="file-number"></span>Parent Directory</a></li>
+            <li><a href="{{ .ParentPath}}" class="parent-dir"><span class="file-number"></span>Parent Directory</a></li>
         {{end}}
         {{range $index, $file := .Children}}
             <li>
-                <a href="{{urlpath (printf "%s/%s" $.Path $file.Name)}}">
+                <a href="{{(printf "%s/%s" $.Path $file.Name)}}">
                     <span class="file-number">{{add $index 1}}.</span>
-                    <span class="file-name">{{$file.Name}}{{if $file.IsDir}}/{{end}}</span>
+                    <span class="file-name">{{$file.RawName}}{{if $file.IsDir}}/{{end}}</span>
                     <span class="file-info">
                         {{if not $file.IsDir}}
                             {{formatSize $file.Size}}
