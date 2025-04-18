@@ -151,10 +151,10 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 
 func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrentFolder string) (string, error) {
 	files := debridTorrent.Files
-	torrentSymlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder)
-	err := os.MkdirAll(torrentSymlinkPath, os.ModePerm)
+	symlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
+	err := os.MkdirAll(symlinkPath, os.ModePerm)
 	if err != nil {
-		return "", fmt.Errorf("failed to create directory: %s: %v", torrentSymlinkPath, err)
+		return "", fmt.Errorf("failed to create directory: %s: %v", symlinkPath, err)
 	}
 
 	pending := make(map[string]debrid.File)
@@ -168,18 +168,33 @@ func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrent
 	for len(pending) > 0 {
 		<-ticker.C
 		for path, file := range pending {
-			fullFilePath := filepath.Join(rclonePath, file.Path)
+			fullFilePath := filepath.Join(rclonePath, file.Name)
 			if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
-				q.logger.Info().Msgf("File is ready: %s", file.Path)
-				_filePath := q.createSymLink(torrentSymlinkPath, rclonePath, file)
-				filePaths = append(filePaths, _filePath)
+				q.logger.Info().Msgf("File is ready: %s", file.Name)
+				fileSymlinkPath := filepath.Join(symlinkPath, file.Name)
+				if err := os.Symlink(fullFilePath, fileSymlinkPath); err != nil {
+					q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fileSymlinkPath, err)
+				}
+				filePaths = append(filePaths, fileSymlinkPath)
 				delete(pending, path)
+			} else if file.Name != file.Path {
+				// This is likely alldebrid nested files(not using webdav)
+				fullFilePath = filepath.Join(rclonePath, file.Path)
+				if _, err := os.Stat(fullFilePath); !os.IsNotExist(err) {
+					q.logger.Info().Msgf("File is ready: %s", file.Path)
+					fileSymlinkPath := filepath.Join(symlinkPath, file.Path)
+					if err := os.Symlink(fullFilePath, fileSymlinkPath); err != nil {
+						q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fileSymlinkPath, err)
+					}
+					filePaths = append(filePaths, fileSymlinkPath)
+					delete(pending, path)
+				}
 			}
 		}
 	}
 
 	if q.SkipPreCache {
-		return torrentSymlinkPath, nil
+		return symlinkPath, nil
 	}
 
 	go func() {
@@ -191,7 +206,7 @@ func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrent
 		}
 	}() // Pre-cache the files in the background
 	// Pre-cache the first 256KB and 1MB of the file
-	return torrentSymlinkPath, nil
+	return symlinkPath, nil
 }
 
 func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) (string, error) {
@@ -205,18 +220,13 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 	}
 }
 
-func (q *QBit) createSymLink(path string, torrentMountPath string, file debrid.File) string {
-
-	// Combine the directory and filename to form a full path
-	fullPath := filepath.Join(path, file.Name) // /mnt/symlinks/{category}/MyTVShow/MyTVShow.S01E01.720p.mkv
-	// Create a symbolic link if file doesn't exist
-	torrentFilePath := filepath.Join(torrentMountPath, file.Path) // debridFolder/MyTVShow/MyTVShow.S01E01.720p.mkv
-	err := os.Symlink(torrentFilePath, fullPath)
+func (q *QBit) createSymLink(torrentFileMountPath, filePath string) string {
+	err := os.Symlink(torrentFileMountPath, filePath)
 	if err != nil {
 		// It's okay if the symlink already exists
-		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fullPath, err)
+		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", filePath, err)
 	}
-	return torrentFilePath
+	return filePath
 }
 
 func (q *QBit) preCacheFile(name string, filePaths []string) error {

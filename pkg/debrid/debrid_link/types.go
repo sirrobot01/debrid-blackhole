@@ -40,6 +40,6 @@ type debridLinkTorrentInfo struct {
 	UploadSpeed     int64   `json:"uploadSpeed"`
 }
 
-type TorrentInfo APIResponse[[]debridLinkTorrentInfo]
+type torrentInfo APIResponse[[]debridLinkTorrentInfo]
 
 type SubmitTorrentInfo APIResponse[debridLinkTorrentInfo]

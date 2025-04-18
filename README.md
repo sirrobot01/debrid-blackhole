@@ -73,12 +73,12 @@ The documentation includes:
     }
   ],
   "qbittorrent": {
-    "port": "8282",
     "download_folder": "/mnt/symlinks/",
     "categories": ["sonarr", "radarr"]
   },
   "use_auth": false,
-  "log_level": "info"
+  "log_level": "info",
+  "port": "8282"
 }
 ```
 

@@ -105,7 +105,7 @@ func (r *RealDebrid) GetLogger() zerolog.Logger {
 	return r.logger
 }
 
-func getSelectedFiles(t *types.Torrent, data TorrentInfo) map[string]types.File {
+func getSelectedFiles(t *types.Torrent, data torrentInfo) map[string]types.File {
 	selectedFiles := make([]types.File, 0)
 	for _, f := range data.Files {
 		if f.Selected == 1 {
@@ -133,7 +133,7 @@ func getSelectedFiles(t *types.Torrent, data TorrentInfo) map[string]types.File 
 // getTorrentFiles returns a list of torrent files from the torrent info
 // validate is used to determine if the files should be validated
 // if validate is false, selected files will be returned
-func getTorrentFiles(t *types.Torrent, data TorrentInfo) map[string]types.File {
+func getTorrentFiles(t *types.Torrent, data torrentInfo) map[string]types.File {
 	files := make(map[string]types.File)
 	cfg := config.Get()
 	idx := 0
@@ -268,7 +268,7 @@ func (r *RealDebrid) UpdateTorrent(t *types.Torrent) error {
 	if err != nil {
 		return err
 	}
-	var data TorrentInfo
+	var data torrentInfo
 	err = json.Unmarshal(resp, &data)
 	if err != nil {
 		return err
@@ -299,7 +299,7 @@ func (r *RealDebrid) CheckStatus(t *types.Torrent, isSymlink bool) (*types.Torre
 			r.logger.Info().Msgf("ERROR Checking file: %v", err)
 			return t, err
 		}
-		var data TorrentInfo
+		var data torrentInfo
 		if err = json.Unmarshal(resp, &data); err != nil {
 			return t, err
 		}

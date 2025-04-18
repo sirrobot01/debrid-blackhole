@@ -70,7 +70,7 @@ type AddMagnetSchema struct {
 	Uri string `json:"uri"`
 }
 
-type TorrentInfo struct {
+type torrentInfo struct {
 	ID               string  `json:"id"`
 	Filename         string  `json:"filename"`
 	OriginalFilename string  `json:"original_filename"`

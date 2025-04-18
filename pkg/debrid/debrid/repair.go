@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/internal/request"
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
@@ -53,6 +54,21 @@ func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
 			}
 		}
 	}
+	cfg := config.Get()
+	// Try to reinsert the torrent if it's broken
+	if cfg.Repair.ReInsert && isBroken && t.Torrent != nil {
+		// Check if the torrent is already in progress
+		if _, inProgress := c.repairsInProgress.Load(t.Torrent.Id); !inProgress {
+			if err := c.reInsertTorrent(t); err != nil {
+				c.logger.Error().Err(err).Str("torrentId", t.Torrent.Id).Msg("Failed to reinsert torrent")
+				return true
+			} else {
+				c.logger.Debug().Str("torrentId", t.Torrent.Id).Msg("Reinserted torrent")
+				return false
+			}
+		}
+	}
+
 	return isBroken
 }
 

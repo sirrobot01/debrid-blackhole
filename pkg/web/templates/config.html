@@ -149,10 +149,12 @@
                                 <label class="form-label" for="qbit.refresh_interval">Refresh Interval (seconds)</label>
                                 <input type="number" class="form-control" name="qbit.refresh_interval" id="qbit.refresh_interval">
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <input type="checkbox" class="form-check-input" name="qbit.skip_pre_cache" id="qbit.skip_pre_cache">
-                                <label class="form-check-label" for="qbit.skip_pre_cache">Skip Pre-Cache On Download(This caches a tiny part of your file to speed up import)</label>
-                            </div>
+                            <div class="col mb-3">
+                                <div class="form-check me-3 d-inline-block">
+                                    <input type="checkbox" class="form-check-input" name="qbit.skip_pre_cache" id="qbit.skip_pre_cache">
+                                    <label class="form-check-label" for="qbit.skip_pre_cache">Skip Pre-Cache On Download(This caches a tiny part of your file to speed up import)</label>
+                                </div>
+                                </div>
                         </div>
                     </div>
 
@@ -170,36 +172,54 @@
                     <!-- Repair Configuration -->
                     <div class="section mb-5">
                         <h5 class="border-bottom pb-2">Repair Configuration</h5>
-                        <div class="row">
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Interval</label>
-                                <input type="text" class="form-control" name="repair.interval" placeholder="e.g., 24h">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label" >Zurg URL</label>
-                                <input type="text" class="form-control" name="repair.zurg_url" id="repair.zurg_url" placeholder="http://zurg:9999">
+                        <div class="row mb-2">
+                            <div class="col">
+                                <div class="form-check me-3 d-inline-block">
+                                    <input type="checkbox" class="form-check-input" name="repair.enabled" id="repair.enabled">
+                                    <label class="form-check-label" for="repair.enabled">Enable Repair</label>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <div class="form-check me-3 d-inline-block">
-                                <input type="checkbox" class="form-check-input" name="repair.enabled" id="repair.enabled">
-                                <label class="form-check-label" for="repair.enabled">Enable Repair</label>
+                        <div id="repairCol" class="d-none">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label" for="repair.interval">Interval</label>
+                                    <input type="text" class="form-control" name="repair.interval" id="repair.interval" placeholder="e.g., 24h">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label" for="repair.zurg_url">Zurg URL</label>
+                                    <input type="text" class="form-control" name="repair.zurg_url" id="repair.zurg_url" placeholder="http://zurg:9999">
+                                </div>
                             </div>
-                            <div class="form-check me-3 d-inline-block">
-                                <input type="checkbox" class="form-check-input" name="repair.use_webdav" id="repair.use_webdav">
-                                <label class="form-check-label" for="repair.use_webdav">Use Webdav</label>
-                            </div>
-                            <div class="form-check me-3 d-inline-block">
-                                <input type="checkbox" class="form-check-input" name="repair.run_on_start" id="repair.run_on_start">
-                                <label class="form-check-label" for="repair.run_on_start">Run on Start</label>
-                            </div>
-                            <div class="form-check d-inline-block">
-                                <input type="checkbox" class="form-check-input" name="repair.auto_process" id="repair.auto_process">
-                                <label class="form-check-label" for="repair.auto_process">Auto Process(Scheduled jobs will be processed automatically)</label>
+                            <div class="row">
+                                <div class="col-md-2 mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" name="repair.use_webdav" id="repair.use_webdav">
+                                        <label class="form-check-label" for="repair.use_webdav">Use Webdav</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" name="repair.run_on_start" id="repair.run_on_start">
+                                        <label class="form-check-label" for="repair.run_on_start">Run on Start</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" name="repair.reinsert" id="repair.reinsert">
+                                        <label class="form-check-label" for="repair.reinsert">Re-Insert Nerfed Release</label>
+                                    </div>
+                                </div>
+                                <div class="col mb-3">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" name="repair.auto_process" id="repair.auto_process">
+                                        <label class="form-check-label" for="repair.auto_process">Auto Process(Scheduled jobs will be auto-processed)</label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="text-end mt-4 mb-3">
+                    <div class="text-end mt-3">
                         <button type="submit" class="btn btn-primary px-4">
                             <i class="bi bi-save"></i> Save
                         </button>
@@ -372,6 +392,9 @@
 
                     // Load Repair config
                     if (config.repair) {
+                        if (config.repair.enabled) {
+                            document.getElementById('repairCol').classList.remove('d-none');
+                        }
                         Object.entries(config.repair).forEach(([key, value]) => {
                             const input = document.querySelector(`[name="repair.${key}"]`);
                             if (input) {
@@ -435,6 +458,14 @@
                     webdavConfig.removeClass('d-none');
                 } else {
                     webdavConfig.addClass('d-none');
+                }
+            });
+
+            $(document).on('change', 'input[name="repair.enabled"]', function() {
+                if (this.checked) {
+                    $('#repairCol').removeClass('d-none');
+                } else {
+                    $('#repairCol').addClass('d-none');
                 }
             });
 
@@ -580,6 +611,7 @@
                         enabled: document.querySelector('[name="repair.enabled"]').checked,
                         interval: document.querySelector('[name="repair.interval"]').value,
                         run_on_start: document.querySelector('[name="repair.run_on_start"]').checked,
+                        reinsert: document.querySelector('[name="repair.reinsert"]').checked,
                         zurg_url: document.querySelector('[name="repair.zurg_url"]').value,
                         use_webdav: document.querySelector('[name="repair.use_webdav"]').checked,
                         auto_process: document.querySelector('[name="repair.auto_process"]').checked

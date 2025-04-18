@@ -99,7 +99,7 @@ func (dl *DebridLink) UpdateTorrent(t *types.Torrent) error {
 	if err != nil {
 		return err
 	}
-	var res TorrentInfo
+	var res torrentInfo
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		return err
@@ -336,7 +336,7 @@ func (dl *DebridLink) getTorrents(page, perPage int) ([]*types.Torrent, error) {
 	if err != nil {
 		return torrents, err
 	}
-	var res TorrentInfo
+	var res torrentInfo
 	err = json.Unmarshal(resp, &res)
 	if err != nil {
 		dl.logger.Info().Msgf("Error unmarshalling torrent info: %s", err)

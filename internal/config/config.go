@@ -58,6 +58,7 @@ type Repair struct {
 	AutoProcess bool   `json:"auto_process,omitempty"`
 	UseWebDav   bool   `json:"use_webdav,omitempty"`
 	Workers     int    `json:"workers,omitempty"`
+	ReInsert    bool   `json:"reinsert,omitempty"`
 }
 
 type Auth struct {
