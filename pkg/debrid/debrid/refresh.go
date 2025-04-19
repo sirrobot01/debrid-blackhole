@@ -3,7 +3,6 @@ package debrid
 import (
 	"fmt"
 	"github.com/sirrobot01/decypharr/internal/config"
-	"github.com/sirrobot01/decypharr/internal/request"
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"io"
@@ -30,13 +29,13 @@ func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
 func (fi *fileInfo) IsDir() bool        { return fi.isDir }
 func (fi *fileInfo) Sys() interface{}   { return nil }
 
-func (c *Cache) refreshListings() {
+func (c *Cache) RefreshListings(refreshRclone bool) {
 	if c.listingRefreshMu.TryLock() {
 		defer c.listingRefreshMu.Unlock()
 	} else {
 		return
 	}
-	// COpy the torrents to a string|time map
+	// Copy the torrents to a string|time map
 	torrentsTime := make(map[string]time.Time, c.torrents.Size())
 	torrents := make([]string, 0, c.torrents.Size())
 	c.torrentsNames.Range(func(key string, value *CachedTorrent) bool {
@@ -60,7 +59,15 @@ func (c *Cache) refreshListings() {
 	}
 	// Atomic store of the complete ready-to-use slice
 	c.listings.Store(files)
-	_ = c.refreshXml()
+	if err := c.RefreshParentXml(); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to refresh XML")
+	}
+
+	if refreshRclone {
+		if err := c.RefreshRclone(); err != nil {
+			c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
+		}
+	}
 }
 
 func (c *Cache) refreshTorrents() {
@@ -118,7 +125,7 @@ func (c *Cache) refreshTorrents() {
 					return
 				default:
 				}
-				if err := c.ProcessTorrent(t, true); err != nil {
+				if err := c.ProcessTorrent(t); err != nil {
 					c.logger.Error().Err(err).Msgf("Failed to process new torrent %s", t.Id)
 					errChan <- err
 				}
@@ -137,11 +144,12 @@ func (c *Cache) refreshTorrents() {
 	close(workChan)
 	wg.Wait()
 
+	c.RefreshListings(true)
+
 	c.logger.Debug().Msgf("Processed %d new torrents", len(newTorrents))
 }
 
 func (c *Cache) RefreshRclone() error {
-	client := request.Default()
 	cfg := config.Get().WebDav
 
 	if cfg.RcUrl == "" {
@@ -163,6 +171,8 @@ func (c *Cache) RefreshRclone() error {
 	forgetReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Send the request
+	client := &http.Client{}
+	client.Timeout = 10 * time.Second
 	forgetResp, err := client.Do(forgetReq)
 	if err != nil {
 		return err
@@ -173,6 +183,26 @@ func (c *Cache) RefreshRclone() error {
 		body, _ := io.ReadAll(forgetResp.Body)
 		return fmt.Errorf("failed to forget rclone: %s - %s", forgetResp.Status, string(body))
 	}
+
+	// Run vfs/refresh
+	refreshReq, err := http.NewRequest("POST", fmt.Sprintf("%s/vfs/refresh", cfg.RcUrl), strings.NewReader(data))
+	if err != nil {
+		return err
+	}
+	if cfg.RcUser != "" && cfg.RcPass != "" {
+		refreshReq.SetBasicAuth(cfg.RcUser, cfg.RcPass)
+	}
+	refreshReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	refreshResp, err := client.Do(refreshReq)
+	if err != nil {
+		return err
+	}
+	defer refreshResp.Body.Close()
+	if refreshResp.StatusCode != 200 {
+		body, _ := io.ReadAll(refreshResp.Body)
+		return fmt.Errorf("failed to refresh rclone: %s - %s", refreshResp.Status, string(body))
+	}
+
 	return nil
 }
 

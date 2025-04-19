@@ -258,7 +258,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// - Otherwise, for deeper (torrent folder) paths, use a longer TTL.
 		ttl := 1 * time.Minute
 		if h.isParentPath(r.URL.Path) {
+			// __all__ or torrents folder
+			// Manually build the xml
 			ttl = 30 * time.Second
+			if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {
+				return
+			}
+			// Refresh the parent XML
+			h.cache.RefreshListings(false)
+			// Check again if the cache is valid
+			// If not, we will use the default WebDAV handler
+			if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {
+				return
+			}
 		}
 
 		if served := h.serveFromCacheIfValid(w, r, cacheKey, ttl); served {

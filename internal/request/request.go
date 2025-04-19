@@ -121,6 +121,7 @@ func WithTransport(transport *http.Transport) ClientOption {
 // WithRetryableStatus adds status codes that should trigger a retry
 func WithRetryableStatus(statusCodes ...int) ClientOption {
 	return func(c *Client) {
+		c.retryableStatus = make(map[int]struct{}) // reset the map
 		for _, code := range statusCodes {
 			c.retryableStatus[code] = struct{}{}
 		}

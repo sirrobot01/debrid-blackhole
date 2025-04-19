@@ -58,14 +58,12 @@ func (c *Cache) IsTorrentBroken(t *CachedTorrent, filenames []string) bool {
 	// Try to reinsert the torrent if it's broken
 	if cfg.Repair.ReInsert && isBroken && t.Torrent != nil {
 		// Check if the torrent is already in progress
-		if _, inProgress := c.repairsInProgress.Load(t.Torrent.Id); !inProgress {
-			if err := c.reInsertTorrent(t); err != nil {
-				c.logger.Error().Err(err).Str("torrentId", t.Torrent.Id).Msg("Failed to reinsert torrent")
-				return true
-			} else {
-				c.logger.Debug().Str("torrentId", t.Torrent.Id).Msg("Reinserted torrent")
-				return false
-			}
+		if err := c.reInsertTorrent(t); err != nil {
+			c.logger.Error().Err(err).Str("torrentId", t.Torrent.Id).Msg("Failed to reinsert torrent")
+			return true
+		} else {
+			c.logger.Debug().Str("torrentId", t.Torrent.Id).Msg("Reinserted torrent")
+			return false
 		}
 	}
 
@@ -76,13 +74,6 @@ func (c *Cache) repairWorker() {
 	// This watches a channel for torrents to repair
 	for req := range c.repairChan {
 		torrentId := req.TorrentID
-		if _, inProgress := c.repairsInProgress.Load(torrentId); inProgress {
-			c.logger.Debug().Str("torrentId", torrentId).Msg("Skipping duplicate repair request")
-			continue
-		}
-
-		// Mark as in progress
-		c.repairsInProgress.Store(torrentId, struct{}{})
 		c.logger.Debug().Str("torrentId", req.TorrentID).Msg("Received repair request")
 
 		// Get the torrent from the cache
@@ -106,28 +97,22 @@ func (c *Cache) repairWorker() {
 				continue
 			}
 		}
-		c.repairsInProgress.Delete(torrentId)
 	}
 }
 
 func (c *Cache) reInsertTorrent(ct *CachedTorrent) error {
 	// Check if Magnet is not empty, if empty, reconstruct the magnet
 	torrent := ct.Torrent
-	if _, ok := c.repairsInProgress.Load(torrent.Id); ok {
+	oldID := torrent.Id // Store the old ID
+	if _, ok := c.repairsInProgress.Load(oldID); ok {
 		return fmt.Errorf("repair already in progress for torrent %s", torrent.Id)
 	}
+	c.repairsInProgress.Store(oldID, struct{}{})
+	defer c.repairsInProgress.Delete(oldID)
 
 	if torrent.Magnet == nil {
 		torrent.Magnet = utils.ConstructMagnet(torrent.InfoHash, torrent.Name)
 	}
-
-	oldID := torrent.Id
-	defer func() {
-		err := c.DeleteTorrent(oldID)
-		if err != nil {
-			c.logger.Error().Err(err).Str("torrentId", oldID).Msg("Failed to delete old torrent")
-		}
-	}()
 
 	// Submit the magnet to the debrid service
 	torrent.Id = ""
@@ -167,11 +152,20 @@ func (c *Cache) reInsertTorrent(ct *CachedTorrent) error {
 	if err != nil {
 		addedOn = time.Now()
 	}
+
+	// We can safely delete the old torrent here
+	if oldID != "" {
+		if err := c.DeleteTorrent(oldID); err != nil {
+			return fmt.Errorf("failed to delete old torrent: %w", err)
+		}
+	}
 	ct.Torrent = torrent
 	ct.IsComplete = len(torrent.Files) > 0
 	ct.AddedOn = addedOn
 	c.setTorrent(ct)
-	c.refreshListings()
+	c.RefreshListings(true)
+	c.logger.Debug().Str("torrentId", torrent.Id).Msg("Reinserted torrent")
+
 	return nil
 }
 

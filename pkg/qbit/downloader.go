@@ -149,6 +149,70 @@ func (q *QBit) ProcessSymlink(torrent *Torrent) (string, error) {
 	return q.createSymlinks(debridTorrent, torrentRclonePath, torrentFolder) // verify cos we're using external webdav
 }
 
+func (q *QBit) createSymlinksWebdav(debridTorrent *debrid.Torrent, rclonePath, torrentFolder string) (string, error) {
+	files := debridTorrent.Files
+	symlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
+	err := os.MkdirAll(symlinkPath, os.ModePerm)
+	if err != nil {
+		return "", fmt.Errorf("failed to create directory: %s: %v", symlinkPath, err)
+	}
+
+	remainingFiles := make(map[string]debrid.File)
+	for _, file := range files {
+		remainingFiles[file.Name] = file
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.After(30 * time.Minute)
+	filePaths := make([]string, 0, len(files))
+
+	for len(remainingFiles) > 0 {
+		select {
+		case <-ticker.C:
+			entries, err := os.ReadDir(rclonePath)
+			if err != nil {
+				continue
+			}
+
+			// Check which files exist in this batch
+			for _, entry := range entries {
+				if file, exists := remainingFiles[entry.Name()]; exists {
+					fullFilePath := filepath.Join(rclonePath, file.Name)
+					fileSymlinkPath := filepath.Join(symlinkPath, file.Name)
+
+					if err := os.Symlink(fullFilePath, fileSymlinkPath); err != nil {
+						q.logger.Debug().Msgf("Failed to create symlink: %s: %v", fileSymlinkPath, err)
+					} else {
+						q.logger.Info().Msgf("File is ready: %s", file.Name)
+						filePaths = append(filePaths, fileSymlinkPath)
+						delete(remainingFiles, file.Name)
+					}
+				}
+			}
+
+		case <-timeout:
+			q.logger.Warn().Msgf("Timeout waiting for files, %d files still pending", len(remainingFiles))
+			return symlinkPath, fmt.Errorf("timeout waiting for files")
+		}
+	}
+
+	if q.SkipPreCache {
+		return symlinkPath, nil
+	}
+
+	go func() {
+
+		if err := q.preCacheFile(debridTorrent.Name, filePaths); err != nil {
+			q.logger.Error().Msgf("Failed to pre-cache file: %s", err)
+		} else {
+			q.logger.Debug().Msgf("Pre-cached %d files", len(filePaths))
+		}
+	}() // Pre-cache the files in the background
+	// Pre-cache the first 256KB and 1MB of the file
+	return symlinkPath, nil
+}
+
 func (q *QBit) createSymlinks(debridTorrent *debrid.Torrent, rclonePath, torrentFolder string) (string, error) {
 	files := debridTorrent.Files
 	symlinkPath := filepath.Join(q.DownloadFolder, debridTorrent.Arr.Name, torrentFolder) // /mnt/symlinks/{category}/MyTVShow/
@@ -218,15 +282,6 @@ func (q *QBit) getTorrentPath(rclonePath string, debridTorrent *debrid.Torrent) 
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-}
-
-func (q *QBit) createSymLink(torrentFileMountPath, filePath string) string {
-	err := os.Symlink(torrentFileMountPath, filePath)
-	if err != nil {
-		// It's okay if the symlink already exists
-		q.logger.Debug().Msgf("Failed to create symlink: %s: %v", filePath, err)
-	}
-	return filePath
 }
 
 func (q *QBit) preCacheFile(name string, filePaths []string) error {

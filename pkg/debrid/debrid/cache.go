@@ -342,14 +342,13 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 						return // Channel closed, exit goroutine
 					}
 
-					if err := c.ProcessTorrent(t, false); err != nil {
+					if err := c.ProcessTorrent(t); err != nil {
 						c.logger.Error().Err(err).Str("torrent", t.Name).Msg("sync error")
 						atomic.AddInt64(&errorCount, 1)
 					}
 
 					count := atomic.AddInt64(&processed, 1)
 					if count%1000 == 0 {
-						c.refreshListings()
 						c.logger.Info().Msgf("Progress: %d/%d torrents processed", count, len(torrents))
 					}
 
@@ -376,7 +375,7 @@ func (c *Cache) sync(torrents []*types.Torrent) error {
 	// Wait for all workers to complete
 	wg.Wait()
 
-	c.refreshListings()
+	c.RefreshListings(true) // final refresh
 	c.logger.Info().Msgf("Sync complete: %d torrents processed, %d errors", len(torrents), errorCount)
 	return nil
 }
@@ -412,7 +411,7 @@ func (c *Cache) setTorrents(torrents map[string]*CachedTorrent) {
 		c.torrentsNames.Store(c.GetTorrentFolder(t.Torrent), t)
 	}
 
-	c.refreshListings()
+	c.RefreshListings(true)
 
 	c.SaveTorrents()
 }
@@ -532,7 +531,7 @@ func (c *Cache) saveTorrent(id string, data []byte) {
 	}
 }
 
-func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
+func (c *Cache) ProcessTorrent(t *types.Torrent) error {
 
 	isComplete := func(files map[string]types.File) bool {
 		_complete := len(files) > 0
@@ -571,10 +570,6 @@ func (c *Cache) ProcessTorrent(t *types.Torrent, refreshRclone bool) error {
 			AddedOn:    addedOn,
 		}
 		c.setTorrent(ct)
-	}
-
-	if refreshRclone {
-		c.refreshListings()
 	}
 	return nil
 }
@@ -685,7 +680,7 @@ func (c *Cache) AddTorrent(t *types.Torrent) error {
 		AddedOn:    addedOn,
 	}
 	c.setTorrent(ct)
-	c.refreshListings()
+	c.RefreshListings(true)
 	go c.GenerateDownloadLinks(ct)
 	return nil
 
@@ -755,7 +750,7 @@ func (c *Cache) DeleteTorrent(id string) error {
 		c.torrents.Delete(id)
 		c.torrentsNames.Delete(c.GetTorrentFolder(t.Torrent))
 		c.removeFromDB(id)
-		c.refreshListings()
+		c.RefreshListings(true)
 	}
 	return nil
 }
@@ -769,7 +764,7 @@ func (c *Cache) DeleteTorrents(ids []string) {
 			c.removeFromDB(id)
 		}
 	}
-	c.refreshListings()
+	c.RefreshListings(true)
 }
 
 func (c *Cache) removeFromDB(torrentId string) {

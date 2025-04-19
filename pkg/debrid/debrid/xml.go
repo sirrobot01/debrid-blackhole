@@ -32,30 +32,24 @@ func (c *Cache) resetPropfindResponse() error {
 	for _, k := range keys {
 		c.PropfindResp.Delete(k)
 	}
-
-	if err := c.RefreshRclone(); err != nil {
-		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
-	}
 	c.logger.Trace().Msgf("Reset XML cache for %s", c.client.GetName())
 	return nil
 }
 
-func (c *Cache) refreshXml() error {
+func (c *Cache) RefreshParentXml() error {
 	parents := []string{"__all__", "torrents"}
 	torrents := c.GetListing()
+	clientName := c.client.GetName()
 	for _, parent := range parents {
-		if err := c.refreshParentXml(torrents, parent); err != nil {
+		if err := c.refreshParentXml(torrents, clientName, parent); err != nil {
 			return fmt.Errorf("failed to refresh XML for %s: %v", parent, err)
 		}
-	}
-	if err := c.RefreshRclone(); err != nil {
-		c.logger.Trace().Err(err).Msg("Failed to refresh rclone") // silent error
 	}
 	c.logger.Trace().Msgf("Refreshed XML cache for %s", c.client.GetName())
 	return nil
 }
 
-func (c *Cache) refreshParentXml(torrents []os.FileInfo, parent string) error {
+func (c *Cache) refreshParentXml(torrents []os.FileInfo, clientName, parent string) error {
 	// Define the WebDAV namespace
 	davNS := "DAV:"
 
@@ -70,7 +64,7 @@ func (c *Cache) refreshParentXml(torrents []os.FileInfo, parent string) error {
 	currentTime := time.Now().UTC().Format(http.TimeFormat)
 
 	// Add the parent directory
-	baseUrl := path.Clean(fmt.Sprintf("/webdav/%s/%s", c.client.GetName(), parent))
+	baseUrl := path.Clean(fmt.Sprintf("/webdav/%s/%s", clientName, parent))
 	parentPath := fmt.Sprintf("%s/", baseUrl)
 	addDirectoryResponse(multistatus, parentPath, parent, currentTime)
 
@@ -79,7 +73,7 @@ func (c *Cache) refreshParentXml(torrents []os.FileInfo, parent string) error {
 		name := torrent.Name()
 		// Note the path structure change - parent first, then torrent name
 		torrentPath := fmt.Sprintf("/webdav/%s/%s/%s/",
-			c.client.GetName(),
+			clientName,
 			parent,
 			name,
 		)
