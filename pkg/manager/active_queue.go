@@ -85,7 +85,7 @@ func (m *Manager) rebuildQueuedTorrentJob(entry *storage.Entry) (*Job, error) {
 		}, nil
 	}
 
-	magnet, err := utils.GetMagnetInfo(entry.Magnet, m.config.AlwaysRmTrackerUrls)
+	magnet, err := utils.GetMagnetInfo(entry.Magnet, false)
 	if err != nil {
 		magnet = utils.ConstructMagnet(entry.InfoHash, entry.Name)
 	}
@@ -98,6 +98,7 @@ func (m *Manager) rebuildQueuedTorrentJob(entry *storage.Entry) (*Job, error) {
 		m.arr.GetOrCreate(entry.Category),
 		entry.Action,
 		&downloadUncached,
+		m.config.AlwaysRmTrackerUrls,
 		entry.CallbackURL,
 		ImportTypeAPI,
 		entry.SkipMultiSeason,

@@ -228,7 +228,7 @@ func (f *Fixer) MoveTorrent(entry *storage.Entry, debridName string, reinsert bo
 	}
 
 	// Construct magnet
-	magnet, err := utils.GetMagnetInfo(entry.Magnet, f.manager.config.AlwaysRmTrackerUrls)
+	magnet, err := utils.GetMagnetInfo(entry.Magnet, false)
 	if err != nil {
 		magnet = utils.ConstructMagnet(entry.InfoHash, entry.Name)
 	}
@@ -255,10 +255,17 @@ func (f *Fixer) MoveTorrent(entry *storage.Entry, debridName string, reinsert bo
 		DownloadUncached: false,
 	}
 
-	if config.Get().AlwaysRmTrackerUrls && newDebridTorrent.Magnet.IsTorrent() {
-		if sanitized, err := utils.GetTorrentInfo(newDebridTorrent.Magnet.File, true); err == nil {
-			newDebridTorrent.Magnet.File = sanitized.File
-			newDebridTorrent.Magnet.Link = sanitized.Link
+	if config.Get().AlwaysRmTrackerUrls {
+		if newDebridTorrent.Magnet.Link != "" {
+			if sanitized, err := utils.GetMagnetInfo(newDebridTorrent.Magnet.Link, true); err == nil {
+				newDebridTorrent.Magnet.Link = sanitized.Link
+			}
+		}
+		if newDebridTorrent.Magnet.IsTorrent() {
+			if sanitized, err := utils.GetTorrentInfo(newDebridTorrent.Magnet.File, true); err == nil {
+				newDebridTorrent.Magnet.File = sanitized.File
+				newDebridTorrent.Magnet.Link = sanitized.Link
+			}
 		}
 	}
 
