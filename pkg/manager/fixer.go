@@ -240,6 +240,11 @@ func (f *Fixer) MoveTorrent(entry *storage.Entry, debridName string, reinsert bo
 		return false, fmt.Errorf("failed to construct magnet for entry %s", entry.Name)
 	}
 
+	// Try to load .torrent file for better re-insertion success
+	if torrentData, err := storage.LoadTorrentFile(entry.InfoHash); err == nil {
+		magnet.File = torrentData
+	}
+
 	// Submit to debrid
 	newDebridTorrent := &types.Torrent{
 		Name:             entry.Name,
