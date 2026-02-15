@@ -205,7 +205,7 @@ func (ad *AllDebrid) doPostFile(endpoint string, fileData []byte, result any) (*
 }
 
 func (ad *AllDebrid) SubmitMagnet(torrent *types.Torrent) (*types.Torrent, error) {
-	if torrent.Magnet.IsTorrent() {
+	if ad.config.ShouldUseTorrentFile() && torrent.Magnet.IsTorrent() {
 		return ad.addTorrentFile(torrent)
 	}
 	return ad.addMagnetLink(torrent)
@@ -238,7 +238,6 @@ func (ad *AllDebrid) addTorrentFile(torrent *types.Torrent) (*types.Torrent, err
 
 func (ad *AllDebrid) addMagnetLink(torrent *types.Torrent) (*types.Torrent, error) {
 	var data UploadMagnetResponse
-
 	resp, err := ad.doRequest("/magnet/upload", map[string]string{"magnets[]": torrent.Magnet.Link}, &data)
 	if err != nil {
 		return nil, err
