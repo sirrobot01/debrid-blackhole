@@ -412,6 +412,12 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start manager worker: %w", err)
 	}
 
+	// Register Decypharr webhook in each configured ARR instance.
+	m.RegisterArrWebhooks()
+
+	// Sync arr files from ARR history for media imported before webhooks were active.
+	m.syncArrFiles()
+
 	// Close ready channel once, safe for multiple calls
 	m.readyOnce.Do(func() {
 		close(m.ready)
