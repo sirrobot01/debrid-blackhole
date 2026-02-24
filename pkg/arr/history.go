@@ -6,6 +6,7 @@ import (
 	gourl "net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/internal/logger"
@@ -77,13 +78,16 @@ type HistorySchema struct {
 	Records       []HistoryRecord `json:"records"`
 }
 
+// HistoryRecord is a single record from the ARR history APIs.
 type HistoryRecord struct {
-	ID         int    `json:"id"`
-	DownloadID string `json:"downloadId"`
-	EventType  string `json:"eventType"`
-	EpisodeID  int    `json:"episodeId,omitempty"`
-	SeriesID   int    `json:"seriesId,omitempty"`
-	MovieID    int    `json:"movieId,omitempty"`
+	ID         int               `json:"id"`
+	DownloadID string            `json:"downloadId"`
+	EventType  string            `json:"eventType"`
+	EpisodeID  int               `json:"episodeId,omitempty"`
+	SeriesID   int               `json:"seriesId,omitempty"`
+	MovieID    int               `json:"movieId,omitempty"`
+	Date       time.Time         `json:"date"`
+	Data       map[string]string `json:"data"`
 }
 
 type QueueResponseScheme struct {
@@ -347,4 +351,30 @@ func (a *Arr) ManualImportItems(items map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+// GetImportHistorySince returns all downloadFolderImported history records since the given date
+// by querying GET /api/v3/history/since. Passing a zero time fetches from epoch.
+// Used at startup to bootstrap arr_refs for media imported before webhooks were active,
+// or to catch up on events missed during downtime.
+func (a *Arr) GetImportHistorySince(since time.Time) []HistoryRecord {
+	var date string
+	if since.IsZero() {
+		date = "1970-01-01T00:00:00Z"
+	} else {
+		date = since.UTC().Format(time.RFC3339)
+	}
+	url := "api/v3/history/since?date=" + gourl.QueryEscape(date)
+	var records []HistoryRecord
+	resp, err := a.Request(http.MethodGet, url, nil, &records)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var result []HistoryRecord
+	for _, r := range records {
+		if r.EventType == "downloadFolderImported" && r.DownloadID != "" && r.Data["importedPath"] != "" {
+			result = append(result, r)
+		}
+	}
+	return result
 }
