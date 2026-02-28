@@ -179,6 +179,47 @@ The raw `queue_cleanup` config shape and the full list of catalog rule IDs are d
 [Configuration → Queue Cleanup](../configuration/#queue-cleanup).
 :::
 
+## Automatic Debrid Cleanup
+
+When you delete a movie, series, or episode file from Sonarr/Radarr, Decypharr can automatically remove the corresponding debrid entry.
+
+### Setup
+
+1. Ensure `host` and `token` are set for your Arr in the config
+2. Enable `allow_delete` for the Arr (via Web UI or config)
+3. Set `app_url` in the config so Sonarr/Radarr can reach Decypharr
+
+```json
+{
+  "app_url": "http://decypharr:8282",
+  "arrs": [
+    {
+      "name": "Sonarr",
+      "host": "http://sonarr:8989",
+      "token": "API_TOKEN",
+      "allow_delete": true
+    }
+  ]
+}
+```
+
+Decypharr automatically registers a webhook in Sonarr/Radarr at startup. No manual webhook configuration is needed.
+
+### How it works
+
+- **File delete** (single episode/movie file): the debrid entry is removed only if no other Arr files still reference it
+- **Movie/Series delete**: all tracked files under that folder are cleaned up, and orphaned debrid entries are removed
+- **Rename**: tracked paths are updated automatically
+- **Upgrade**: the old file's debrid entry is cleaned up, the new one is tracked
+
+:::caution
+`allow_delete` is disabled by default. When enabled, deleting media from Sonarr/Radarr will permanently remove the debrid entry from your provider.
+:::
+
+### Import history sync
+
+On first startup, Decypharr syncs the Arr import history to track files that were imported before webhooks were configured. On subsequent startups, only events missed during downtime are synced.
+
 ## Auto-Detection
 
 Decypharr can auto-detect Arrs that connect to it:
