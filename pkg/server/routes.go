@@ -86,6 +86,14 @@ func (s *Server) WebRoutes() http.Handler {
 				r.Get("/download/{torrent}/{file}", s.handleDownloadFile)
 			})
 
+			// Maintenance
+			r.Route("/maintenance/purge", func(r chi.Router) {
+				r.Get("/local", s.handlePurgeLocalPreview)
+				r.Delete("/local", s.handlePurgeLocalExecute)
+				r.Get("/provider/{name}", s.handlePurgeProviderPreview)
+				r.Delete("/provider/{name}", s.handlePurgeProviderExecute)
+			})
+
 			// Config/Auth
 			r.Get("/config", s.handleGetConfig)
 			r.Post("/config", s.handleUpdateConfig)

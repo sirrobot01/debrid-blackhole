@@ -128,8 +128,14 @@
                 <i class="bi bi-inbox"></i>
             </div>
             <h3 class="text-2xl font-bold mb-2">No Queues Found</h3>
+            {{ if .ManagedOnly }}
+            <p class="text-base-content/70 mb-6">
+                Managed-only mode is active. Torrents will appear here when added through your Arr apps.
+            </p>
+            {{ else }}
             <p class="text-base-content/70 mb-6">You haven't added any items yet. Start by adding your first
                 download!</p>
+            {{ end }}
             <a href="{{.URLBase}}download" class="btn btn-primary">
                 <i class="bi bi-plus-circle mr-2"></i>Add New Download
             </a>

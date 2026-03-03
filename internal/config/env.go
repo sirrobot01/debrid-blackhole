@@ -80,6 +80,9 @@ func (c *Config) applyEnvOverrides() {
 	if val := getEnv("SKIP_AUTO_MOVE"); val != "" {
 		c.SkipAutoMove = parseBool(val)
 	}
+	if val := getEnv("MANAGED_ONLY"); val != "" {
+		c.ManagedOnly = parseBool(val)
+	}
 	// Manager categories array
 	for i := range 100 { // Support up to 100 categories
 		key := fmt.Sprintf("CATEGORIES__%d", i)

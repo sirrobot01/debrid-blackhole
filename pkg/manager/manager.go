@@ -86,6 +86,10 @@ type Manager struct {
 	jobQueue  *JobQueue
 	nzbSyncMu sync.Mutex
 
+	// Auto reinsert tracking (prevents infinite loops when a provider keeps
+	// deleting an entry we immediately re-add). Only used in managed-only mode.
+	reinsertAttempts *xsync.Map[string, *reinsertAttempt]
+
 	// Notifications service
 	Notifications *notifications.Service
 }
@@ -154,6 +158,7 @@ func New() *Manager {
 		debridSpeedTestResults: xsync.NewMap[string, debridTypes.SpeedTestResult](),
 		activeStreams:          xsync.NewMap[string, *ActiveStream](),
 		processingEntries:      xsync.NewMap[string, struct{}](),
+		reinsertAttempts:       xsync.NewMap[string, *reinsertAttempt](),
 	}
 
 	instance.init()
@@ -623,6 +628,92 @@ func (m *Manager) DeleteEntry(infohash string, removePlacements bool) error {
 	// Refresh entry cache
 	m.RefreshEntries(true)
 	return nil
+}
+
+// GetUnmanagedEntries returns storage entries that have no category (not added through Arr apps).
+func (m *Manager) GetUnmanagedEntries() ([]*storage.Entry, error) {
+	queued := m.queue.ListFilter("", config.ProtocolAll, "", nil, "", false)
+	queuedHashes := make(map[string]bool, len(queued))
+	for _, e := range queued {
+		queuedHashes[e.InfoHash] = true
+	}
+
+	var entries []*storage.Entry
+	err := m.storage.ForEach(func(entry *storage.Entry) error {
+		if entry.Category == "" && !queuedHashes[entry.InfoHash] {
+			entries = append(entries, entry)
+		}
+		return nil
+	})
+	return entries, err
+}
+
+// PurgeUnmanagedEntries deletes storage entries that have no category.
+func (m *Manager) PurgeUnmanagedEntries() (int, error) {
+	entries, err := m.GetUnmanagedEntries()
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, entry := range entries {
+		if err := m.storage.Delete(entry.InfoHash); err != nil {
+			m.logger.Error().Err(err).Str("infohash", entry.InfoHash).Msg("Failed to purge unmanaged entry")
+			continue
+		}
+		deleted++
+	}
+	if deleted > 0 {
+		m.RefreshEntries(true)
+	}
+	return deleted, nil
+}
+
+// GetUnmanagedProviderTorrents returns torrents on the provider that are not tracked in storage or queue.
+func (m *Manager) GetUnmanagedProviderTorrents(provider string) ([]*debridTypes.Torrent, error) {
+	client := m.ProviderClient(provider)
+	if client == nil {
+		return nil, fmt.Errorf("provider not found: %s", provider)
+	}
+	remote, err := client.GetTorrents()
+	if err != nil {
+		return nil, err
+	}
+
+	queued := m.queue.ListFilter("", config.ProtocolAll, "", nil, "", false)
+	queuedHashes := make(map[string]bool, len(queued))
+	for _, e := range queued {
+		queuedHashes[e.InfoHash] = true
+	}
+
+	var unmanaged []*debridTypes.Torrent
+	for _, t := range remote {
+		exists, _ := m.storage.Exists(t.InfoHash)
+		if !exists && !queuedHashes[t.InfoHash] {
+			unmanaged = append(unmanaged, t)
+		}
+	}
+	return unmanaged, nil
+}
+
+// PurgeUnmanagedProviderTorrents deletes torrents from the provider that are not tracked in storage or queue.
+func (m *Manager) PurgeUnmanagedProviderTorrents(provider string) (int, error) {
+	client := m.ProviderClient(provider)
+	if client == nil {
+		return 0, fmt.Errorf("provider not found: %s", provider)
+	}
+	torrents, err := m.GetUnmanagedProviderTorrents(provider)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, t := range torrents {
+		if err := client.DeleteTorrent(t.Id); err != nil {
+			m.logger.Error().Err(err).Str("id", t.Id).Str("name", t.Name).Msg("Failed to purge torrent from provider")
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 func (m *Manager) DeleteTorrents(infohashes []string, removeFromDebrid bool) error {
