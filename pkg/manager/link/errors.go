@@ -143,12 +143,31 @@ func ErrorCodeToLinkError(code string) *Error {
 		return NewPermanentError(ErrUnauthorized, code)
 	case "404":
 		return NewPermanentError(Err404, code)
+	// Transient provider codes have to be Refetchable, not Retryable.
+	//
+	// On the link-validation path only ShouldDisableAccount() and
+	// ShouldRefetch() are consulted. A CategoryRetryable error is acted on by
+	// neither, so it falls through and the failure is memoised against the
+	// download URL. For providers whose download URL is deterministic the cache
+	// key never rotates, which makes a rate limit as permanent as a hard
+	// failure: the file stays unreadable for the rest of the process lifetime
+	// and only a restart clears it.
+	//
+	// Refetchable is the category that escapes the cache: it drops the stored
+	// entry and returns a fresh link without re-validating, so it cannot loop.
 	case "429":
-		return NewRetryableError(Err429, code)
+		return NewRefetchableError(Err429, code)
 	case "503":
-		return NewRetryableError(Err503, code)
+		return NewRefetchableError(Err503, code)
+	case "500", "502", "504":
+		return NewRefetchableError(fmt.Errorf("HTTP %s from provider", code), code)
 	default:
-		return NewPermanentError(fmt.Errorf("unknown error code: %s", code), code)
+		// An unrecognised code is not evidence of permanent failure. Treating it
+		// as permanent means one transient 400 poisons the file until restart,
+		// which is what users see as "playback works, then stops until I
+		// restart the container". Allow a refetch instead, which also clears any
+		// poisoned cache entry.
+		return NewRefetchableError(fmt.Errorf("unknown error code: %s", code), code)
 	}
 }
 
