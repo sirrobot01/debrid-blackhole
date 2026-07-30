@@ -101,6 +101,17 @@ func (e StreamError) Error() string {
 	return e.Err.Error()
 }
 
+// IsRetryable satisfies the selfRetryable interface that
+// customerror.IsRetriableError probes for, so the Retryable field above
+// actually reaches the retry loops in pkg/mount/dfs/vfs/downloaders.go
+// (DownloadWithRetry, downloadChunkWithRetry).
+//
+// Without this method nothing ever reads StreamError.Retryable: the field is
+// set in three places in this file but has no effect on any decision.
+func (e StreamError) IsRetryable() bool {
+	return e.Retryable
+}
+
 // StreamMetadata describes the headers/status for a streaming response before data flows.
 type StreamMetadata struct {
 	Header        http.Header
@@ -274,6 +285,26 @@ func (m *Manager) streamHTTP(ctx context.Context, torrent *storage.Entry, filena
 	}
 
 	resp.Body.Close()
+
+	// Transient upstream statuses must not abort the stream. Debrid providers
+	// emit 429 routinely under load, and 5xx sporadically; treating them as
+	// unrecoverable kills playback for the whole session, because ffmpeg sees
+	// an I/O error and the player keeps requesting segments that never arrive.
+	// Returning a retryable StreamError lets the existing retry loops back off
+	// and try again instead.
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return StreamError{
+			Err:       fmt.Errorf("transient HTTP status: %d", resp.StatusCode),
+			Retryable: true,
+			LinkError: false,
+		}
+	}
+
 	return retry.Unrecoverable(StreamError{
 		Err:       fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode),
 		Retryable: false,
