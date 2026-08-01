@@ -12,6 +12,7 @@ import (
 	"github.com/sirrobot01/decypharr/pkg/debrid/providers/premiumize"
 	"github.com/sirrobot01/decypharr/pkg/debrid/providers/realdebrid"
 	"github.com/sirrobot01/decypharr/pkg/debrid/providers/torbox"
+	"github.com/sirrobot01/decypharr/pkg/debrid/providers/torrin"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"github.com/sirrobot01/decypharr/pkg/storage"
 	"go.uber.org/ratelimit"
@@ -67,6 +68,8 @@ func (m *Manager) createClient(dc config.Debrid) (debrid.Client, error) {
 		client, err = debridlink.New(dc, rateLimits)
 	case "premiumize":
 		client, err = premiumize.New(dc, rateLimits)
+	case "torrin":
+		client, err = torrin.New(dc, rateLimits)
 	default:
 		return nil, ErrUnsupportedDebridProvider
 	}
