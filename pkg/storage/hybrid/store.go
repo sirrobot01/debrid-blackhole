@@ -131,6 +131,11 @@ func New(config Config) (*Store, error) {
 	logPath := config.DataPath
 	var err error
 
+	// Adopt an orphaned compaction file left by an interrupted swap. Without
+	// this, openAppendLog's O_CREATE silently produces an empty log and the
+	// data in the .compact file is lost for good.
+	recoverOrphanedCompaction(logPath)
+
 	s.log, err = openAppendLog(logPath)
 	if err != nil {
 		cancel()
@@ -583,23 +588,99 @@ func (s *Store) Compact() error {
 		return fmt.Errorf("failed to sync compaction log: %w", err)
 	}
 
-	// Swap logs
+	// Swap logs.
+	//
+	// Both files must be closed first. Go opens files without
+	// FILE_SHARE_DELETE on Windows, so a rename fails while either the source
+	// or the destination is still open - which made the previous
+	// remove-then-rename sequence delete the log and then reliably fail to put
+	// the compacted copy in its place.
+	//
+	// The old log is also never removed up front: os.Rename replaces an
+	// existing destination on POSIX and Windows alike, so removing it
+	// beforehand only creates a window where a failed rename loses everything.
 	oldLog := s.log
 	oldPath := oldLog.path
 
-	s.log = newLog
+	if err := newLog.Close(); err != nil {
+		_ = os.Remove(newLogPath)
+		return fmt.Errorf("failed to close compaction log: %w", err)
+	}
+	if err := oldLog.Close(); err != nil {
+		_ = os.Remove(newLogPath)
+		return fmt.Errorf("failed to close log before compaction swap: %w", err)
+	}
+
+	if err := renameWithRetry(newLogPath, oldPath); err != nil {
+		// The old log is untouched on disk - reopen it so the store keeps
+		// serving the pre-compaction state instead of pointing at nothing.
+		reopened, reopenErr := openAppendLog(oldPath)
+		if reopenErr != nil {
+			return fmt.Errorf("failed to swap compacted log into place (%w) and could not reopen the original log: %w", err, reopenErr)
+		}
+		s.log = reopened
+		return fmt.Errorf("failed to swap compacted log into place: %w", err)
+	}
+
+	swapped, err := openAppendLog(oldPath)
+	if err != nil {
+		return fmt.Errorf("failed to reopen compacted log: %w", err)
+	}
+
+	s.log = swapped
 	s.index = newIndex
 	s.cache.Clear()
-
-	// Close and remove old log
-	_ = oldLog.Close()
-	_ = os.Remove(oldPath)
-	_ = os.Rename(newLogPath, oldPath)
-	s.log.path = oldPath
 
 	s.stats.Compactions.Add(1)
 
 	return nil
+}
+
+// recoverOrphanedCompaction adopts a leftover ".compact" file when the log it
+// was meant to replace is missing or empty.
+//
+// Earlier versions removed the log before renaming the compacted copy over it,
+// so an interrupted swap left only the ".compact" file behind. openAppendLog
+// creates the missing log with O_CREATE, so without this the store starts up
+// empty and the surviving data is discarded on the next write. Adopting the
+// ".compact" file is safe: it is written and synced in full before the swap is
+// attempted, and Compact() holds an exclusive lock, so it is never a partial
+// snapshot of a concurrent compaction.
+func recoverOrphanedCompaction(logPath string) {
+	compactPath := logPath + ".compact"
+
+	compactInfo, err := os.Stat(compactPath)
+	if err != nil || compactInfo.Size() <= logHeaderSize {
+		return // nothing usable to recover
+	}
+
+	// Only step in when the real log cannot be the newer copy.
+	if info, err := os.Stat(logPath); err == nil && info.Size() > logHeaderSize {
+		return
+	}
+
+	_ = renameWithRetry(compactPath, logPath)
+}
+
+// renameWithRetry renames oldPath to newPath, retrying briefly on failure.
+//
+// On Windows a rename fails while any other process holds the destination
+// open - antivirus, search indexers and backup agents all do this transiently.
+// The Go toolchain retries renames in the module cache for the same reason
+// (golang/go#37802). A few short retries turn a hard failure into a pause.
+func renameWithRetry(oldPath, newPath string) error {
+	const attempts = 5
+
+	var err error
+	for i := range attempts {
+		if err = os.Rename(oldPath, newPath); err == nil {
+			return nil
+		}
+		if i < attempts-1 {
+			time.Sleep(time.Duration(50<<i) * time.Millisecond)
+		}
+	}
+	return err
 }
 
 func (s *Store) GetStats() StatsMeta {
