@@ -38,6 +38,29 @@ func checkMagnet(t *testing.T, magnet *Magnet, expectedInfoHash, expectedName, e
 	}
 }
 
+// applyTrackerPolicy mirrors what the manager does at debrid submission time.
+// Parsing helpers no longer strip trackers themselves — the policy is applied
+// once, just before the magnet is handed to a provider.
+func applyTrackerPolicy(t *testing.T, magnet *Magnet, rmTrackerUrls bool) *Magnet {
+	t.Helper()
+
+	if !rmTrackerUrls {
+		return magnet
+	}
+	if magnet.IsTorrent() {
+		stripped, err := GetTorrentInfo(magnet.File, true)
+		if err != nil {
+			t.Fatalf("GetTorrentInfo failed: %v", err)
+		}
+		return stripped
+	}
+	stripped, err := GetMagnetInfo(magnet.Link, true)
+	if err != nil {
+		t.Fatalf("GetMagnetInfo failed: %v", err)
+	}
+	return stripped
+}
+
 // testMagnetFromFile is a helper function for tests that use GetMagnetFromFile with file operations
 func testMagnetFromFile(t *testing.T, filePath string, rmTrackerUrls bool, expectedInfoHash, expectedName, expectedLink string, expectedTrackerCount int) {
 	t.Helper()
@@ -48,10 +71,11 @@ func testMagnetFromFile(t *testing.T, filePath string, rmTrackerUrls bool, expec
 	}
 	defer file.Close()
 
-	magnet, err := GetMagnetFromFile(file, filepath.Base(filePath), rmTrackerUrls)
+	magnet, err := GetMagnetFromFile(file, filepath.Base(filePath))
 	if err != nil {
 		t.Fatalf("GetMagnetFromFile failed: %v", err)
 	}
+	magnet = applyTrackerPolicy(t, magnet, rmTrackerUrls)
 
 	checkMagnet(t, magnet, expectedInfoHash, expectedName, expectedLink, expectedTrackerCount, true)
 
@@ -115,10 +139,11 @@ func TestGetMagnetFromUrl_MagnetLink_StripTrue(t *testing.T) {
 		t.Fatalf("Failed to load magnet URL from test file: %v", err)
 	}
 
-	magnet, err := GetMagnetFromUrl(magnetUrl, true)
+	magnet, err := GetMagnetFromUrl(magnetUrl)
 	if err != nil {
 		t.Fatalf("GetMagnetFromUrl failed: %v", err)
 	}
+	magnet = applyTrackerPolicy(t, magnet, true)
 
 	checkMagnet(t, magnet, expectedInfoHash, expectedName, expectedLink, expectedTrackerCount, false)
 	t.Logf("Generated clean magnet link: %s", magnet.Link)
@@ -136,7 +161,7 @@ func TestGetMagnetFromUrl_MagnetLink_StripFalse(t *testing.T) {
 		t.Fatalf("Failed to load magnet URL from test file: %v", err)
 	}
 
-	magnet, err := GetMagnetFromUrl(magnetUrl, false)
+	magnet, err := GetMagnetFromUrl(magnetUrl)
 	if err != nil {
 		t.Fatalf("GetMagnetFromUrl failed: %v", err)
 	}
@@ -163,10 +188,11 @@ func testMagnetFromHttpTorrent(t *testing.T, torrentPath string, rmTrackerUrls b
 	defer server.Close()
 
 	// Test the function with the mock server URL
-	magnet, err := GetMagnetFromUrl(server.URL, rmTrackerUrls)
+	magnet, err := GetMagnetFromUrl(server.URL)
 	if err != nil {
 		t.Fatalf("GetMagnetFromUrl failed: %v", err)
 	}
+	magnet = applyTrackerPolicy(t, magnet, rmTrackerUrls)
 
 	checkMagnet(t, magnet, expectedInfoHash, expectedName, expectedLink, expectedTrackerCount, true)
 
