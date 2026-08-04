@@ -1725,13 +1725,18 @@ fe80::/10</textarea>
                                         <i class="bi bi-database-x mr-2"></i>Local Cleanup
                                     </h3>
                                     <p class="text-sm text-base-content/70 mb-4">
-                                        Remove entries not added through your apps (Sonarr, Radarr, etc.) from Decypharr's database.
+                                        Remove entries that carry no category &mdash; those never added through an
+                                        <em>arr</em> (Sonarr, Radarr, etc.). This does <strong>not</strong> mean
+                                        &ldquo;no longer used&rdquo;: an entry imported by an <em>arr</em> keeps its
+                                        category even after the media is gone, and is never listed here.
                                     </p>
                                     <div id="purgeLocalResult" class="hidden mb-4">
                                         <div class="alert alert-info">
                                             <i class="bi bi-info-circle"></i>
-                                            <span>Found <strong id="purgeLocalCount">0</strong> unmanaged entries.</span>
+                                            <span>Found <strong id="purgeLocalCount">0</strong> entries with no category.</span>
                                         </div>
+                                        <div id="purgeLocalList"
+                                             class="mt-3 max-h-64 overflow-y-auto rounded-box border border-base-300 divide-y divide-base-300"></div>
                                     </div>
                                     <div class="flex gap-2">
                                         <button type="button" class="btn btn-outline btn-sm" id="purgeLocalScanBtn">
@@ -1750,7 +1755,8 @@ fe80::/10</textarea>
                                         <i class="bi bi-cloud-slash mr-2"></i>Provider Cleanup
                                     </h3>
                                     <p class="text-sm text-base-content/70 mb-4">
-                                        Remove torrents from your debrid provider that are not managed by Decypharr.
+                                        Remove torrents the provider holds but Decypharr has no entry for.
+                                        Anything Decypharr knows about is left alone.
                                     </p>
                                     <div class="mb-4">
                                         <select class="select select-sm w-full" id="purgeProviderSelect">
@@ -1760,8 +1766,10 @@ fe80::/10</textarea>
                                     <div id="purgeProviderResult" class="hidden mb-4">
                                         <div class="alert alert-info">
                                             <i class="bi bi-info-circle"></i>
-                                            <span>Found <strong id="purgeProviderCount">0</strong> unmanaged torrents on provider.</span>
+                                            <span>Found <strong id="purgeProviderCount">0</strong> torrents unknown to Decypharr.</span>
                                         </div>
+                                        <div id="purgeProviderList"
+                                             class="mt-3 max-h-64 overflow-y-auto rounded-box border border-base-300 divide-y divide-base-300"></div>
                                     </div>
                                     <div class="flex gap-2">
                                         <button type="button" class="btn btn-outline btn-sm" id="purgeProviderScanBtn">
