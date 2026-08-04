@@ -38,12 +38,7 @@ func (m *Manager) AddNewTorrent(ctx context.Context, importReq *ImportRequest) e
 	torrent.DownloadUncached = debridTorrent.DownloadUncached
 	applyDebridTorrentToEntry(torrent, debridTorrent)
 
-	// Save .torrent file to disk if available (for re-insertion by the Fixer)
-	if importReq.Magnet.IsTorrent() {
-		if err := storage.SaveTorrentFile(importReq.Magnet.InfoHash, importReq.Magnet.File); err != nil {
-			m.logger.Warn().Err(err).Str("name", torrent.Name).Msg("Failed to save .torrent file")
-		}
-	}
+	m.persistTorrentFile(importReq, torrent)
 
 	if err := m.queue.Add(torrent); err != nil {
 		return fmt.Errorf("failed to add torrent to queue: %w", err)
@@ -97,8 +92,23 @@ func (m *Manager) processTorrentJob(ctx context.Context, job *Job) error {
 	return nil
 }
 
+// persistTorrentFile stores the .torrent bytes so the Fixer can reuse them for
+// re-insertion. Called on every path that queues an entry — a torrent deferred
+// because the provider is saturated needs the file just as much as one
+// submitted straight away. Storage.Delete removes it with the entry, so this
+// must run only once the entry is about to be queued.
+func (m *Manager) persistTorrentFile(importReq *ImportRequest, torrent *storage.Entry) {
+	if !importReq.Magnet.IsTorrent() {
+		return
+	}
+	if err := storage.SaveTorrentFile(importReq.Magnet.InfoHash, importReq.Magnet.File); err != nil {
+		m.logger.Warn().Err(err).Str("name", torrent.Name).Msg("Failed to save .torrent file")
+	}
+}
+
 func (m *Manager) queueTorrentRetry(importReq *ImportRequest) error {
 	torrent := newTorrentQueueEntry(importReq, debridTypes.TorrentStatusQueued)
+	m.persistTorrentFile(importReq, torrent)
 	if err := m.queue.Add(torrent); err != nil {
 		return fmt.Errorf("failed to add torrent to queue: %w", err)
 	}
