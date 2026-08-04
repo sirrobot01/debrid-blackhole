@@ -26,6 +26,12 @@ import (
 	"go.uber.org/ratelimit"
 )
 
+// maxTorrentLimit is AllDebrid's own hard cap on simultaneously active
+// torrents, observed directly against their API rather than documented
+// anywhere. A configured `limit` above it is clamped down to it — it caps
+// what the user can request, it doesn't raise what AllDebrid allows.
+const maxTorrentLimit = 5000
+
 type AllDebrid struct {
 	Host                  string `json:"host"`
 	APIKey                string
@@ -205,6 +211,12 @@ func (ad *AllDebrid) doPostFile(endpoint string, fileData []byte, result any) (*
 }
 
 func (ad *AllDebrid) SubmitMagnet(torrent *types.Torrent) (*types.Torrent, error) {
+	if ad.config.SlotStrategy == "remove_oldest" {
+		if err := ad.enforceSlotLimit(); err != nil {
+			ad.logger.Warn().Err(err).Msg("Failed to enforce slot limit, continuing with upload")
+		}
+	}
+
 	if torrent.Magnet.IsTorrent() {
 		return ad.addTorrentFile(torrent)
 	}
@@ -582,9 +594,62 @@ func (ad *AllDebrid) CheckFile(ctx context.Context, _, link string) error {
 	return nil
 }
 
+// torrentLimit returns the effective cap on active torrents: the configured
+// `limit`, clamped to AllDebrid's own maxTorrentLimit. Unset (<= 0) or above
+// the cap both resolve to the cap itself.
+func (ad *AllDebrid) torrentLimit() int {
+	if ad.config.Limit <= 0 || ad.config.Limit > maxTorrentLimit {
+		return maxTorrentLimit
+	}
+	return ad.config.Limit
+}
+
 func (ad *AllDebrid) GetAvailableSlots() (int, error) {
-	// AllDebrid does not provide available slots info
-	return config.DefaultAvailableSlots, nil
+	count, err := ad.countMagnets()
+	if err != nil {
+		return 0, err
+	}
+	available := ad.torrentLimit() - count - ad.config.MinimumFreeSlot
+	if available < 0 {
+		available = 0
+	}
+	return available, nil
+}
+
+func (ad *AllDebrid) countMagnets() (int, error) {
+	var res TorrentsListResponse
+	resp, err := ad.doRequest("/magnet/status", nil, &res)
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return 0, fmt.Errorf("alldebrid API error: Status: %d", resp.StatusCode)
+	}
+	return len(res.Data.Magnets), nil
+}
+
+func (ad *AllDebrid) enforceSlotLimit() error {
+	var res TorrentsListResponse
+	resp, err := ad.doRequest("/magnet/status", nil, &res)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("alldebrid API error: Status: %d", resp.StatusCode)
+	}
+	magnets := res.Data.Magnets
+	if len(magnets) == 0 || len(magnets) < ad.torrentLimit() {
+		return nil
+	}
+	// Find the oldest magnet by UploadDate
+	oldest := magnets[0]
+	for _, m := range magnets[1:] {
+		if m.UploadDate < oldest.UploadDate {
+			oldest = m
+		}
+	}
+	ad.logger.Info().Str("magnet", oldest.Filename).Int("id", oldest.Id).Msg("Removing oldest magnet to free slot")
+	return ad.DeleteTorrent(strconv.Itoa(oldest.Id))
 }
 
 func (ad *AllDebrid) GetProfile() (*types.Profile, error) {
