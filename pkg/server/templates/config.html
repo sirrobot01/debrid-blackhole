@@ -1728,7 +1728,9 @@ fe80::/10</textarea>
                                         Remove entries that carry no category &mdash; those never added through an
                                         <em>arr</em> (Sonarr, Radarr, etc.). This does <strong>not</strong> mean
                                         &ldquo;no longer used&rdquo;: an entry imported by an <em>arr</em> keeps its
-                                        category even after the media is gone, and is never listed here.
+                                        category even after the media is gone, and is never listed here. Only
+                                        removes from Decypharr's own database — the torrent stays on your debrid
+                                        provider.
                                     </p>
                                     <div id="purgeLocalResult" class="hidden mb-4">
                                         <div class="alert alert-info">
@@ -1756,7 +1758,8 @@ fe80::/10</textarea>
                                     </h3>
                                     <p class="text-sm text-base-content/70 mb-4">
                                         Remove torrents the provider holds but Decypharr has no entry for.
-                                        Anything Decypharr knows about is left alone.
+                                        Anything Decypharr knows about is left alone. This deletes from the
+                                        provider itself and cannot be undone.
                                     </p>
                                     <div class="mb-4">
                                         <select class="select select-sm w-full" id="purgeProviderSelect">
