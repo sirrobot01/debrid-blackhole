@@ -146,6 +146,9 @@ class ConfigManager {
 
         // Load repair config
         this.populateRepairSettings(config.repair, config.arrs);
+
+        // Fill the Maintenance tab's provider dropdown
+        this.populateProviderSelect(config.debrids);
     }
 
     populateRepairSettings(repair, arrs) {

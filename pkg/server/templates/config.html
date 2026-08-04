@@ -53,6 +53,12 @@
                             <i class="bi bi-heart-pulse text-lg"></i>
                             <span class="hidden sm:inline">Repair</span>
                         </button>
+                        <button type="button"
+                                class="tab-button flex items-center gap-2 py-3 px-1 border-b-2 border-transparent text-base-content/70 hover:text-base-content hover:border-base-300 font-medium text-sm transition-colors"
+                                data-tab="maintenance">
+                            <i class="bi bi-tools text-lg"></i>
+                            <span class="hidden sm:inline">Maintenance</span>
+                        </button>
                     </nav>
                 </div>
 
@@ -1705,6 +1711,72 @@ fe80::/10</textarea>
                 </div>
 
                 </div>
+
+                <div class="tab-content hidden" data-tab-content="maintenance">
+                    <div class="space-y-6">
+                        <h2 class="text-2xl font-bold flex items-center mb-6">
+                            <i class="bi bi-tools mr-3 text-warning"></i>Maintenance
+                        </h2>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="card bg-base-200">
+                                <div class="card-body">
+                                    <h3 class="card-title text-lg">
+                                        <i class="bi bi-database-x mr-2"></i>Local Cleanup
+                                    </h3>
+                                    <p class="text-sm text-base-content/70 mb-4">
+                                        Remove entries not added through your apps (Sonarr, Radarr, etc.) from Decypharr's database.
+                                    </p>
+                                    <div id="purgeLocalResult" class="hidden mb-4">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i>
+                                            <span>Found <strong id="purgeLocalCount">0</strong> unmanaged entries.</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button type="button" class="btn btn-outline btn-sm" id="purgeLocalScanBtn">
+                                            <i class="bi bi-search mr-1"></i>Scan
+                                        </button>
+                                        <button type="button" class="btn btn-error btn-sm hidden" id="purgeLocalBtn">
+                                            <i class="bi bi-trash mr-1"></i>Purge
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card bg-base-200">
+                                <div class="card-body">
+                                    <h3 class="card-title text-lg">
+                                        <i class="bi bi-cloud-slash mr-2"></i>Provider Cleanup
+                                    </h3>
+                                    <p class="text-sm text-base-content/70 mb-4">
+                                        Remove torrents from your debrid provider that are not managed by Decypharr.
+                                    </p>
+                                    <div class="mb-4">
+                                        <select class="select select-sm w-full" id="purgeProviderSelect">
+                                            <option value="">Select a provider...</option>
+                                        </select>
+                                    </div>
+                                    <div id="purgeProviderResult" class="hidden mb-4">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i>
+                                            <span>Found <strong id="purgeProviderCount">0</strong> unmanaged torrents on provider.</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button type="button" class="btn btn-outline btn-sm" id="purgeProviderScanBtn">
+                                            <i class="bi bi-search mr-1"></i>Scan
+                                        </button>
+                                        <button type="button" class="btn btn-error btn-sm hidden" id="purgeProviderBtn">
+                                            <i class="bi bi-trash mr-1"></i>Purge
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </form>
