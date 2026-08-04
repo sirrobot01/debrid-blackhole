@@ -164,8 +164,13 @@ func NewSegmentCache(
 	// before any read/write can trigger a pool-driven punch.
 	var sc *SegmentCache
 
+	memSize := int64(bufferMemorySize)
+	if config.BufferMemorySize > 0 {
+		memSize = config.BufferMemorySize
+	}
+
 	buf, err := usenetBufferPool().NewBuffer(buffer.Config{
-		MemorySize: bufferMemorySize,
+		MemorySize: memSize,
 		DiskPath:   filepath.Join(diskPath, "segments.bin"),
 		TotalSize:  totalSize,
 		// Only fires if the usenet pool is given a disk limit (off by default —

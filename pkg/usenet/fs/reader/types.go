@@ -102,6 +102,11 @@ type Config struct {
 	// MaxDisk is the maximum disk space to use for segment caching (default: 256MB).
 	MaxDisk int64
 
+	// BufferMemorySize is the per-stream RAM ceiling for the buffer's hot
+	// working set. Larger values keep more segments in RAM, reducing disk
+	// round-trips and re-downloads during high-bitrate streaming (default: 32MB).
+	BufferMemorySize int64
+
 	// DiskPath is the base directory for disk cache (default: system temp dir).
 	DiskPath string
 
@@ -124,12 +129,13 @@ type Config struct {
 // DefaultConfig returns a ReaderConfig with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		MaxDisk:         256 * 1024 * 1024, // 256MB
-		MaxConnections:  8,
-		PrefetchAhead:   8,
-		DownloadTimeout: 60 * time.Second,
-		MaxRetries:      3,
-		RetryDelay:      time.Second,
+		MaxDisk:          256 * 1024 * 1024, // 256MB
+		BufferMemorySize: 32 << 20,          // 32MB
+		MaxConnections:   8,
+		PrefetchAhead:    8,
+		DownloadTimeout:  60 * time.Second,
+		MaxRetries:       3,
+		RetryDelay:       time.Second,
 	}
 }
 
@@ -173,6 +179,13 @@ func WithMaxDisk(bytes int64) Option {
 func WithDiskPath(path string) Option {
 	return func(c *Config) {
 		c.DiskPath = path
+	}
+}
+
+// WithBufferMemorySize sets the per-stream RAM ceiling for the buffer.
+func WithBufferMemorySize(bytes int64) Option {
+	return func(c *Config) {
+		c.BufferMemorySize = bytes
 	}
 }
 

@@ -170,6 +170,8 @@ func (vf *File) getOrCreateStreamingReader() *reader.StreamingReader {
 		readerConfig.MaxConnections = vf.maxConcurrent
 		readerConfig.PrefetchAhead = reader.PrefetchAheadSegments(vf.prefetchSize, segments)
 		readerConfig.DiskPath = cfg.Usenet.DiskBufferPath
+		readerConfig.MaxDisk = cfg.Usenet.StreamMaxDiskBytes()
+		readerConfig.BufferMemorySize = cfg.Usenet.StreamBufferSizeBytes()
 
 		var r *reader.StreamingReader
 		var err error
@@ -181,6 +183,7 @@ func (vf *File) getOrCreateStreamingReader() *reader.StreamingReader {
 				segments,
 				encConfig,
 				reader.WithMaxDisk(readerConfig.MaxDisk),
+				reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 				reader.WithMaxConnections(readerConfig.MaxConnections),
 				reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 				reader.WithDiskPath(readerConfig.DiskPath),
@@ -191,6 +194,7 @@ func (vf *File) getOrCreateStreamingReader() *reader.StreamingReader {
 				vf.manager,
 				segments,
 				reader.WithMaxDisk(readerConfig.MaxDisk),
+				reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 				reader.WithMaxConnections(readerConfig.MaxConnections),
 				reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 				reader.WithDiskPath(readerConfig.DiskPath),
@@ -268,6 +272,8 @@ func (vf *File) newReaderForRange(start, end int64) (io.ReadCloser, error) {
 	readerConfig.MaxConnections = vf.maxConcurrent
 	readerConfig.PrefetchAhead = reader.PrefetchAheadSegments(vf.prefetchSize, segments)
 	readerConfig.DiskPath = cfg.Usenet.DiskBufferPath
+	readerConfig.MaxDisk = cfg.Usenet.StreamMaxDiskBytes()
+	readerConfig.BufferMemorySize = cfg.Usenet.StreamBufferSizeBytes()
 
 	var r *reader.StreamingReader
 	var err error
@@ -279,6 +285,7 @@ func (vf *File) newReaderForRange(start, end int64) (io.ReadCloser, error) {
 			segments,
 			encConfig,
 			reader.WithMaxDisk(readerConfig.MaxDisk),
+			reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 			reader.WithMaxConnections(readerConfig.MaxConnections),
 			reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 			reader.WithDiskPath(readerConfig.DiskPath),
@@ -289,6 +296,7 @@ func (vf *File) newReaderForRange(start, end int64) (io.ReadCloser, error) {
 			vf.manager,
 			segments,
 			reader.WithMaxDisk(readerConfig.MaxDisk),
+			reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 			reader.WithMaxConnections(readerConfig.MaxConnections),
 			reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 			reader.WithDiskPath(readerConfig.DiskPath),

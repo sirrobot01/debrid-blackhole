@@ -205,6 +205,8 @@ func (f *FS) createNewReaderForVolume(vol *types.Volume) (PrefetchableReaderAt, 
 	readerConfig.MaxConnections = f.maxConcurrent
 	readerConfig.PrefetchAhead = reader.PrefetchAheadSegments(f.prefetchSize, segments)
 	readerConfig.DiskPath = cfg.Usenet.DiskBufferPath
+	readerConfig.MaxDisk = cfg.Usenet.StreamMaxDiskBytes()
+	readerConfig.BufferMemorySize = cfg.Usenet.StreamBufferSizeBytes()
 
 	// Create the new streaming reader
 	var streamReader *reader.StreamingReader
@@ -217,6 +219,7 @@ func (f *FS) createNewReaderForVolume(vol *types.Volume) (PrefetchableReaderAt, 
 			segments,
 			encConfig,
 			reader.WithMaxDisk(readerConfig.MaxDisk),
+			reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 			reader.WithMaxConnections(readerConfig.MaxConnections),
 			reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 			reader.WithDiskPath(readerConfig.DiskPath),
@@ -227,6 +230,7 @@ func (f *FS) createNewReaderForVolume(vol *types.Volume) (PrefetchableReaderAt, 
 			f.client,
 			segments,
 			reader.WithMaxDisk(readerConfig.MaxDisk),
+			reader.WithBufferMemorySize(readerConfig.BufferMemorySize),
 			reader.WithMaxConnections(readerConfig.MaxConnections),
 			reader.WithPrefetchAhead(readerConfig.PrefetchAhead),
 			reader.WithDiskPath(readerConfig.DiskPath),

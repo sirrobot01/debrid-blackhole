@@ -56,6 +56,17 @@ type Usenet struct {
 	// smooth playback; this bounds the aggregate so many concurrent streams
 	// can't OOM. Empty = default (512MB); "0" disables the cap.
 	BufferMemory string `json:"buffer_memory,omitempty"`
+
+	// StreamBufferSize is the per-stream RAM ceiling for the underlying buffer.
+	// Each stream's hot working set (forward prefetch + recent reads) is capped
+	// at this size. Larger values keep more segments in RAM, reducing disk I/O
+	// and re-downloads during 4K streaming. e.g. "128MB" (default: 32MB).
+	StreamBufferSize string `json:"stream_buffer_size,omitempty"`
+
+	// StreamMaxDisk is the per-stream disk cache ceiling. When a stream's RAM
+	// buffer is full, segments spill to disk up to this limit. Larger values
+	// reduce re-downloads for large files (4K REMUXes). e.g. "2GB" (default: 256MB).
+	StreamMaxDisk string `json:"stream_max_disk,omitempty"`
 }
 
 // BufferMemoryBytes resolves the usenet streaming-buffer RAM cap. Empty ->
@@ -67,6 +78,32 @@ func (u Usenet) BufferMemoryBytes() int64 {
 	n, err := ParseSize(u.BufferMemory)
 	if err != nil {
 		return 512 << 20
+	}
+	return n
+}
+
+// StreamBufferSizeBytes resolves the per-stream RAM buffer ceiling.
+// Empty -> 32MB default (matches the previous hardcoded constant).
+func (u Usenet) StreamBufferSizeBytes() int64 {
+	if u.StreamBufferSize == "" {
+		return 32 << 20
+	}
+	n, err := ParseSize(u.StreamBufferSize)
+	if err != nil {
+		return 32 << 20
+	}
+	return n
+}
+
+// StreamMaxDiskBytes resolves the per-stream disk cache ceiling.
+// Empty -> 256MB default (matches the previous hardcoded constant).
+func (u Usenet) StreamMaxDiskBytes() int64 {
+	if u.StreamMaxDisk == "" {
+		return 256 * 1024 * 1024
+	}
+	n, err := ParseSize(u.StreamMaxDisk)
+	if err != nil {
+		return 256 * 1024 * 1024
 	}
 	return n
 }
@@ -201,6 +238,13 @@ func (c *Config) applyUsenetEnvVars() {
 		if v, err := strconv.Atoi(availabilitySample); err == nil {
 			c.Usenet.ImportAvailabilitySamplePercent = v
 		}
+	}
+
+	if v := getEnv("USENET__STREAM_BUFFER_SIZE"); v != "" {
+		c.Usenet.StreamBufferSize = v
+	}
+	if v := getEnv("USENET__STREAM_MAX_DISK"); v != "" {
+		c.Usenet.StreamMaxDisk = v
 	}
 
 	// Usenet providers array
