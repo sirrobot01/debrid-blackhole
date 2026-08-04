@@ -216,6 +216,11 @@ Decypharr automatically registers a webhook in Sonarr/Radarr at startup. No manu
 `allow_delete` is disabled by default. When enabled, deleting media from Sonarr/Radarr will permanently remove the debrid entry from your provider.
 :::
 
+With `allow_delete` off, deleting media in Sonarr/Radarr does **not** leave
+the entry untouched: its tracked-file reference is dropped either way —
+`DeleteArrFile` runs regardless of `allow_delete` — only the automatic
+removal from the debrid provider is skipped.
+
 ### Import history sync
 
 On first startup, Decypharr syncs the Arr import history to track files that were imported before webhooks were configured. On subsequent startups, only events missed during downtime are synced.
