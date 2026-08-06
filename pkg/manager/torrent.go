@@ -235,10 +235,28 @@ func (m *Manager) handleTorrentDeletions(torrentsToDelete []string) {
 	deleteWg.Wait()
 }
 
-// reinsertAttempt tracks auto reinsert attempts to prevent infinite loops
+// reinsertAttempt tracks auto reinsert attempts to prevent infinite loops.
+// A single infohash can be reinserted concurrently from multiple providers
+// (e.g. the same torrent configured on two debrids), so count/lastTried need
+// their own lock beyond what the xsync.Map gives the pointer itself.
 type reinsertAttempt struct {
+	mu        sync.Mutex
 	count     int
 	lastTried time.Time
+}
+
+func (a *reinsertAttempt) snapshot() (count int, lastTried time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.count, a.lastTried
+}
+
+func (a *reinsertAttempt) recordAttempt() (count int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.count++
+	a.lastTried = time.Now()
+	return a.count
 }
 
 const (
@@ -273,16 +291,17 @@ func (m *Manager) reinsertDeletedTorrents(provider string, torrentsToDelete []st
 
 	for _, infohash := range torrentsToDelete {
 		if attempt, ok := m.reinsertAttempts.Load(infohash); ok {
-			if attempt.count >= maxReinsertRetries {
+			count, lastTried := attempt.snapshot()
+			if count >= maxReinsertRetries {
 				m.logger.Warn().
 					Str("infohash", infohash).
-					Int("attempts", attempt.count).
+					Int("attempts", count).
 					Msg("Auto reinsert max retries exceeded, allowing deletion")
 				m.reinsertAttempts.Delete(infohash)
 				toDelete = append(toDelete, infohash)
 				continue
 			}
-			if time.Since(attempt.lastTried) < reinsertCooldown {
+			if time.Since(lastTried) < reinsertCooldown {
 				continue
 			}
 		}
@@ -302,8 +321,7 @@ func (m *Manager) reinsertDeletedTorrents(provider string, torrentsToDelete []st
 		success, err := m.fixer.MoveTorrent(entry, provider, true)
 
 		attempt, _ := m.reinsertAttempts.LoadOrStore(infohash, &reinsertAttempt{})
-		attempt.count++
-		attempt.lastTried = time.Now()
+		attemptCount := attempt.recordAttempt()
 
 		if success {
 			m.logger.Info().
@@ -317,7 +335,7 @@ func (m *Manager) reinsertDeletedTorrents(provider string, torrentsToDelete []st
 				Err(err).
 				Str("provider", provider).
 				Str("name", entry.Name).
-				Int("attempt", attempt.count).
+				Int("attempt", attemptCount).
 				Msg("Failed to auto reinsert torrent")
 		}
 	}
