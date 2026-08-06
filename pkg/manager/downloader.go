@@ -672,8 +672,6 @@ func (d *Downloader) detectMultiSeason(torrent *storage.Entry) (bool, []SeasonIn
 		return false, nil
 	}
 
-	d.logger.Info().Msgf("Multi-season torrent detected with seasons: %v", getSortedSeasons(seasonsFound))
-
 	// Group files by season
 	seasonGroups := groupFilesBySeason(files, seasonsFound)
 
@@ -694,6 +692,13 @@ func (d *Downloader) detectMultiSeason(torrent *storage.Entry) (bool, []SeasonIn
 			Name:         seasonName,
 		})
 	}
+
+	// Only convert to multi-season if multiple season entries were actually created
+	if len(seasons) <= 1 {
+		return false, nil
+	}
+
+	d.logger.Info().Msgf("Multi-season torrent detected with seasons: %v", getSortedSeasons(seasonsFound))
 
 	return true, seasons
 }
