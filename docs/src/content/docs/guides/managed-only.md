@@ -8,7 +8,10 @@ Managed-only mode makes Decypharr the single source of truth for your debrid pro
 - **External torrents are ignored** — torrents added directly on the provider (outside Sonarr/Radarr) are not synced into Decypharr
 - **Managed torrents are protected** — if a managed torrent is deleted from the provider, Decypharr automatically re-adds it
 
-All torrent management should go through your Arr apps or the Decypharr UI.
+All torrent management should go through your Arr apps or the Decypharr UI. Note that
+adding a torrent from the Decypharr UI without picking an Arr association leaves it with
+no category — the same signal Local/Provider Cleanup uses for "unmanaged" below, so an
+uncategorized manual add is eligible for cleanup like any other external torrent.
 
 ## Configuration
 
@@ -42,7 +45,11 @@ The **Settings > Maintenance** tab provides tools to clean up unmanaged entries.
 
 ### Local Cleanup
 
-Removes entries from Decypharr's database that were not added through an Arr app. This is useful after enabling managed-only on an existing setup — previously synced external torrents will have no Arr association.
+Removes entries from Decypharr's database that carry no category — the signal used for
+"not added through an Arr app". This is useful after enabling managed-only on an existing
+setup — previously synced external torrents will have no Arr association. It also catches
+torrents added manually through the Decypharr UI or API without an Arr selected; if you
+want to keep those from ever appearing here, associate them with an Arr when adding them.
 
 Torrents are **not deleted from the provider**, only from Decypharr's local storage.
 
