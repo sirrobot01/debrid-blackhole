@@ -138,7 +138,7 @@ func (s *Service) fetchAndValidate(ctx context.Context, entry *storage.Entry, fi
 					// Account swap doesn't consume a re-insertion attempt.
 					return s.fetchAndValidate(ctx, entry, filename, attempt)
 				}
-			} else if linkErr.ShouldRefetch() {
+			} else if linkErr.ShouldRefetch() || linkErr.ShouldRetry() {
 				// Invalidate and refetch
 				return s.invalidateAndRefetch(ctx, entry, link, attempt)
 			}

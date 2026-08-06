@@ -145,7 +145,7 @@ func ErrorCodeToLinkError(code string) *Error {
 		return NewPermanentError(Err404, code)
 	case "429":
 		return NewRetryableError(Err429, code)
-	case "503":
+	case "503", "read_pxy_timeout":
 		return NewRetryableError(Err503, code)
 	default:
 		return NewPermanentError(fmt.Errorf("unknown error code: %s", code), code)
