@@ -205,6 +205,11 @@ When you delete a movie, series, or episode file from Sonarr/Radarr, Decypharr c
 
 Decypharr automatically registers a webhook in Sonarr/Radarr at startup. No manual webhook configuration is needed.
 
+The webhook endpoint is authenticated with the Arr's own `token` (embedded in the
+registered URL), not with your Decypharr login — it has to be reachable by
+Sonarr/Radarr directly, so it can't sit behind the same session auth as the rest
+of the app. Don't expose this port beyond your Sonarr/Radarr network.
+
 ### How it works
 
 - **File delete** (single episode/movie file): the debrid entry is removed only if no other Arr files still reference it

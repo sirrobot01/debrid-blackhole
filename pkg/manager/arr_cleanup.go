@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	gourl "net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -37,20 +38,25 @@ func (m *Manager) RegisterArrWebhooks() {
 		if a.Host == "" || a.Token == "" {
 			continue
 		}
-		webhookURL := fmt.Sprintf("%s%s/webhooks/arr?arr=%s", baseURL, urlBase, a.Name)
-		go func(a *arr.Arr, webhookURL string) {
+		// The ARR's own API token doubles as the webhook's auth secret (checked
+		// in handleArrWebhook) — there's no other way to verify an incoming
+		// webhook actually came from this ARR instance. Logged with the token
+		// stripped so it doesn't end up in plaintext logs.
+		loggedURL := fmt.Sprintf("%s%s/webhooks/arr?arr=%s", baseURL, urlBase, gourl.QueryEscape(a.Name))
+		webhookURL := loggedURL + "&token=" + gourl.QueryEscape(a.Token)
+		go func(a *arr.Arr, webhookURL, loggedURL string) {
 			if err := a.RegisterWebhook(webhookURL); err != nil {
 				m.logger.Warn().Err(err).
 					Str("arr", a.Name).
-					Str("webhook_url", webhookURL).
+					Str("webhook_url", loggedURL).
 					Msg("Failed to register arr webhook")
 				return
 			}
 			m.logger.Info().
 				Str("arr", a.Name).
-				Str("webhook_url", webhookURL).
+				Str("webhook_url", loggedURL).
 				Msg("Registered arr webhook")
-		}(a, webhookURL)
+		}(a, webhookURL, loggedURL)
 	}
 }
 
