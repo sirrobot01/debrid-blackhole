@@ -116,9 +116,13 @@ func (s *Storage) SetArrFilesLastEventDate(arrName string, t time.Time) error {
 	return s.arrFiles.Put(key, []byte(t.UTC().Format(time.RFC3339Nano)), nil)
 }
 
-// FindArrFilesByFolder returns all arr file records whose ManagedPath is nested under folderPath.
+// FindArrFilesByFolder returns all arr file records for arrName whose ManagedPath is nested
+// under folderPath. Scoped to arrName so a SeriesDelete/MovieDelete from one ARR can't sweep
+// up another ARR's tracked files when their library roots overlap (shared parent folder,
+// symlinked structure, etc) — each ARR only ever reports its own folder in these events, so
+// nothing outside it should be touched by that request.
 // Used for SeriesDelete / MovieDelete events where only a root folder is provided.
-func (s *Storage) FindArrFilesByFolder(folderPath string) ([]ArrFile, error) {
+func (s *Storage) FindArrFilesByFolder(arrName, folderPath string) ([]ArrFile, error) {
 	prefix := normalizePath(folderPath) + string(filepath.Separator)
 	var refs []ArrFile
 	_ = s.arrFiles.ForEach(func(_ string, value []byte) error {
@@ -126,7 +130,7 @@ func (s *Storage) FindArrFilesByFolder(folderPath string) ([]ArrFile, error) {
 		if err := json.Unmarshal(value, &ref); err != nil {
 			return nil
 		}
-		if strings.HasPrefix(normalizePath(ref.ManagedPath), prefix) {
+		if ref.ArrName == arrName && strings.HasPrefix(normalizePath(ref.ManagedPath), prefix) {
 			refs = append(refs, ref)
 		}
 		return nil

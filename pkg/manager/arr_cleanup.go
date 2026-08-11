@@ -248,7 +248,7 @@ func (m *Manager) HandleArrSeriesDelete(arrName string, payload *arr.WebhookPayl
 		Str("event", payload.EventType).
 		Logger()
 	a := m.arr.Get(arrName)
-	m.handleArrFolderDelete(log, payload.Series.Path, a != nil && a.AllowDelete)
+	m.handleArrFolderDelete(log, arrName, payload.Series.Path, a != nil && a.AllowDelete)
 }
 
 // HandleArrMovieDelete handles "MovieDelete" events by cleaning up all files under the movie folder.
@@ -263,15 +263,16 @@ func (m *Manager) HandleArrMovieDelete(arrName string, payload *arr.WebhookPaylo
 		Str("event", payload.EventType).
 		Logger()
 	a := m.arr.Get(arrName)
-	m.handleArrFolderDelete(log, payload.Movie.FolderPath, a != nil && a.AllowDelete)
+	m.handleArrFolderDelete(log, arrName, payload.Movie.FolderPath, a != nil && a.AllowDelete)
 }
 
-// handleArrFolderDelete finds all arr files under folderPath and cleans up each one.
-// Entry deletion is gated on allowDelete.
-func (m *Manager) handleArrFolderDelete(log zerolog.Logger, folderPath string, allowDelete bool) {
+// handleArrFolderDelete finds all arr files tracked for arrName under folderPath and cleans up
+// each one. Scoped to arrName so this ARR's delete event can't touch another ARR's tracked
+// files. Entry deletion is gated on allowDelete.
+func (m *Manager) handleArrFolderDelete(log zerolog.Logger, arrName, folderPath string, allowDelete bool) {
 	log = log.With().Str("folder_path", folderPath).Logger()
 
-	refs, err := m.storage.FindArrFilesByFolder(folderPath)
+	refs, err := m.storage.FindArrFilesByFolder(arrName, folderPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to find arr files by folder")
 		return
