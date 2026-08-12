@@ -36,23 +36,26 @@ var (
 
 // NewFile creates a new file
 func NewFile(vfsManager *vfs.Manager, config *config.FuseConfig, info *manager.FileInfo, rl *logger.RateLimitedLogger) *File {
+	createdAt := info.ModTime()
+	if createdAt.IsZero() {
+		// Choose the fallback once when the node is created. Recomputing it in
+		// Getattr would change ctime and mtime whenever the attr cache expires.
+		createdAt = time.Now()
+	}
+
 	return &File{
-		config:  config,
-		logger:  rl.Rate(fmt.Sprintf("%s/%s", info.Parent(), info.Name())),
-		info:    info,
-		vfs:     vfsManager,
-		content: info.Content(),
+		config:    config,
+		logger:    rl.Rate(fmt.Sprintf("%s/%s", info.Parent(), info.Name())),
+		info:      info,
+		vfs:       vfsManager,
+		content:   info.Content(),
+		createdAt: createdAt,
 	}
 }
 
 // Getattr returns file attributes
 func (f *File) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	var modTime uint64
-	if f.createdAt.IsZero() {
-		modTime = uint64(time.Now().Unix())
-	} else {
-		modTime = uint64(f.createdAt.Unix())
-	}
+	modTime := uint64(f.createdAt.Unix())
 	out.Mode = 0644 | fuse.S_IFREG
 	out.Size = uint64(f.info.Size())
 	out.Nlink = 1 // Files always have 1 link (themselves)
