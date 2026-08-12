@@ -292,49 +292,60 @@ func (dl *DebridLink) UpdateTorrent(t *types.Torrent) error {
 	return nil
 }
 
-// doPostMultipart performs a POST request with multipart file upload.
-func (dl *DebridLink) doPostMultipart(endpoint string, fileData []byte, filename string, result interface{}) (*http.Response, error) {
+// doPostMultipart performs a POST request with multipart file upload. On a 2xx
+// status with a body, result is JSON-decoded into it. The raw body is always
+// returned too — resp.Body is closed here, so callers can't read it themselves,
+// but they can still fold the raw text into an error message on failure.
+func (dl *DebridLink) doPostMultipart(endpoint string, fileData []byte, filename string, result interface{}) (*http.Response, []byte, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err := part.Write(fileData); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	writer.Close()
 
 	req, err := http.NewRequest(http.MethodPost, dl.Host+endpoint, &buf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := dl.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer request.DrainAndClose(resp.Body)
 
-	if result != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && resp.ContentLength != 0 {
-		if err := json.ConfigDefault.NewDecoder(resp.Body).Decode(result); err != nil {
-			return resp, err
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp, nil, err
+	}
+
+	if result != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && len(body) > 0 {
+		if err := json.ConfigDefault.Unmarshal(body, result); err != nil {
+			return resp, body, err
 		}
 	}
-	return resp, nil
+	return resp, body, nil
 }
 
 func (dl *DebridLink) SubmitMagnet(t *types.Torrent) (*types.Torrent, error) {
 	var res SubmitTorrentInfo
 
 	if dl.config.ShouldUseTorrentFile() && t.Magnet.IsTorrent() {
-		resp, err := dl.doPostMultipart("/seedbox/add", t.Magnet.File, "file.torrent", &res)
+		resp, body, err := dl.doPostMultipart("/seedbox/add", t.Magnet.File, "file.torrent", &res)
 		if err != nil {
 			return nil, err
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return nil, fmt.Errorf("debridlink API error: Status: %d", resp.StatusCode)
+			return nil, fmt.Errorf("error adding torrent(status %d): %s", resp.StatusCode, string(body))
+		}
+		if len(body) == 0 {
+			return nil, fmt.Errorf("empty response from debridlink API")
 		}
 	} else {
 		payload := map[string]string{"url": t.Magnet.Link}
