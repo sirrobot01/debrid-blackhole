@@ -91,6 +91,8 @@ message EntryProto {
   int32 error_count = 37;
   int64 last_error_time_unix = 38;
   bool has_last_error_time = 39;
+
+  bool rm_tracker_urls = 40;
 }
 
 // ============================================================================

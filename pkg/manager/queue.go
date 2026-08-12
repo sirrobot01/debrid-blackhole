@@ -37,6 +37,7 @@ type ImportRequest struct {
 	Arr              *arr.Arr              `json:"arr"`
 	Action           config.DownloadAction `json:"action"`
 	DownloadUncached *bool                 `json:"downloadUncached"`
+	RmTrackerUrls    bool                  `json:"rmTrackerUrls"`
 	CallBackUrl      string                `json:"callBackUrl"`
 	SkipMultiSeason  bool                  `json:"skip_multi_season"`
 
@@ -48,7 +49,7 @@ type ImportRequest struct {
 	Async bool       `json:"async"`
 }
 
-func NewTorrentRequest(debrid string, downloadFolder string, magnet *utils.Magnet, arr *arr.Arr, action config.DownloadAction, downloadUncached *bool, callBackUrl string, importType ImportType, skipMultiSeason bool) *ImportRequest {
+func NewTorrentRequest(debrid string, downloadFolder string, magnet *utils.Magnet, arr *arr.Arr, action config.DownloadAction, downloadUncached *bool, rmTrackerUrls bool, callBackUrl string, importType ImportType, skipMultiSeason bool) *ImportRequest {
 
 	return &ImportRequest{
 		Id:               uuid.New().String(),
@@ -59,6 +60,7 @@ func NewTorrentRequest(debrid string, downloadFolder string, magnet *utils.Magne
 		Arr:              arr,
 		Action:           action,
 		DownloadUncached: downloadUncached,
+		RmTrackerUrls:    rmTrackerUrls,
 		CallBackUrl:      callBackUrl,
 		Type:             importType,
 		SkipMultiSeason:  skipMultiSeason,

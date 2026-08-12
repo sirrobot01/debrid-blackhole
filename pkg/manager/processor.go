@@ -38,6 +38,8 @@ func (m *Manager) AddNewTorrent(ctx context.Context, importReq *ImportRequest) e
 	torrent.DownloadUncached = debridTorrent.DownloadUncached
 	applyDebridTorrentToEntry(torrent, debridTorrent)
 
+	m.persistTorrentFile(importReq, torrent)
+
 	if err := m.queue.Add(torrent); err != nil {
 		return fmt.Errorf("failed to add torrent to queue: %w", err)
 	}
@@ -90,8 +92,23 @@ func (m *Manager) processTorrentJob(ctx context.Context, job *Job) error {
 	return nil
 }
 
+// persistTorrentFile stores the .torrent bytes so the Fixer can reuse them for
+// re-insertion. Called on every path that queues an entry — a torrent deferred
+// because the provider is saturated needs the file just as much as one
+// submitted straight away. Storage.Delete removes it with the entry, so this
+// must run only once the entry is about to be queued.
+func (m *Manager) persistTorrentFile(importReq *ImportRequest, torrent *storage.Entry) {
+	if !importReq.Magnet.IsTorrent() {
+		return
+	}
+	if err := storage.SaveTorrentFile(importReq.Magnet.InfoHash, importReq.Magnet.File); err != nil {
+		m.logger.Warn().Err(err).Str("name", torrent.Name).Msg("Failed to save .torrent file")
+	}
+}
+
 func (m *Manager) queueTorrentRetry(importReq *ImportRequest) error {
 	torrent := newTorrentQueueEntry(importReq, debridTypes.TorrentStatusQueued)
+	m.persistTorrentFile(importReq, torrent)
 	if err := m.queue.Add(torrent); err != nil {
 		return fmt.Errorf("failed to add torrent to queue: %w", err)
 	}
@@ -128,6 +145,7 @@ func newTorrentQueueEntry(importReq *ImportRequest, status debridTypes.TorrentSt
 		Action:           importReq.Action,
 		CallbackURL:      importReq.CallBackUrl,
 		SkipMultiSeason:  importReq.SkipMultiSeason,
+		RmTrackerUrls:    importReq.RmTrackerUrls,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 		AddedOn:          now,
@@ -238,7 +256,7 @@ func (m *Manager) processQueuedTorrent(entry *storage.Entry) {
 		return
 	}
 
-	magnet, err := utils.GetMagnetInfo(entry.Magnet, m.config.AlwaysRmTrackerUrls)
+	magnet, err := utils.GetMagnetInfo(entry.Magnet, false)
 	if err != nil {
 		magnet = utils.ConstructMagnet(entry.InfoHash, entry.Name)
 	}
@@ -438,6 +456,20 @@ func (m *Manager) SendToDebrid(ctx context.Context, importRequest *ImportRequest
 			Str("Name", debridTorrent.Name).
 			Str("Action", string(importRequest.Action)).
 			Msg("Processing torrent")
+
+		if importRequest.RmTrackerUrls || config.Get().AlwaysRmTrackerUrls {
+			if debridTorrent.Magnet.Link != "" {
+				if sanitized, err := utils.GetMagnetInfo(debridTorrent.Magnet.Link, true); err == nil {
+					debridTorrent.Magnet.Link = sanitized.Link
+				}
+			}
+			if debridTorrent.Magnet.IsTorrent() {
+				if sanitized, err := utils.GetTorrentInfo(debridTorrent.Magnet.File, true); err == nil {
+					debridTorrent.Magnet.File = sanitized.File
+					debridTorrent.Magnet.Link = sanitized.Link
+				}
+			}
+		}
 
 		dbt, err := db.SubmitMagnet(debridTorrent)
 		if err != nil || dbt == nil || dbt.Id == "" {

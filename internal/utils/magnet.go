@@ -45,7 +45,57 @@ func stripTrackersFromMagnet(mi metainfo.Magnet, fileType string) metainfo.Magne
 	return mi
 }
 
-func GetMagnetFromFile(file io.Reader, filePath string, rmTrackerUrls bool) (*Magnet, error) {
+func stripTrackersFromTorrentFile(data []byte) ([]byte, error) {
+	mi, err := metainfo.Load(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	mi.Announce = ""
+	mi.AnnounceList = nil
+	var buf bytes.Buffer
+	if err := mi.Write(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// GetTorrentInfo parses raw .torrent file bytes and optionally removes tracker URLs.
+func GetTorrentInfo(torrentData []byte, rmTrackerUrls bool) (*Magnet, error) {
+	mi, err := metainfo.Load(bytes.NewReader(torrentData))
+	if err != nil {
+		return nil, err
+	}
+	hash := mi.HashInfoBytes()
+	infoHash := hash.HexString()
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	finalTorrentData := torrentData
+	if rmTrackerUrls {
+		finalTorrentData, err = stripTrackersFromTorrentFile(torrentData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	finalMI, err := metainfo.Load(bytes.NewReader(finalTorrentData))
+	if err != nil {
+		return nil, err
+	}
+	magnetMeta := finalMI.Magnet(&hash, &info)
+
+	return &Magnet{
+		InfoHash: infoHash,
+		Name:     info.Name,
+		Size:     info.Length,
+		Link:     magnetMeta.String(),
+		File:     finalTorrentData,
+	}, nil
+}
+
+func GetMagnetFromFile(file io.Reader, filePath string) (*Magnet, error) {
 	var (
 		m   *Magnet
 		err error
@@ -55,14 +105,14 @@ func GetMagnetFromFile(file io.Reader, filePath string, rmTrackerUrls bool) (*Ma
 		if err != nil {
 			return nil, err
 		}
-		m, err = GetMagnetFromBytes(torrentData, rmTrackerUrls)
+		m, err = GetMagnetFromBytes(torrentData)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// .magnet file
 		magnetLink := ReadMagnetFile(file)
-		m, err = GetMagnetInfo(magnetLink, rmTrackerUrls)
+		m, err = GetMagnetInfo(magnetLink, false)
 		if err != nil {
 			return nil, err
 		}
@@ -71,40 +121,17 @@ func GetMagnetFromFile(file io.Reader, filePath string, rmTrackerUrls bool) (*Ma
 	return m, nil
 }
 
-func GetMagnetFromUrl(url string, rmTrackerUrls bool) (*Magnet, error) {
+func GetMagnetFromUrl(url string) (*Magnet, error) {
 	if strings.HasPrefix(url, "magnet:") {
-		return GetMagnetInfo(url, rmTrackerUrls)
+		return GetMagnetInfo(url, false)
 	} else if strings.HasPrefix(url, "http") {
-		return OpenMagnetHttpURL(url, rmTrackerUrls)
+		return OpenMagnetHttpURL(url)
 	}
 	return nil, fmt.Errorf("invalid url")
 }
 
-func GetMagnetFromBytes(torrentData []byte, rmTrackerUrls bool) (*Magnet, error) {
-	// Create a scanner to read the file line by line
-	mi, err := metainfo.Load(bytes.NewReader(torrentData))
-	if err != nil {
-		return nil, err
-	}
-
-	hash := mi.HashInfoBytes()
-	infoHash := hash.HexString()
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		return nil, err
-	}
-	magnetMeta := mi.Magnet(&hash, &info)
-	if rmTrackerUrls {
-		magnetMeta = stripTrackersFromMagnet(magnetMeta, "torrent file")
-	}
-	magnet := &Magnet{
-		InfoHash: infoHash,
-		Name:     info.Name,
-		Size:     info.Length,
-		Link:     magnetMeta.String(),
-		File:     torrentData,
-	}
-	return magnet, nil
+func GetMagnetFromBytes(torrentData []byte) (*Magnet, error) {
+	return GetTorrentInfo(torrentData, false)
 }
 
 func ReadMagnetFile(file io.Reader) string {
@@ -124,7 +151,7 @@ func ReadMagnetFile(file io.Reader) string {
 	return ""
 }
 
-func OpenMagnetHttpURL(magnetLink string, rmTrackerUrls bool) (*Magnet, error) {
+func OpenMagnetHttpURL(magnetLink string) (*Magnet, error) {
 	resp, err := http.Get(magnetLink)
 	if err != nil {
 		return nil, fmt.Errorf("error making GET request: %v", err)
@@ -139,9 +166,10 @@ func OpenMagnetHttpURL(magnetLink string, rmTrackerUrls bool) (*Magnet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
-	return GetMagnetFromBytes(torrentData, rmTrackerUrls)
+	return GetMagnetFromBytes(torrentData)
 }
 
+// GetMagnetInfo parses a magnet link and optionally removes tracker URLs.
 func GetMagnetInfo(magnetLink string, rmTrackerUrls bool) (*Magnet, error) {
 	if magnetLink == "" {
 		return nil, fmt.Errorf("error getting magnet from file")
