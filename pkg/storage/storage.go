@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var storeNames = []string{"entries", "queue", "items", "repair_state", "repair_runs"}
+var storeNames = []string{"entries", "queue", "items", "repair_state", "repair_runs", "arr_refs"}
 
 // legacyStoreNames are buckets from the v1 repair system. They are removed
 // on startup so they don't accumulate dead data.
@@ -27,6 +27,7 @@ type Storage struct {
 	entryItems  *appendstore.Store
 	repairState *appendstore.Store
 	repairRuns  *appendstore.Store
+	arrFiles    *appendstore.Store // ARR managed files index
 	dir         string
 	logger      zerolog.Logger
 
@@ -111,6 +112,7 @@ func NewStorage(dbPath string) (*Storage, error) {
 		entryItems:  itemStores["items"],
 		repairState: itemStores["repair_state"],
 		repairRuns:  itemStores["repair_runs"],
+		arrFiles:    itemStores["arr_refs"],
 		dir:         dbPath,
 		logger:      log,
 	}
@@ -121,12 +123,14 @@ func NewStorage(dbPath string) (*Storage, error) {
 		log.Info().Int("count", count).Msg("Migrated entry metadata to new format")
 	}
 
+	s.initArrFilesStore()
+
 	return s, nil
 }
 
 func (s *Storage) Close() error {
 	var errs []error
-	stores := []*appendstore.Store{s.entries, s.queue, s.entryItems, s.repairState, s.repairRuns}
+	stores := []*appendstore.Store{s.entries, s.queue, s.entryItems, s.repairState, s.repairRuns, s.arrFiles}
 	for _, store := range stores {
 		if store == nil {
 			continue
@@ -144,7 +148,7 @@ func (s *Storage) Close() error {
 // DiskSize returns the total on-disk size of all stores (O(1), no filesystem walk).
 func (s *Storage) DiskSize() int64 {
 	var size int64
-	for _, store := range []*appendstore.Store{s.entries, s.queue, s.entryItems, s.repairState, s.repairRuns} {
+	for _, store := range []*appendstore.Store{s.entries, s.queue, s.entryItems, s.repairState, s.repairRuns, s.arrFiles} {
 		if store != nil {
 			size += store.DiskSize()
 		}
@@ -186,6 +190,7 @@ func (s *Storage) copyFrom(other *Storage) error {
 		{"items", other.entryItems, s.entryItems},
 		{"repair_state", other.repairState, s.repairState},
 		{"repair_runs", other.repairRuns, s.repairRuns},
+		{"arr_refs", other.arrFiles, s.arrFiles},
 	}
 
 	for _, p := range pairs {

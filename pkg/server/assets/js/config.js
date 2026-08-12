@@ -1130,6 +1130,14 @@ class ConfigManager {
                                 <span class="text-sm leading-tight">Download Uncached</span>
                             </label>
                         </div>
+
+                        <div class="rounded-box bg-base-200/50 px-3 py-2">
+                            <label class="label cursor-pointer justify-start gap-2 p-0">
+                                <input type="checkbox" class="checkbox checkbox-sm checkbox-primary"
+                                       name="arr[${index}].allow_delete" id="arr[${index}].allow_delete">
+                                <span class="text-sm leading-tight">Allow Delete</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1483,6 +1491,7 @@ class ConfigManager {
             const hostInput = getField('host');
             const tokenInput = getField('token');
             const skipRepairInput = getField('skip_repair');
+            const allowDeleteInput = getField('allow_delete');
             const downloadUncachedInput = getField('download_uncached');
             const selectedDebridInput = getField('selected_debrid');
             const sourceInput = getField('source');
@@ -1496,6 +1505,7 @@ class ConfigManager {
                 host: hostInput.value,
                 token: tokenInput.value,
                 skip_repair: skipRepairInput.checked,
+                allow_delete: allowDeleteInput?.checked ?? false,
                 download_uncached: downloadUncachedInput.checked,
                 selected_debrid: selectedDebridInput.value,
                 source: sourceInput.value
