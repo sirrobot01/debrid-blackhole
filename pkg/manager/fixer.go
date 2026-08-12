@@ -328,6 +328,12 @@ func (f *Fixer) MoveTorrent(entry *storage.Entry, debridName string, reinsert bo
 		}()
 	}
 
+	// This placement was just (re-)submitted, so if debridName's strategy is
+	// remove_after_add, free its slot again the same way a fresh download
+	// would — otherwise a torrent stays on AllDebrid for good after its first
+	// repair, since AddTorrentProvider above reset RemovedAt to nil.
+	f.manager.applySlotStrategyFor(entry, debridName)
+
 	return true, nil
 }
 
