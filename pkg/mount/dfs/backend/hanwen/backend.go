@@ -83,7 +83,11 @@ func (b *Backend) Mount(ctx context.Context) error {
 		DisableXAttrs:        true,
 		IgnoreSecurityLabels: true,
 		MaxWrite:             1024 * 1024,
-		AllowOther: true,
+		// The kernel defaults MaxBackground to 12, which caps in-flight
+		// readahead far below the VFS readahead window.
+		MaxBackground: b.config.FuseMaxBackground,
+		MaxReadAhead:  b.config.FuseMaxReadAhead,
+		AllowOther:    true,
 	}
 
 	var opt []string

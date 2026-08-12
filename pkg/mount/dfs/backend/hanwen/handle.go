@@ -8,7 +8,6 @@ import (
 	"io"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -29,13 +28,10 @@ type Handle struct {
 	streamFile *vfs.StreamingFile
 	closed     atomic.Bool
 	logger     *logger.RateLimitedEvent
-	lastAccess atomic.Int64
 }
 
 // Read implements DFS streaming
 func (fh *Handle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	fh.lastAccess.Store(time.Now().Unix())
-
 	if fh.closed.Load() {
 		return nil, syscall.EBADF
 	}

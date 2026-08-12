@@ -16,6 +16,8 @@ import (
 	grab "github.com/cavaliergopher/grab/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/pkg/debrid/types"
+	"github.com/sirrobot01/decypharr/pkg/manager/link"
 	"github.com/sirrobot01/decypharr/pkg/notifications"
 	"github.com/sirrobot01/decypharr/pkg/storage"
 	"github.com/sourcegraph/conc/pool"
@@ -254,6 +256,13 @@ func (d *Downloader) createSymlinksWhenMountFilesAppear(entry *storage.Entry, fi
 			entryName := item.Name()
 			fullPath := filepath.Join(dirPath, entryName)
 
+			if item.IsDir() {
+				if err := checkDirectory(fullPath); err != nil {
+					return err
+				}
+				continue
+			}
+
 			if file, exists := remainingFiles[entryName]; exists {
 				fileSymlinkPath := filepath.Join(symlinkDir, file.Name)
 				if err := os.Symlink(fullPath, fileSymlinkPath); err != nil && !os.IsExist(err) {
@@ -263,12 +272,6 @@ func (d *Downloader) createSymlinksWhenMountFilesAppear(entry *storage.Entry, fi
 				delete(remainingFiles, entryName)
 				d.logger.Info().Msgf("File is ready: %s/%s", entry.GetFolder(), file.Name)
 				continue
-			}
-
-			if item.IsDir() {
-				if err := checkDirectory(fullPath); err != nil {
-					return err
-				}
 			}
 		}
 		return nil
@@ -509,10 +512,13 @@ func (d *Downloader) processTorrentDownload(entry *storage.Entry) error {
 	}
 	var tasks []downloadTask
 	for _, file := range files {
-		downloadLink, err := d.manager.linkService.GetLink(context.Background(), entry, file.Name)
+		downloadLink, err := d.resolveLinkWithRetry(d.operationContext(), entry, file.Name)
 		if err != nil {
-			d.logger.Error().Msgf("Failed to get download link for %s: %v", file.Name, err)
-			continue
+			// Do not silently skip a file: proceeding would download a subset
+			// and then mark the entry complete while it is missing files
+			// (#315). Fail the whole batch so it is retried, not falsely
+			// completed.
+			return fmt.Errorf("resolve download link for %s: %w", file.Name, err)
 		}
 		tasks = append(tasks, downloadTask{file: file, link: downloadLink.DownloadLink})
 	}
@@ -545,6 +551,40 @@ func (d *Downloader) processTorrentDownload(entry *storage.Entry) error {
 	d.completeEntry(entry)
 	d.logger.Info().Msgf("Downloaded all files for %s", entry.Name)
 	return nil
+}
+
+// resolveLinkWithRetry fetches a download link, retrying transient failures
+// (429/5xx/network) with backoff and giving up immediately on permanent ones.
+// It exists so a batch download never silently drops a file whose link fetch
+// hit a passing blip (#315/#258); a returned error fails the whole batch.
+func (d *Downloader) resolveLinkWithRetry(ctx context.Context, entry *storage.Entry, filename string) (types.DownloadLink, error) {
+	const maxAttempts = 4
+	delay := config.DefaultRetryDelay
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		dl, err := d.manager.linkService.GetLink(ctx, entry, filename)
+		if err == nil {
+			return dl, nil
+		}
+		lastErr = err
+		// Permanent errors won't improve with retries — surface immediately.
+		if linkErr := link.GetLinkError(err); linkErr != nil && !linkErr.IsRetryable() {
+			return types.DownloadLink{}, err
+		}
+		if attempt < maxAttempts {
+			d.logger.Warn().Err(err).Str("file", filename).Int("attempt", attempt).
+				Msg("link fetch failed, retrying")
+			select {
+			case <-ctx.Done():
+				return types.DownloadLink{}, ctx.Err()
+			case <-time.After(delay):
+			}
+			if delay *= 2; delay > config.DefaultRetryDelayMax {
+				delay = config.DefaultRetryDelayMax
+			}
+		}
+	}
+	return types.DownloadLink{}, fmt.Errorf("link unresolved after %d attempts: %w", maxAttempts, lastErr)
 }
 
 // processUsenetDownload downloads NZB files via parallel NNTP segment fetching

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirrobot01/decypharr/pkg/storage/hybrid"
+	"github.com/sirrobot01/appendstore"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,18 +23,7 @@ func (s *Storage) AddOrUpdate(entry *Entry) error {
 		return fmt.Errorf("failed to marshal entry: %w", err)
 	}
 
-	meta := &hybrid.EntryMeta{
-		Category:  entry.Category,
-		Provider:  entry.ActiveProvider,
-		Status:    string(entry.Status),
-		Name:      entry.GetFolder(), // Store computed folder name for fast listings
-		TotalSize: entry.Size,
-		Protocol:  string(entry.Protocol),
-		Bad:       entry.Bad,
-		AddedOn:   entry.AddedOn.Unix(),
-	}
-
-	return s.entries.Put(entry.InfoHash, data, meta)
+	return s.entries.Put(entry.InfoHash, data, entryPutOptions(entry))
 }
 
 // BatchAddOrUpdate adds or updates multiple entries
@@ -138,21 +127,23 @@ type EntryMetaInfo struct {
 	AddedOn  time.Time
 	Provider string
 	Protocol string
+	Category string
 	Bad      bool
 }
 
 // ForEachMeta iterates over entry metadata without reading full entries from disk.
 // This is O(n) in-memory only - no disk reads, no protobuf deserialization.
 func (s *Storage) ForEachMeta(fn func(*EntryMetaInfo) error) error {
-	return s.entries.ForEachMeta(func(key string, meta *hybrid.IndexEntry) error {
+	return s.entries.ForEachMetadata(func(key string, meta *appendstore.Metadata) error {
 		return fn(&EntryMetaInfo{
 			InfoHash: key,
-			Name:     meta.Name,
-			Size:     meta.TotalSize,
-			AddedOn:  time.Unix(meta.AddedOn, 0),
-			Provider: meta.Provider,
-			Protocol: meta.Protocol,
-			Bad:      meta.Bad,
+			Name:     meta.Attribute(attributeName),
+			Size:     metadataInt64(meta, attributeTotalSize),
+			AddedOn:  time.Unix(metadataInt64(meta, attributeAddedOn), 0),
+			Provider: meta.Attribute(attributeProvider),
+			Protocol: meta.Attribute(attributeProtocol),
+			Category: meta.Attribute(attributeCategory),
+			Bad:      metadataBool(meta, attributeBad),
 		})
 	})
 }
@@ -165,13 +156,13 @@ func (s *Storage) MigrateMetadata() (int, error) {
 	// First, collect all keys that need migration
 	// We check if Protocol is empty as indicator of unmigrated data
 	var keysToMigrate []string
-	_ = s.entries.ForEachMeta(func(key string, meta *hybrid.IndexEntry) error {
+	_ = s.entries.ForEachMetadata(func(key string, meta *appendstore.Metadata) error {
 		// Skip special keys
 		if strings.HasPrefix(key, "__") {
 			return nil
 		}
 		// Check if metadata needs migration (Protocol empty = old format)
-		if meta.Protocol == "" {
+		if meta.Attribute(attributeProtocol) == "" {
 			keysToMigrate = append(keysToMigrate, key)
 		}
 		return nil
@@ -311,18 +302,7 @@ func (s *Storage) UpdateQueue(entry *Entry) error {
 		return err
 	}
 
-	meta := &hybrid.EntryMeta{
-		Category:  entry.Category,
-		Provider:  entry.ActiveProvider,
-		Status:    string(entry.Status),
-		Name:      entry.GetFolder(), // Store computed folder name for fast listings
-		TotalSize: entry.Size,
-		Protocol:  string(entry.Protocol),
-		Bad:       entry.Bad,
-		AddedOn:   entry.AddedOn.Unix(),
-	}
-
-	return s.queue.Put(strings.ToLower(entry.InfoHash), data, meta)
+	return s.queue.Put(strings.ToLower(entry.InfoHash), data, entryPutOptions(entry))
 }
 
 // GetQueued retrieves a queued entry

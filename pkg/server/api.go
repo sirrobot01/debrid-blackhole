@@ -516,10 +516,20 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if newConfig.Port == "" {
 		newConfig.Port = "8282"
 	}
+	newConfig.MigrateVirtualFolders()
+	if err := newConfig.ValidateVirtualFolders(); err != nil {
+		http.Error(w, "Invalid virtual folders: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Preserve fields that shouldn't be overwritten by frontend
 	currentConfig := config.Get()
 	newConfig.Auth = currentConfig.GetAuth()
+	// The frontend config form doesn't include use_auth or enable_webdav_auth,
+	// so they would be zero-valued (false) in the decoded payload. Preserve
+	// them from the live config so auth isn't silently disabled on every save.
+	newConfig.UseAuth = currentConfig.UseAuth
+	newConfig.EnableWebdavAuth = currentConfig.EnableWebdavAuth
 
 	// Filter out empty or incomplete arrs
 	validArrs := make([]config.Arr, 0, len(newConfig.Arrs))
@@ -549,6 +559,11 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		go s.Restart()
 	} else {
 		config.Get().ApplyRuntime(&newConfig)
+		if err := s.manager.ApplyVirtualFolders(newConfig.VirtualFolders); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to apply virtual folders after live config update")
+			http.Error(w, "Configuration was saved, but virtual folders could not be applied: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		// Reschedule/reapply the repair sweep if its settings changed.
 		if svc := s.manager.Repair(); svc != nil {
 			if err := svc.ApplyConfig(); err != nil {
@@ -558,6 +573,33 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSONResponse(w, map[string]any{"status": "success", "restarted": restarted}, http.StatusOK)
+}
+
+func (s *Server) handlePreviewVirtualFolder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Folder config.VirtualFolder `json:"folder"`
+		Limit  int                  `json:"limit"`
+	}
+	if err := json.ConfigDefault.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	config.NormalizeVirtualFolder(&req.Folder)
+	if err := config.ValidateVirtualFolder(req.Folder, nil); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	total, samples, err := s.manager.PreviewVirtualFolder(req.Folder, req.Limit)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to preview virtual folder")
+		http.Error(w, "Failed to preview virtual folder: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	utils.JSONResponse(w, map[string]any{
+		"total":   total,
+		"samples": samples,
+	}, http.StatusOK)
 }
 
 func (s *Server) handleGetRepairConfig(w http.ResponseWriter, r *http.Request) {
@@ -630,6 +672,7 @@ func (s *Server) handleRunRepair(w http.ResponseWriter, r *http.Request) {
 		Force             bool   `json:"force,omitempty"`
 		AutoRepair        *bool  `json:"auto_repair,omitempty"`
 		UnrestrictLink    bool   `json:"unrestrict_link,omitempty"`
+		VerifyContent     *bool  `json:"verify_content,omitempty"`
 		Protocol          string `json:"protocol,omitempty"`
 	}
 	if r.Body != nil && r.ContentLength != 0 {
@@ -663,6 +706,15 @@ func (s *Server) handleRunRepair(w http.ResponseWriter, r *http.Request) {
 	case "0", "false", "no", "off":
 		unrestrictLink = false
 	}
+	verifyContent := req.VerifyContent
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("verify_content"))) {
+	case "1", "true", "yes", "on":
+		v := true
+		verifyContent = &v
+	case "0", "false", "no", "off":
+		v := false
+		verifyContent = &v
+	}
 	protocolScope := strings.ToLower(strings.TrimSpace(req.Protocol))
 	if queryProtocol := strings.TrimSpace(r.URL.Query().Get("protocol")); queryProtocol != "" {
 		protocolScope = strings.ToLower(queryProtocol)
@@ -686,6 +738,7 @@ func (s *Server) handleRunRepair(w http.ResponseWriter, r *http.Request) {
 		IgnoreLastChecked: ignoreLastChecked,
 		AutoRepair:        autoRepair,
 		UnrestrictLink:    unrestrictLink,
+		VerifyContent:     verifyContent,
 		ProtocolScope:     protocolScope,
 	})
 	if err != nil {

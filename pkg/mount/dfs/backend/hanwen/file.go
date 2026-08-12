@@ -86,7 +86,6 @@ func (f *File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, s
 		streamFile: reader,
 		logger:     f.logger,
 	}
-	fh.lastAccess.Store(time.Now().Unix())
 	return fh, 0, 0
 }
 

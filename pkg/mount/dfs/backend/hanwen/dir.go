@@ -275,5 +275,3 @@ func (d *Dir) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 	return 0
 }
-
-
