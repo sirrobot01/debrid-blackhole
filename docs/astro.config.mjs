@@ -39,6 +39,7 @@ export default defineConfig({
                     items: [
                         {label: 'Configuration Reference', link: '/guides/configuration'},
                         {label: 'Virtual Folders', link: '/guides/virtual-folders'},
+                        {label: 'Managed-Only Mode', link: '/guides/managed-only'},
                     ],
                 },
                 {

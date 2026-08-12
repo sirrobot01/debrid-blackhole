@@ -93,8 +93,16 @@ func (m *Manager) doRefreshTorrents(_ context.Context, provider string, debridCl
 		return err
 	}
 
-	// Handle deletions
-	m.handleTorrentDeletions(torrentsToDelete)
+	m.logger.Debug().
+		Str("provider", provider).
+		Int("new", len(newTorrents)).
+		Int("updates", len(torrentsToUpdate)).
+		Int("deletions", len(torrentsToDelete)).
+		Msg("Sync summary")
+
+	// Reinsert torrents deleted from provider, then delete the rest
+	remainingDeletions := m.reinsertDeletedTorrents(provider, torrentsToDelete)
+	m.handleTorrentDeletions(remainingDeletions)
 
 	// Batch update torrents with changed placements (run concurrently)
 	var updateWg sync.WaitGroup
@@ -168,10 +176,33 @@ func (m *Manager) detectTorrentChanges(provider string, remoteTorrentsByHash map
 	}
 
 	// Check for brand new torrents (not in cache at all)
+	cfg := config.Get()
+	managedOnly := cfg.ManagedOnly
+
+	var queuedHashes map[string]bool
+	if managedOnly {
+		queued := m.queue.ListFilter("", config.ProtocolAll, "", nil, "", false)
+		queuedHashes = make(map[string]bool, len(queued))
+		for _, e := range queued {
+			queuedHashes[e.InfoHash] = true
+		}
+	}
+
+	var skippedExternal int
 	for infohash, t := range remoteTorrentsByHash {
 		if !cachedInfoHashes[infohash] {
+			if managedOnly && !queuedHashes[infohash] {
+				skippedExternal++
+				continue
+			}
 			newTorrents = append(newTorrents, t)
 		}
+	}
+	if skippedExternal > 0 {
+		m.logger.Info().
+			Str("provider", provider).
+			Int("count", skippedExternal).
+			Msg("Managed-only mode: skipped external torrents")
 	}
 
 	return newTorrents, torrentsToUpdate, torrentsToDelete, nil
@@ -202,6 +233,121 @@ func (m *Manager) handleTorrentDeletions(torrentsToDelete []string) {
 	}
 	close(deleteChan)
 	deleteWg.Wait()
+}
+
+// reinsertAttempt tracks auto reinsert attempts to prevent infinite loops.
+// A single infohash can be reinserted concurrently from multiple providers
+// (e.g. the same torrent configured on two debrids), so count/lastTried need
+// their own lock beyond what the xsync.Map gives the pointer itself.
+type reinsertAttempt struct {
+	mu        sync.Mutex
+	count     int
+	lastTried time.Time
+}
+
+func (a *reinsertAttempt) snapshot() (count int, lastTried time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.count, a.lastTried
+}
+
+func (a *reinsertAttempt) recordAttempt() (count int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.count++
+	a.lastTried = time.Now()
+	return a.count
+}
+
+const (
+	maxReinsertRetries = 3
+	reinsertCooldown   = 5 * time.Minute
+)
+
+// reinsertDeletedTorrents attempts to reinsert torrents that were deleted from the provider.
+// Returns infohashes that could not be reinserted (should still be deleted).
+func (m *Manager) reinsertDeletedTorrents(provider string, torrentsToDelete []string) []string {
+	if len(torrentsToDelete) == 0 {
+		return nil
+	}
+
+	m.logger.Debug().
+		Str("provider", provider).
+		Int("count", len(torrentsToDelete)).
+		Strs("infohashes", torrentsToDelete).
+		Msg("Torrents detected as missing from provider")
+
+	client := m.ProviderClient(provider)
+	if client == nil {
+		return torrentsToDelete
+	}
+
+	if !config.Get().ManagedOnly {
+		return torrentsToDelete
+	}
+
+	var toDelete []string
+	var successCount int
+
+	for _, infohash := range torrentsToDelete {
+		if attempt, ok := m.reinsertAttempts.Load(infohash); ok {
+			count, lastTried := attempt.snapshot()
+			if count >= maxReinsertRetries {
+				m.logger.Warn().
+					Str("infohash", infohash).
+					Int("attempts", count).
+					Msg("Auto reinsert max retries exceeded, allowing deletion")
+				m.reinsertAttempts.Delete(infohash)
+				toDelete = append(toDelete, infohash)
+				continue
+			}
+			if time.Since(lastTried) < reinsertCooldown {
+				continue
+			}
+		}
+
+		entry, err := m.storage.Get(infohash)
+		if err != nil || !entry.IsTorrent() || entry.Magnet == "" {
+			toDelete = append(toDelete, infohash)
+			continue
+		}
+
+		m.logger.Info().
+			Str("provider", provider).
+			Str("name", entry.Name).
+			Str("infohash", infohash).
+			Msg("Auto reinserting torrent deleted from provider")
+
+		success, err := m.fixer.MoveTorrent(entry, provider, true)
+
+		attempt, _ := m.reinsertAttempts.LoadOrStore(infohash, &reinsertAttempt{})
+		attemptCount := attempt.recordAttempt()
+
+		if success {
+			m.logger.Info().
+				Str("provider", provider).
+				Str("name", entry.Name).
+				Msg("Successfully reinserted torrent to provider")
+			m.reinsertAttempts.Delete(infohash)
+			successCount++
+		} else {
+			m.logger.Warn().
+				Err(err).
+				Str("provider", provider).
+				Str("name", entry.Name).
+				Int("attempt", attemptCount).
+				Msg("Failed to auto reinsert torrent")
+		}
+	}
+
+	if successCount > 0 {
+		m.logger.Info().
+			Str("provider", provider).
+			Int("count", successCount).
+			Msg("Auto reinsert completed")
+	}
+
+	return toDelete
 }
 
 // processNewTorrents processes new torrents with worker pool and batch writing
