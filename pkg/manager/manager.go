@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -86,6 +87,10 @@ type Manager struct {
 	jobQueue  *JobQueue
 	nzbSyncMu sync.Mutex
 
+	// Auto reinsert tracking (prevents infinite loops when a provider keeps
+	// deleting an entry we immediately re-add). Only used in managed-only mode.
+	reinsertAttempts *xsync.Map[string, *reinsertAttempt]
+
 	// Notifications service
 	Notifications *notifications.Service
 }
@@ -154,6 +159,7 @@ func New() *Manager {
 		debridSpeedTestResults: xsync.NewMap[string, debridTypes.SpeedTestResult](),
 		activeStreams:          xsync.NewMap[string, *ActiveStream](),
 		processingEntries:      xsync.NewMap[string, struct{}](),
+		reinsertAttempts:       xsync.NewMap[string, *reinsertAttempt](),
 	}
 
 	instance.init()
@@ -412,6 +418,12 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start manager worker: %w", err)
 	}
 
+	// Register Decypharr webhook in each configured ARR instance.
+	m.RegisterArrWebhooks()
+
+	// Sync arr files from ARR history for media imported before webhooks were active.
+	m.syncArrFiles()
+
 	// Close ready channel once, safe for multiple calls
 	m.readyOnce.Do(func() {
 		close(m.ready)
@@ -623,6 +635,110 @@ func (m *Manager) DeleteEntry(infohash string, removePlacements bool) error {
 	// Refresh entry cache
 	m.RefreshEntries(true)
 	return nil
+}
+
+// GetUnmanagedEntries returns entries no arr currently references: nothing
+// that ever came through one, plus anything that did but that no arr still
+// tracks — the media was deleted or upgraded there, so nothing uses the
+// torrent now. A category on the entry does not exempt it; the only source
+// of truth is arr_refs.
+//
+// Derived at call time rather than stored: an incomplete arr_refs index (an
+// arr unreachable during the history bootstrap, a download_folder that has
+// since moved) only makes one scan wrong, and the next one is right again.
+// Nothing is written, so nothing has to be undone.
+func (m *Manager) GetUnmanagedEntries() ([]*storage.Entry, error) {
+	referenced, err := m.storage.ReferencedInfoHashes()
+	if err != nil {
+		return nil, err
+	}
+
+	queued := m.queue.ListFilter("", config.ProtocolAll, "", nil, "", false)
+	queuedHashes := make(map[string]bool, len(queued))
+	for _, e := range queued {
+		queuedHashes[e.InfoHash] = true
+	}
+
+	var entries []*storage.Entry
+	err = m.storage.ForEach(func(entry *storage.Entry) error {
+		if queuedHashes[entry.InfoHash] {
+			return nil
+		}
+		if _, ok := referenced[strings.ToLower(entry.InfoHash)]; ok {
+			return nil
+		}
+		entries = append(entries, entry)
+		return nil
+	})
+	return entries, err
+}
+
+// PurgeUnmanagedEntries deletes the entries GetUnmanagedEntries reports.
+func (m *Manager) PurgeUnmanagedEntries() (int, error) {
+	entries, err := m.GetUnmanagedEntries()
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, entry := range entries {
+		if err := m.storage.Delete(entry.InfoHash); err != nil {
+			m.logger.Error().Err(err).Str("infohash", entry.InfoHash).Msg("Failed to purge unmanaged entry")
+			continue
+		}
+		deleted++
+	}
+	if deleted > 0 {
+		m.RefreshEntries(true)
+	}
+	return deleted, nil
+}
+
+// GetUnmanagedProviderTorrents returns torrents on the provider that are not tracked in storage or queue.
+func (m *Manager) GetUnmanagedProviderTorrents(provider string) ([]*debridTypes.Torrent, error) {
+	client := m.ProviderClient(provider)
+	if client == nil {
+		return nil, fmt.Errorf("provider not found: %s", provider)
+	}
+	remote, err := client.GetTorrents()
+	if err != nil {
+		return nil, err
+	}
+
+	queued := m.queue.ListFilter("", config.ProtocolAll, "", nil, "", false)
+	queuedHashes := make(map[string]bool, len(queued))
+	for _, e := range queued {
+		queuedHashes[e.InfoHash] = true
+	}
+
+	var unmanaged []*debridTypes.Torrent
+	for _, t := range remote {
+		exists, _ := m.storage.Exists(t.InfoHash)
+		if !exists && !queuedHashes[t.InfoHash] {
+			unmanaged = append(unmanaged, t)
+		}
+	}
+	return unmanaged, nil
+}
+
+// PurgeUnmanagedProviderTorrents deletes torrents from the provider that are not tracked in storage or queue.
+func (m *Manager) PurgeUnmanagedProviderTorrents(provider string) (int, error) {
+	client := m.ProviderClient(provider)
+	if client == nil {
+		return 0, fmt.Errorf("provider not found: %s", provider)
+	}
+	torrents, err := m.GetUnmanagedProviderTorrents(provider)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, t := range torrents {
+		if err := client.DeleteTorrent(t.Id); err != nil {
+			m.logger.Error().Err(err).Str("id", t.Id).Str("name", t.Name).Msg("Failed to purge torrent from provider")
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 func (m *Manager) DeleteTorrents(infohashes []string, removeFromDebrid bool) error {

@@ -76,13 +76,14 @@ type Arr struct {
 	Host             string `json:"host,omitempty"`
 	Token            string `json:"token,omitempty"`
 	SkipRepair       bool   `json:"skip_repair,omitempty"`
+	AllowDelete      bool   `json:"allow_delete,omitempty"`
 	DownloadUncached *bool  `json:"download_uncached,omitempty"`
 	SelectedDebrid   string `json:"selected_debrid,omitempty"`
 	Source           string `json:"source,omitempty"` // The source of the arr, e.g. "auto", "config", "". Auto means it was automatically detected from the arr
 }
 
 func (a Arr) IsZero() bool {
-	return a.Name == "" && a.Host == "" && a.Token == "" && !a.SkipRepair && a.DownloadUncached == nil && a.SelectedDebrid == "" && a.Source == ""
+	return a.Name == "" && a.Host == "" && a.Token == "" && !a.SkipRepair && !a.AllowDelete && a.DownloadUncached == nil && a.SelectedDebrid == "" && a.Source == ""
 }
 
 // QueueCleanup is the global policy that drives CleanupQueue. It maps
@@ -294,6 +295,7 @@ type Config struct {
 	SkipPreCache          bool                     `json:"skip_pre_cache,omitempty"`
 	SkipMultiSeason       bool                     `json:"skip_multi_season,omitempty"`
 	AlwaysRmTrackerUrls   bool                     `json:"always_rm_tracker_urls,omitempty"`
+	ManagedOnly           bool                     `json:"managed_only,omitempty"`
 	Categories            []string                 `json:"categories,omitempty"`
 	FolderNaming          WebDavFolderNaming       `json:"folder_naming,omitempty"`
 	CustomFolders         map[string]CustomFolders `json:"custom_folders,omitempty"` // Deprecated: migrated to VirtualFolders.

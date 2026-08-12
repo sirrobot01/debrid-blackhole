@@ -153,6 +153,7 @@ func New(mgr *manager.Manager) *Server {
 
 		//webhooks
 		r.Post("/webhooks/tautulli", s.handleTautulli)
+		r.Post("/webhooks/arr", s.handleArrWebhook)
 	})
 	s.router = r
 	return s

@@ -397,6 +397,7 @@ See the [Health Checker & Repair guide](/guides/repair/) for the full model, API
       "token": "API_TOKEN",
       "skip_repair": false,
       "download_uncached": false,
+      "allow_delete": false,
       "selected_debrid": ""
     }
   ]
@@ -410,6 +411,7 @@ See the [Health Checker & Repair guide](/guides/repair/) for the full model, API
 | `token`             | Arr API key                      | Required    |
 | `skip_repair`       | Skip repair for this Arr         | `false`     |
 | `download_uncached` | Download uncached torrents       | `false`     |
+| `allow_delete`      | Delete debrid entry when media is removed from the Arr | `false` |
 | `selected_debrid`   | Force specific Debrid provider   | `""` (auto) |
 | `source`            | Config source (`auto`, `config`) | `config`    |
 
