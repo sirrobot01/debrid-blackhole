@@ -98,7 +98,7 @@ func (m *Manager) rebuildQueuedTorrentJob(entry *storage.Entry) (*Job, error) {
 		m.arr.GetOrCreate(entry.Category),
 		entry.Action,
 		&downloadUncached,
-		m.config.AlwaysRmTrackerUrls,
+		entry.RmTrackerUrls || m.config.AlwaysRmTrackerUrls,
 		entry.CallbackURL,
 		ImportTypeAPI,
 		entry.SkipMultiSeason,

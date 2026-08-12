@@ -255,7 +255,7 @@ func (f *Fixer) MoveTorrent(entry *storage.Entry, debridName string, reinsert bo
 		DownloadUncached: false,
 	}
 
-	if config.Get().AlwaysRmTrackerUrls {
+	if entry.RmTrackerUrls || config.Get().AlwaysRmTrackerUrls {
 		if newDebridTorrent.Magnet.Link != "" {
 			if sanitized, err := utils.GetMagnetInfo(newDebridTorrent.Magnet.Link, true); err == nil {
 				newDebridTorrent.Magnet.Link = sanitized.Link
