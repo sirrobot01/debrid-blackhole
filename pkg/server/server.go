@@ -153,8 +153,10 @@ func New(mgr *manager.Manager) *Server {
 			})
 		})
 
-		//webhooks
-		r.Post("/webhooks/tautulli", s.handleTautulli)
+		// Webhooks. Mounted behind authentication: these endpoints launch
+		// repair work, which can delete files, so they must not be reachable
+		// without credentials.
+		r.Mount("/webhooks", s.webhookRoutes())
 	})
 	s.router = r
 	return s
