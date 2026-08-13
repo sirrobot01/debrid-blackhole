@@ -62,6 +62,9 @@ type ImportResponseSchema struct {
 		LanguageProfileId int `json:"languageProfileId"`
 		Id                int `json:"id"`
 	} `json:"series"`
+	Movie struct {
+		Id int `json:"id"`
+	} `json:"movie"`
 	SeasonNumber int `json:"seasonNumber"`
 	Episodes     []struct {
 		SeriesId                 int       `json:"seriesId"`
@@ -116,6 +119,7 @@ type ManualImportRequestFile struct {
 	FolderName   string `json:"folderName"`
 	Path         string `json:"path"`
 	SeriesId     int    `json:"seriesId"`
+	MovieId      int    `json:"movieId,omitempty"`
 	SeasonNumber int    `json:"seasonNumber"`
 	EpisodeIds   []int  `json:"episodeIds"`
 	Quality      struct {
@@ -172,6 +176,7 @@ func (a *Arr) Import(downloadID string) error {
 			Path:              d.Path,
 			FolderName:        d.FolderName,
 			SeriesId:          d.Series.Id,
+			MovieId:           d.Movie.Id,
 			SeasonNumber:      d.SeasonNumber,
 			EpisodeIds:        episodesIds,
 			Quality:           d.Quality,
