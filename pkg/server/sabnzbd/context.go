@@ -123,7 +123,7 @@ func (s *SABnzbd) authenticate(category, username, password string) (*arr.Arr, e
 	if (username == "" || password == "") && cfg.UseAuth {
 		return nil, fmt.Errorf("unauthorized: Host and token are required for authentication(you've enabled authentication)")
 	}
-	if a.Source == "auto" {
+	if a.Source == "auto" && username != "" && password != "" {
 		a.Host = username
 		a.Token = password
 	}
