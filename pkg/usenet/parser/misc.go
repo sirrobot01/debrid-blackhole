@@ -78,15 +78,22 @@ func getGroupsList(groups map[string]struct{}) []string {
 }
 
 func determineNZBName(filename string, meta map[string]string) string {
-	// Prefer filename if it exists
-	if filename != "" {
-		filename = strings.TrimSuffix(filename, filepath.Ext(filename))
-	} else if name := meta["Name"]; name != "" {
-		filename = name
-	} else if title := meta["title"]; title != "" {
-		filename = title
+	// Try each name source in priority order and return the first that survives
+	// invalid-char removal as a usable (non-collapsing) path component. A source
+	// that cleans to nothing — ".nzb", "???.nzb", "***.nzb", "" — must NOT
+	// shadow a usable meta fallback: an empty name makes DownloadPath() collapse
+	// onto the category SavePath, which the deletion path would then wipe. When
+	// no source is usable the caller substitutes the unique NZB ID.
+	for _, candidate := range []string{
+		strings.TrimSuffix(filename, filepath.Ext(filename)),
+		meta["Name"],
+		meta["title"],
+	} {
+		if cleaned := utils.RemoveInvalidChars(candidate); utils.IsUsableName(cleaned) {
+			return cleaned
+		}
 	}
-	return utils.RemoveInvalidChars(filename)
+	return ""
 }
 
 func determineExtension(group *FileGroup) string {

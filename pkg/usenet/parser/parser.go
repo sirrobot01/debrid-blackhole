@@ -170,6 +170,16 @@ func (p *NZBParser) Parse(ctx context.Context, filename string, content []byte) 
 	}
 
 	nzb.ID = uuid.New().String()
+	if !utils.IsUsableName(nzb.Name) {
+		// No source (filename, meta Name/title) yielded a usable name. Fall back
+		// to the unique, filesystem-safe NZB ID so the derived DownloadPath()
+		// cannot collapse onto the category directory.
+		p.logger.Warn().
+			Str("nzb_id", nzb.ID).
+			Str("filename", filename).
+			Msg("NZB has no usable name; substituting the NZB ID to keep the download path unique")
+		nzb.Name = nzb.ID
+	}
 	return nzb, fileGroups, nil
 }
 

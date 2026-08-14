@@ -3,6 +3,7 @@ package utils
 import (
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // videoExtensions is a set of known video file extensions (lowercase, without dot)
@@ -64,6 +65,18 @@ func RemoveExtension(value string) string {
 		}
 	}
 	return value
+}
+
+// IsUsableName reports whether name can serve as a filesystem path component
+// without collapsing. A name that is empty, or made up only of dots and
+// whitespace (e.g. "", ".", "..", "   "), makes filepath.Join(dir, name)
+// resolve to dir itself or a parent — never a safe download/symlink target.
+// Names with at least one meaningful rune (including "multi   space" release
+// names and dotfiles like ".hidden") are usable.
+func IsUsableName(name string) bool {
+	return strings.TrimFunc(name, func(r rune) bool {
+		return r == '.' || unicode.IsSpace(r)
+	}) != ""
 }
 
 func IsMediaFile(path string) bool {
