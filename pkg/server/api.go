@@ -503,9 +503,27 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	// Decode the incoming config update
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to read config update request")
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	var newConfig config.Config
-	if err := json.ConfigDefault.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+	if err := json.Unmarshal(body, &newConfig); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to decode config update request")
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	currentConfig := config.Get()
+
+	// A top-level key absent from the posted JSON means "keep the current
+	// value"; only explicitly posted values (including empty ones such as
+	// "debrids": []) overwrite. Without this merge, a partial POST replaced
+	// every omitted section with its zero value and Save wiped it from disk.
+	if err := newConfig.PreserveMissingSections(currentConfig, body); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to merge config update request")
 		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -524,7 +542,6 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Preserve fields that shouldn't be overwritten by frontend
-	currentConfig := config.Get()
 	newConfig.Auth = currentConfig.GetAuth()
 	// The frontend config form doesn't include use_auth or enable_webdav_auth,
 	// so they would be zero-valued (false) in the decoded payload. Preserve
