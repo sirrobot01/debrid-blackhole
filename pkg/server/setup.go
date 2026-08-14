@@ -175,12 +175,12 @@ func (s *Server) setupCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		debrid := config.Debrid{
-			Provider:         req.Debrid.Provider,
-			Name:             req.Debrid.Provider,
-			APIKey:           req.Debrid.APIKey,
-			DownloadAPIKeys:  []string{req.Debrid.APIKey},
-			DownloadUncached: false,
-			RateLimit:        config.DefaultRateLimit,
+			Provider:        req.Debrid.Provider,
+			Name:            req.Debrid.Provider,
+			APIKey:          req.Debrid.APIKey,
+			DownloadAPIKeys: []string{req.Debrid.APIKey},
+			// DownloadUncached left nil: absent means the default (false).
+			RateLimit: config.DefaultRateLimit,
 		}
 
 		if len(cfg.Debrids) == 0 {

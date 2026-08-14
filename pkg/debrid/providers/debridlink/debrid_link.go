@@ -76,7 +76,7 @@ func New(dc config.Debrid, ratelimits map[string]ratelimit.Limiter) (*DebridLink
 		Host:                  "https://debrid-link.com/api/v2",
 		APIKey:                dc.APIKey,
 		accountsManager:       account.NewManager(dc, ratelimits["download"], log),
-		DownloadUncached:      dc.DownloadUncached,
+		DownloadUncached:      dc.DownloadsUncached(),
 		autoExpiresLinksAfter: autoExpiresLinksAfter,
 		client:                request.New(opts...),
 		repairClient:          request.New(repairOpts...),
