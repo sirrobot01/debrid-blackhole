@@ -345,6 +345,43 @@ func (m *Manager) processAction(entry *storage.Entry) {
 		_ = m.queue.Update(entry)
 		return
 	}
+	m.applySlotStrategy(entry)
+}
+
+func (m *Manager) applySlotStrategy(entry *storage.Entry) {
+	for providerName := range entry.Providers {
+		m.applySlotStrategyFor(entry, providerName)
+	}
+	_ = m.AddOrUpdate(entry, nil)
+}
+
+// applySlotStrategyFor frees a single provider placement's AllDebrid slot
+// when that provider's SlotStrategy is remove_after_add and the placement
+// hasn't already been freed. It only mutates entry in memory — callers
+// persist it (applySlotStrategy does so for all providers at once; the
+// Fixer's MoveTorrent relies on its own deferred save after re-inserting a
+// single placement, which is why this is split out from applySlotStrategy
+// rather than inlined there).
+func (m *Manager) applySlotStrategyFor(entry *storage.Entry, providerName string) {
+	pe, ok := entry.Providers[providerName]
+	if !ok || pe == nil || pe.RemovedAt != nil {
+		return
+	}
+	client := m.ProviderClient(providerName)
+	if client == nil {
+		return
+	}
+	cfg := client.Config()
+	if cfg.Provider != "alldebrid" || cfg.SlotStrategy != "remove_after_add" {
+		return
+	}
+	if err := client.DeleteTorrent(pe.ID); err != nil {
+		m.logger.Warn().Err(err).Str("provider", providerName).Str("name", entry.Name).Msg("Failed to free slot (remove_after_add)")
+		return
+	}
+	now := time.Now()
+	pe.RemovedAt = &now
+	m.logger.Info().Str("provider", providerName).Str("name", entry.Name).Msg("Slot freed (remove_after_add)")
 }
 
 // processTorrent handles the complete torrent lifecycle
