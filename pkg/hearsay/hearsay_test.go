@@ -1,12 +1,14 @@
 package hearsay
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/Tensai75/nzbparser"
 	"github.com/rs/zerolog"
 
 	hearsaylib "github.com/sirrobot01/hearsay"
@@ -14,8 +16,42 @@ import (
 
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/pkg/storage"
+	"github.com/sirrobot01/decypharr/pkg/usenet/manifest"
 	"github.com/sirrobot01/decypharr/pkg/usenet/parser"
 )
+
+func TestZerologHandlerDemotesRoutineSyncTraffic(t *testing.T) {
+	tests := []struct {
+		name    string
+		level   slog.Level
+		message string
+		want    string
+	}{
+		{name: "published generation", level: slog.LevelInfo, message: "published generation", want: "debug"},
+		{name: "ingested generation", level: slog.LevelInfo, message: "ingested generation", want: "debug"},
+		{name: "transient fetch failure", level: slog.LevelWarn, message: "fetch failed", want: "trace"},
+		{name: "real warning", level: slog.LevelWarn, message: "publish failed", want: "warn"},
+		{name: "other information", level: slog.LevelInfo, message: "pruned stale feeds", want: "info"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			log := zerolog.New(&output).Level(zerolog.TraceLevel)
+			slog.New(zerologHandler{log: log}).Log(t.Context(), test.level, test.message, "ns", "example")
+
+			var record map[string]any
+			if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+				t.Fatalf("decode log record: %v", err)
+			}
+			if got := record[zerolog.LevelFieldName]; got != test.want {
+				t.Fatalf("level = %v, want %q", got, test.want)
+			}
+			if got := record["ns"]; got != "example" {
+				t.Fatalf("namespace attribute = %v, want example", got)
+			}
+		})
+	}
+}
 
 func testService(t *testing.T) *Service {
 	t.Helper()
@@ -238,7 +274,7 @@ func TestObserveAndReport(t *testing.T) {
 	s.ReportNZB(NZBSubjectFromGroups(map[string]*parser.FileGroup{
 		"a": {
 			Type:  storage.NZBFileTypeMedia,
-			Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Id: "m@x"}}}},
+			Files: []manifest.File{{Segments: []manifest.Segment{{MessageID: "m@x"}}}},
 		},
 	}), true)
 

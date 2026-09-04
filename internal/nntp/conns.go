@@ -587,7 +587,11 @@ func (c *Connection) GetDecodedBody(messageID string) ([]byte, error) {
 // returning the parsed yEnc metadata from the same pass. The returned slice
 // escapes to the caller and is not recycled.
 func (c *Connection) GetDecodedBodyWithMetadata(messageID string) ([]byte, *YencMetadata, error) {
-	res, err := c.requestBody(messageID)
+	// The result escapes to a long-lived caller, so it must not take a 1 MiB
+	// scratch buffer out of bodyBufPool permanently. Let rapidyenc allocate
+	// storage sized for this article, just as DecodeBodyInto does when called
+	// with an empty destination.
+	res, err := c.requestBodyBuffered(messageID, nil, false)
 	if err != nil {
 		return nil, nil, err
 	}

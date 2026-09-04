@@ -16,6 +16,7 @@ import (
 	debrid "github.com/sirrobot01/decypharr/pkg/debrid/common"
 	debridTypes "github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"github.com/sirrobot01/decypharr/pkg/manager"
+	"github.com/sirrobot01/decypharr/pkg/storage"
 )
 
 // Collector owns the cached stats snapshot and the HTTP handler.
@@ -167,9 +168,12 @@ func (c *Collector) collect() *Snapshot {
 
 	// --- Queue ---
 	if queue := c.mgr.JobQueue(); queue != nil {
+		// Active counts entries actually downloading, not jobs holding a
+		// worker slot: a worker is released once the job is handed off to the
+		// queue scheduler, well before the download finishes.
 		snap.Queue = QueueStats{
 			Pending: queue.Len(),
-			Active:  queue.ActiveCount(),
+			Active:  c.mgr.Storage().CountQueuedByState(storage.EntryStateDownloading),
 		}
 	}
 

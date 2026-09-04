@@ -1328,12 +1328,16 @@ func (c *Client) keepAliveBatch(pp *ProviderPool, toPing []*connectionEntry, now
 	if flushed {
 		c.flushIdle(pp)
 	}
-	c.logger.Debug().Err(firstErr).
-		Str("provider", pp.config.Host).
-		Int("failed", failed).
-		Int("batch", len(toPing)).
-		Bool("pool_flushed", flushed).
-		Msg("keepalive pings failed, closed idle connections")
+
+	// If it's a timeout, or skippable error, skip logs
+	if !customerror.IsSilentError(firstErr) {
+		c.logger.Trace().Err(firstErr).
+			Str("provider", pp.config.Host).
+			Int("failed", failed).
+			Int("batch", len(toPing)).
+			Bool("pool_flushed", flushed).
+			Msg("keepalive pings failed, closed idle connections")
+	}
 }
 
 // keepAlive pings an idle connection that was removed from the pool (with a

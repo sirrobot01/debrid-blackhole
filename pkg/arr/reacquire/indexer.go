@@ -237,10 +237,6 @@ func (i *Indexer) handle(ctx context.Context, request indexRequest) {
 		var stats matchStats
 		stats, err = i.reconcile(ctx, instance, request, managed)
 		if err == nil && stats.matched() > 0 {
-			stats.fields(i.logger.Info()).
-				Str("arr", request.arrName).
-				Str("entry_id", request.entryID).
-				Msg("Indexed Arr entry")
 			return
 		}
 		if err == nil {

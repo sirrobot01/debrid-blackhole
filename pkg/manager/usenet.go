@@ -96,7 +96,12 @@ func (m *Manager) processNZBJob(ctx context.Context, job *Job) error {
 		if err != nil {
 			return fmt.Errorf("read staged NZB: %w", err)
 		}
-		meta, groups, err := m.usenet.ParseWithID(ctx, job.Entry.InfoHash, job.Request.Name, content, job.Request.Arr.Name)
+		// Parsing stats segments over NNTP. It ran on the bare queue context,
+		// so a degraded provider held the worker slot with no upper bound;
+		// give it the same budget the processing stage gets.
+		parseCtx, cancelParse := context.WithTimeout(ctx, m.usenetTimeout)
+		meta, groups, err := m.usenet.ParseWithID(parseCtx, job.Entry.InfoHash, job.Request.Name, content, job.Request.Arr.Name)
+		cancelParse()
 		if err != nil {
 			// A missing article at the parse stage is a definitive
 			// availability result: record and share it before failing the

@@ -230,3 +230,25 @@ func TestGetHeaderPrefixSnippet(t *testing.T) {
 		t.Fatalf("meta = %+v", meta)
 	}
 }
+
+func TestGetDecodedBodyWithMetadataDoesNotRetainScratchBuffer(t *testing.T) {
+	t.Parallel()
+
+	conn, server := newBodyTestConn(t)
+	payload := testPayload(4 * 1024)
+	serveResponses(t, server, "222 0 <a@b> body\r\n"+encodeBody(payload)+".\r\n")
+
+	decoded, metadata, err := conn.GetDecodedBodyWithMetadata("<a@b>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decoded, payload) {
+		t.Fatal("payload corrupted")
+	}
+	if metadata == nil || metadata.PartSize != int64(len(payload)) {
+		t.Fatalf("metadata = %+v", metadata)
+	}
+	if cap(decoded) >= 1<<20 {
+		t.Fatalf("4 KiB escaping body retains %d-byte scratch allocation", cap(decoded))
+	}
+}

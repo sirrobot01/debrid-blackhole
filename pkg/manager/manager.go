@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -377,14 +378,25 @@ func (m *Manager) processJob(ctx context.Context, job *Job) {
 		}
 		return
 	}
-
-	m.waitForDownloadCompletion(ctx, job.Entry)
+	// The worker slot is released as soon as the job is handed off. Waiting
+	// here until the entry left the downloading state parked a worker for the
+	// whole post-download lifecycle - including the 30 minute mount wait of the
+	// symlink action - so a handful of slow imports stalled every job the arrs
+	// submitted. processQueuedEntries drives the entry from here.
 }
+
+// activeDownloadWaitTimeout bounds how long a job may hold a worker slot while
+// it waits on an entry it does not drive itself. Without a bound, an entry the
+// queue scheduler never picks up parked its worker forever, and enough of them
+// drained the pool to zero.
+const activeDownloadWaitTimeout = 35 * time.Minute
 
 func (m *Manager) waitForDownloadCompletion(ctx context.Context, entry *storage.Entry) {
 	if entry == nil {
 		return
 	}
+	ctx, cancel := context.WithTimeout(ctx, activeDownloadWaitTimeout)
+	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -394,6 +406,13 @@ func (m *Manager) waitForDownloadCompletion(ctx context.Context, entry *storage.
 		}
 		select {
 		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				m.logger.Warn().
+					Str("name", entry.Name).
+					Str("infohash", entry.InfoHash).
+					Dur("waited", activeDownloadWaitTimeout).
+					Msg("Stopped waiting for download completion, releasing worker slot")
+			}
 			return
 		case <-ticker.C:
 		}

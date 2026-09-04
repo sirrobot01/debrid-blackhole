@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Tensai75/nzbparser"
 	"github.com/sirrobot01/decypharr/internal/nntp"
 	"github.com/sirrobot01/decypharr/pkg/storage"
+	"github.com/sirrobot01/decypharr/pkg/usenet/manifest"
 )
 
 const maxCorruptHeaderProbes = 4
@@ -44,29 +44,24 @@ func headerProbeOrder(count int) []int {
 // missing responses do not consume article bodies and therefore do not count
 // against the corruption-probe ceiling. A decoded-but-corrupt response does
 // consume bandwidth, so at most maxCorruptHeaderProbes are attempted.
-func fetchFileHeaderPrefix(ctx context.Context, manager *nntp.Client, file nzbparser.NzbFile, maxSnippet int) (*nntp.YencMetadata, error) {
+func fetchFileHeaderPrefix(ctx context.Context, source ArticleSource, file manifest.File, maxSnippet int) (*nntp.YencMetadata, error) {
 	if len(file.Segments) == 0 {
 		return nil, fmt.Errorf("file has no segments")
 	}
-	if manager == nil {
-		return nil, fmt.Errorf("NNTP client is nil")
+	if source == nil {
+		return nil, fmt.Errorf("article source is nil")
 	}
 
 	var lastErr error
 	corruptProbes := 0
 	for _, index := range headerProbeOrder(len(file.Segments)) {
 		segment := file.Segments[index]
-		if segment.Id == "" {
+		if segment.MessageID == "" {
 			lastErr = fmt.Errorf("segment %d has no message ID", segment.Number)
 			continue
 		}
 
-		var metadata *nntp.YencMetadata
-		err := manager.ExecuteWithFailover(ctx, func(conn *nntp.Connection) error {
-			value, fetchErr := conn.GetHeaderPrefix(segment.Id, maxSnippet)
-			metadata = value
-			return fetchErr
-		})
+		metadata, err := source.Header(ctx, segment.MessageID, maxSnippet)
 		if err == nil {
 			if metadata == nil {
 				return nil, fmt.Errorf("segment header contained no yEnc metadata")
@@ -94,22 +89,13 @@ func fetchFileHeaderPrefix(ctx context.Context, manager *nntp.Client, file nzbpa
 
 // fetchFileHeader obtains yEnc topology while allowing any healthy part to
 // stand in for a missing first article.
-func fetchFileHeader(ctx context.Context, manager *nntp.Client, file nzbparser.NzbFile) (*nntp.YencMetadata, error) {
-	return fetchFileHeaderPrefix(ctx, manager, file, metadataOnly)
+func fetchFileHeader(ctx context.Context, source ArticleSource, file manifest.File) (*nntp.YencMetadata, error) {
+	return fetchFileHeaderPrefix(ctx, source, file, metadataOnly)
 }
 
 // fetchSegmentData returns exactly the decoded bytes described by segment.
-func fetchSegmentData(ctx context.Context, manager *nntp.Client, segment storage.NZBSegment) ([]byte, error) {
-	var (
-		body []byte
-	)
-	err := manager.ExecuteWithFailover(ctx, func(conn *nntp.Connection) error {
-		decoded, fetchErr := conn.GetDecodedBody(segment.MessageID)
-		if fetchErr == nil {
-			body = decoded
-		}
-		return fetchErr
-	})
+func fetchSegmentData(ctx context.Context, source ArticleSource, segment storage.NZBSegment) ([]byte, error) {
+	body, err := source.Body(ctx, segment.MessageID)
 	if err != nil {
 		return nil, err
 	}

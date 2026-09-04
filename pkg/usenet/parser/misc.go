@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Tensai75/nzbparser"
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"github.com/sirrobot01/decypharr/pkg/storage"
+	"github.com/sirrobot01/decypharr/pkg/usenet/manifest"
 	"github.com/sirrobot01/decypharr/pkg/usenet/types"
 )
 
@@ -79,9 +79,9 @@ func wrapNZBFile(f *storage.NZBFile) ([]*storage.NZBFile, error) {
 }
 
 // fileMetaKey returns a stable key for associating per-file metadata.
-func fileMetaKey(file nzbparser.NzbFile) string {
+func fileMetaKey(file manifest.File) string {
 	if len(file.Segments) > 0 {
-		return "m:" + file.Segments[0].Id
+		return "m:" + file.Segments[0].MessageID
 	}
 	if file.Subject != "" {
 		return "s:" + file.Subject
@@ -97,6 +97,7 @@ func getGroupsList(groups map[string]struct{}) []string {
 	for g := range groups {
 		result = append(result, g)
 	}
+	sort.Strings(result)
 	return result
 }
 
@@ -123,7 +124,7 @@ func determineExtension(group *FileGroup) string {
 	return ""
 }
 
-func getNZBSegments(index int, file nzbparser.NzbFile, group *FileGroup) (int64, []storage.NZBSegment) {
+func getNZBSegments(index int, file manifest.File, group *FileGroup) (int64, []storage.NZBSegment) {
 	if len(file.Segments) == 0 {
 		return 0, nil
 	}
@@ -177,7 +178,7 @@ func getNZBSegments(index int, file nzbparser.NzbFile, group *FileGroup) (int64,
 	for idx, segment := range file.Segments {
 		// A segment without a message id can never be fetched; it would also
 		// defeat the empty-slot duplicate check below.
-		if segment.Id == "" {
+		if segment.MessageID == "" {
 			return 0, nil
 		}
 		segSize := metadata.segmentSize
@@ -220,7 +221,7 @@ func getNZBSegments(index int, file nzbparser.NzbFile, group *FileGroup) (int64,
 
 		seg := storage.NZBSegment{
 			Number:      segment.Number,
-			MessageID:   segment.Id,
+			MessageID:   segment.MessageID,
 			Bytes:       segSize,
 			StartOffset: currentOffset,
 			EndOffset:   currentOffset + segSize - 1,
@@ -312,6 +313,13 @@ func buildExtractedArchiveFiles(
 	if len(baseSegments) == 0 {
 		return nil, fmt.Errorf("archive has no base segments")
 	}
+	segmentIndex, err := newSegmentLayout(baseSegments)
+	if err != nil {
+		return nil, fmt.Errorf("index archive source segments: %w", err)
+	}
+	if err := segmentIndex.validateVolumes(volumeInfos); err != nil {
+		return nil, fmt.Errorf("validate archive volume layout: %w", err)
+	}
 	files := make([]*storage.NZBFile, 0, len(infos))
 
 	for _, info := range infos {
@@ -334,7 +342,7 @@ func buildExtractedArchiveFiles(
 			segments = info.Segments
 		} else if info.DataOffset > 0 || info.FileSize > 0 {
 			// Slice segments for this file's byte range
-			sliced, err := sliceSegmentsForRangeSimple(baseSegments, info.DataOffset, info.FileSize)
+			sliced, err := segmentIndex.slice(info.DataOffset, info.FileSize, true)
 			if err != nil || len(sliced) == 0 {
 				if err == nil {
 					err = fmt.Errorf("no source segments overlap the file range")

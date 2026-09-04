@@ -189,6 +189,42 @@ func (s *NZBStorage) GetNZBHeader(id string) (*storage.NZB, error) {
 	return decodeNZB(data)
 }
 
+// GetNZBFile returns one file of an NZB with its segment map. It decodes only
+// the requested file, so probing one file of a large NZB neither builds nor
+// retains the segment maps of every other file - the full decode aliases every
+// message id into one large buffer, which then stays alive for as long as any
+// of those ids does. Legacy proto files fall back to a full decode. A nil file
+// with a nil error means the file was not found or is deleted.
+func (s *NZBStorage) GetNZBFile(id, filename string) (*storage.NZBFile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	path := s.metaFilePath(id)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("nzb not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to read NZB meta file: %w", err)
+	}
+
+	if isCodecV2(data) {
+		return decodeFileV2(data, filename)
+	}
+
+	nzb, err := decodeNZB(data)
+	if err != nil {
+		return nil, err
+	}
+	for i := range nzb.Files {
+		if nzb.Files[i].Name == filename && !nzb.Files[i].IsDeleted {
+			file := nzb.Files[i]
+			return &file, nil
+		}
+	}
+	return nil, nil
+}
+
 // SampleFileMessageIDs returns the sampled message ids for a single file,
 // used by availability/repair probes. For v2 blobs it decodes only that file's
 // sampled ids (no numeric columns, no NZBSegment allocation, no other files),

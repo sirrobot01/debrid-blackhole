@@ -479,25 +479,31 @@ func (s *Service) NZBClaimedIncomplete(subject string) bool {
 }
 
 // zerologHandler maps slog records from the hearsay syncer onto
-// decypharr's zerolog logger, levels and attributes intact.
+// decypharr's zerolog logger. High-volume progress remains available at
+// debug level, while transient peer availability failures use trace.
 type zerologHandler struct {
 	log   zerolog.Logger
 	attrs []slog.Attr
 }
 
+const slogLevelTrace = slog.LevelDebug - 4
+
 func (h zerologHandler) Enabled(context.Context, slog.Level) bool { return true }
 
 func (h zerologHandler) Handle(_ context.Context, r slog.Record) error {
+	level := hearsayLogLevel(r.Level, r.Message)
 	var e *zerolog.Event
 	switch {
-	case r.Level >= slog.LevelError:
+	case level >= slog.LevelError:
 		e = h.log.Error()
-	case r.Level >= slog.LevelWarn:
+	case level >= slog.LevelWarn:
 		e = h.log.Warn()
-	case r.Level >= slog.LevelInfo:
+	case level >= slog.LevelInfo:
 		e = h.log.Info()
-	default:
+	case level >= slog.LevelDebug:
 		e = h.log.Debug()
+	default:
+		e = h.log.Trace()
 	}
 	// zerolog serializes opaque error structs to "{}"; keep the message.
 	add := func(key string, value any) {
@@ -516,6 +522,17 @@ func (h zerologHandler) Handle(_ context.Context, r slog.Record) error {
 	})
 	e.Msg(r.Message)
 	return nil
+}
+
+func hearsayLogLevel(level slog.Level, message string) slog.Level {
+	switch {
+	case level == slog.LevelInfo && (message == "published generation" || message == "ingested generation"):
+		return slog.LevelDebug
+	case level == slog.LevelWarn && message == "fetch failed":
+		return slogLevelTrace
+	default:
+		return level
+	}
 }
 
 func (h zerologHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
@@ -537,8 +554,8 @@ func NZBSubjectFromGroups(groups map[string]*parser.FileGroup) string {
 		}
 		for i := range g.Files {
 			for _, seg := range g.Files[i].Segments {
-				if seg.Id != "" {
-					ids = append(ids, seg.Id)
+				if seg.MessageID != "" {
+					ids = append(ids, seg.MessageID)
 				}
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/sirrobot01/decypharr/internal/nntp"
 	"github.com/sirrobot01/decypharr/internal/utils"
 	"github.com/sirrobot01/decypharr/pkg/storage"
+	"github.com/sirrobot01/decypharr/pkg/usenet/parser"
 )
 
 // verifyHeadBytes is how much of the file head is read for verification. It
@@ -78,6 +79,21 @@ func headSignatureOK(head []byte) bool {
 func (u *Usenet) VerifyFileHead(ctx context.Context, file *storage.NZBFile) error {
 	if file.Size > 0 && file.Size < verifyHeadBytes {
 		return nil // too small to classify; not worth failing a grab over
+	}
+	if u.analyzer != nil {
+		head, err := u.analyzer.ReadFilePrefix(ctx, file, verifyHeadBytes)
+		if err == nil {
+			if headSignatureOK(head) {
+				return nil
+			}
+			return fmt.Errorf("head of %q matches no media container signature: %w", file.Name, customerror.UsenetCorruptContentError)
+		}
+		if !errors.Is(err, parser.ErrPrefixReadUnsupported) {
+			if nntp.IsArticleNotFoundError(err) {
+				return fmt.Errorf("head article of %q missing: %w", file.Name, customerror.UsenetSegmentMissingError)
+			}
+			return err
+		}
 	}
 	entry, err := u.createEntry(file, 0, RetentionWindow)
 	if err != nil {

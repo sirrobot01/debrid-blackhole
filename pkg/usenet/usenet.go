@@ -249,6 +249,7 @@ func (r *contextSectionReader) Read(p []byte) (int, error) {
 
 type Usenet struct {
 	nntp                     *nntp.Client
+	analyzer                 *parser.NZBParser
 	fetchScheduler           *reader.FetchScheduler
 	logger                   zerolog.Logger
 	metadataDir              string
@@ -362,6 +363,7 @@ func New() (*Usenet, error) {
 	u := &Usenet{
 		nzbStorage:               nzbStorage,
 		nntp:                     client,
+		analyzer:                 parser.NewParser(client, processingMaxConns, _logger.With().Str("component", "parser").Logger()),
 		fetchScheduler:           reader.NewFetchScheduler(maxConns),
 		logger:                   _logger,
 		metadataDir:              metadataDir,
@@ -543,13 +545,10 @@ func (u *Usenet) ParseWithID(ctx context.Context, id, name string, content []byt
 		return nil, nil, fmt.Errorf("invalid NZB content: %w", err)
 	}
 
-	// Create parser with the manager
-	prs := parser.NewParser(u.nntp, u.processingMaxConnections, u.logger.With().Str("component", "parser").Logger())
-
 	// Quick parse: defer archive extraction for async processing.
 	// Groups survive a stat failure so the caller can identify the
 	// dead post.
-	nzb, groups, err := prs.Parse(ctx, name, content)
+	nzb, groups, err := u.analyzer.Parse(ctx, name, content)
 	if err != nil {
 		return nil, groups, err
 	}
@@ -595,10 +594,8 @@ func (u *Usenet) Process(ctx context.Context, nzb *storage.NZB, groups map[strin
 		Str("name", nzb.Name).
 		Msg("Processing archive files in NZB")
 
-	// Create parser with the manager
-	prs := parser.NewParser(u.nntp, u.processingMaxConnections, u.logger.With().Str("component", "parser").Logger())
 	// Process the groups (archives)
-	updatedNZB, err := prs.Process(ctx, nzb, groups)
+	updatedNZB, err := u.analyzer.Process(ctx, nzb, groups)
 	if err != nil {
 		// Mark as failed
 		_ = u.markAsFailed(nzb, err)
@@ -706,6 +703,10 @@ func (u *Usenet) checkAvailability(ctx context.Context, fileName string, message
 	if len(messageIDs) == 0 {
 		return nil
 	}
+	messageIDs = u.analyzer.FilterUnobserved(messageIDs)
+	if len(messageIDs) == 0 {
+		return nil
+	}
 
 	result, err := u.nntp.BatchStat(ctx, messageIDs)
 	if err != nil {
@@ -801,44 +802,17 @@ func (u *Usenet) Close() error {
 }
 
 func (u *Usenet) getFile(nzoID, filename string) (*storage.NZBFile, error) {
-	files, err := u.getFiles(nzoID, []string{filename})
-	if err != nil {
-		return nil, err
-	}
-	file := files[filename]
-	if file == nil {
-		return nil, fmt.Errorf("file %s not found in NZB %s", filename, nzoID)
-	}
-	return file, nil
-}
-
-func (u *Usenet) getFiles(nzoID string, filenames []string) (map[string]*storage.NZBFile, error) {
-	nzb, err := u.nzbStorage.GetNZB(nzoID)
+	file, err := u.nzbStorage.GetNZBFile(nzoID, filename)
 	if err != nil {
 		return nil, fmt.Errorf("metadata load failed: %w", err)
 	}
-
-	requested := make(map[string]struct{}, len(filenames))
-	for _, filename := range filenames {
-		requested[filename] = struct{}{}
+	if file == nil {
+		return nil, fmt.Errorf("file %s not found in NZB %s", filename, nzoID)
 	}
-
-	files := make(map[string]*storage.NZBFile, len(requested))
-	for i := range nzb.Files {
-		source := nzb.Files[i]
-		if source.IsDeleted {
-			continue
-		}
-		if _, ok := requested[source.Name]; !ok {
-			continue
-		}
-		file := source
-		if file.NzbID == "" {
-			file.NzbID = nzoID
-		}
-		files[file.Name] = &file
+	if file.NzbID == "" {
+		file.NzbID = nzoID
 	}
-	return files, nil
+	return file, nil
 }
 
 func (u *Usenet) preStreamChecks(file *storage.NZBFile) error {
@@ -1165,6 +1139,7 @@ func (u *Usenet) Stats() map[string]any {
 	stats := u.nntp.Stats()
 	stats["readers"] = u.fs.Size()
 	stats["nzb_storage"] = u.nzbStorage.Stats()
+	stats["analyzer"] = u.analyzer.Metrics()
 	return stats
 }
 

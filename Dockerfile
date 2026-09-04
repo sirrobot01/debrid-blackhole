@@ -83,6 +83,9 @@ RUN chmod +x /entrypoint.sh
 ENV PUID=1000
 ENV PGID=1000
 ENV LOG_PATH=/app/logs
+# This anacrolix diagnostic fires whenever an internal unlock handler takes
+# 20ms; actual torrent errors remain visible and operators can override it.
+ENV GO_LOG=client-unlock-handlers.go=err
 
 EXPOSE 8282
 VOLUME ["/app"]

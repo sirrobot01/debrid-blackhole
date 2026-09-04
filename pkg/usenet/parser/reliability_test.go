@@ -6,21 +6,21 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Tensai75/nzbparser"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/decypharr/internal/config"
 	"github.com/sirrobot01/decypharr/internal/customerror"
 	"github.com/sirrobot01/decypharr/internal/nntp"
 	"github.com/sirrobot01/decypharr/internal/testutil/nntpd"
 	"github.com/sirrobot01/decypharr/pkg/storage"
+	"github.com/sirrobot01/decypharr/pkg/usenet/manifest"
 	"github.com/sirrobot01/decypharr/pkg/usenet/types"
 )
 
 func TestProbeContentAvailabilityReportsAllMissingContent(t *testing.T) {
 	p := &NZBParser{logger: zerolog.Nop()}
 	groups := map[string]*FileGroup{
-		"b": {BaseName: "b", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "b@example"}}}}},
-		"a": {BaseName: "a", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "a@example"}}}}},
+		"b": {BaseName: "b", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "b@example"}}}}},
+		"a": {BaseName: "a", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "a@example"}}}}},
 	}
 	missing := &nntp.Error{Type: nntp.ErrorTypeArticleNotFound, Code: 430, Message: "missing"}
 
@@ -40,8 +40,8 @@ func TestProbeContentAvailabilityReportsAllMissingContent(t *testing.T) {
 func TestProbeContentAvailabilityAcceptsAnotherAvailableGroup(t *testing.T) {
 	p := &NZBParser{logger: zerolog.Nop()}
 	groups := map[string]*FileGroup{
-		"a": {BaseName: "a", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "missing@example"}}}}},
-		"b": {BaseName: "b", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "available@example"}}}}},
+		"a": {BaseName: "a", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "missing@example"}}}}},
+		"b": {BaseName: "b", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "available@example"}}}}},
 	}
 	missing := &nntp.Error{Type: nntp.ErrorTypeArticleNotFound, Code: 430, Message: "missing"}
 	err := p.probeContentAvailability(context.Background(), groups, func(_ context.Context, messageID string) error {
@@ -58,8 +58,8 @@ func TestProbeContentAvailabilityAcceptsAnotherAvailableGroup(t *testing.T) {
 func TestProbeContentAvailabilityStopsOnOperationalError(t *testing.T) {
 	p := &NZBParser{logger: zerolog.Nop()}
 	groups := map[string]*FileGroup{
-		"a": {BaseName: "a", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "a@example"}}}}},
-		"b": {BaseName: "b", Files: []nzbparser.NzbFile{{Segments: nzbparser.NzbSegments{{Number: 1, Id: "b@example"}}}}},
+		"a": {BaseName: "a", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "a@example"}}}}},
+		"b": {BaseName: "b", Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "b@example"}}}}},
 	}
 	wantErr := errors.New("authentication failed")
 	calls := 0
@@ -69,6 +69,26 @@ func TestProbeContentAvailabilityStopsOnOperationalError(t *testing.T) {
 	})
 	if !errors.Is(err, wantErr) || calls != 1 {
 		t.Fatalf("operational error probe = calls %d, err %v", calls, err)
+	}
+}
+
+func TestProbeContentAvailabilityReusesBodyObservation(t *testing.T) {
+	backend := &fakeArticleBackend{}
+	broker := newArticleBroker(backend, 1, 1<<20)
+	if _, err := broker.Body(t.Context(), "observed@example"); err != nil {
+		t.Fatal(err)
+	}
+	p := NewParserWithSource(broker, 1, zerolog.Nop())
+	groups := map[string]*FileGroup{
+		"content": {BaseName: "content", articleObserved: true, Files: []manifest.File{{Segments: []manifest.Segment{{Number: 1, MessageID: "observed@example"}}}}},
+	}
+	calls := 0
+	err := p.probeContentAvailability(t.Context(), groups, func(context.Context, string) error {
+		calls++
+		return errors.New("STAT should not run")
+	})
+	if err != nil || calls != 0 {
+		t.Fatalf("observed availability = calls %d, err %v", calls, err)
 	}
 }
 
@@ -174,6 +194,9 @@ func TestExtensionlessObfuscatedMediaProducesLogicalFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := p.Metrics().NetworkStats; got != 0 {
+		t.Fatalf("content-classified post made %d redundant STAT requests", got)
+	}
 	files, err := p.processFileGroups(t.Context(), groups, "")
 	if err != nil {
 		t.Fatal(err)
@@ -187,11 +210,11 @@ func TestExtensionlessObfuscatedMediaProducesLogicalFile(t *testing.T) {
 }
 
 func TestProcessMediaRebasesLogicalOffsets(t *testing.T) {
-	first := nzbparser.NzbFile{Filename: "movie.mkv", Number: 1, Groups: []string{"alt.test"}, Segments: nzbparser.NzbSegments{{Number: 1, Id: "one@example", Bytes: 5}}}
-	second := nzbparser.NzbFile{Filename: "movie.mkv", Number: 2, Groups: []string{"alt.test"}, Segments: nzbparser.NzbSegments{{Number: 1, Id: "two@example", Bytes: 4}}}
+	first := manifest.File{Filename: "movie.mkv", Number: 1, Groups: []string{"alt.test"}, Segments: []manifest.Segment{{Number: 1, MessageID: "one@example", Bytes: 5}}}
+	second := manifest.File{Filename: "movie.mkv", Number: 2, Groups: []string{"alt.test"}, Segments: []manifest.Segment{{Number: 1, MessageID: "two@example", Bytes: 4}}}
 	group := &FileGroup{
 		BaseName: "movie", ActualFilename: "movie.mkv", Type: storage.NZBFileTypeMedia,
-		Files: []nzbparser.NzbFile{first, second}, metadata: &fileAnalysisResult{fileSize: 4, lastFileSize: 3, segmentSize: 4},
+		Files: []manifest.File{first, second}, metadata: &fileAnalysisResult{fileSize: 4, lastFileSize: 3, segmentSize: 4},
 		Groups: map[string]struct{}{"alt.test": {}},
 	}
 	file := (&NZBParser{logger: zerolog.Nop()}).processMediaFile(group, "")
@@ -224,9 +247,9 @@ func TestArchiveSlicersRejectPartiallyCoveredRanges(t *testing.T) {
 func TestArchiveBuildersRejectIncompleteVolume(t *testing.T) {
 	group := &FileGroup{
 		BaseName: "archive", metadata: &fileAnalysisResult{fileSize: 8, lastFileSize: 8, segmentSize: 4},
-		Files: []nzbparser.NzbFile{
-			{Filename: "archive.rar", Segments: nzbparser.NzbSegments{{Number: 1, Id: "a", Bytes: 5}, {Number: 2, Id: "b", Bytes: 5}}},
-			{Filename: "archive.r00", Segments: nzbparser.NzbSegments{{Number: 1, Id: "c", Bytes: 5}, {Number: 3, Id: "d", Bytes: 5}}},
+		Files: []manifest.File{
+			{Filename: "archive.rar", Segments: []manifest.Segment{{Number: 1, MessageID: "a", Bytes: 5}, {Number: 2, MessageID: "b", Bytes: 5}}},
+			{Filename: "archive.r00", Segments: []manifest.Segment{{Number: 1, MessageID: "c", Bytes: 5}, {Number: 3, MessageID: "d", Bytes: 5}}},
 		},
 	}
 	if _, err := buildArchiveVolumeDescriptors(group); err == nil {
@@ -240,10 +263,37 @@ func TestArchiveBuildersRejectIncompleteVolume(t *testing.T) {
 func TestObfuscatedRARMergeDoesNotCombineNamedStandaloneArchives(t *testing.T) {
 	p := &NZBParser{logger: zerolog.Nop()}
 	groups := map[string]*FileGroup{
-		"movie":  {BaseName: "movie", ActualFilename: "Movie.rar", Type: storage.NZBFileTypeRar, Files: []nzbparser.NzbFile{{Filename: "Movie.rar"}}},
-		"extras": {BaseName: "extras", ActualFilename: "Extras.rar", Type: storage.NZBFileTypeRar, Files: []nzbparser.NzbFile{{Filename: "Extras.rar"}}},
+		"movie":  {BaseName: "movie", ActualFilename: "Movie.rar", Type: storage.NZBFileTypeRar, Files: []manifest.File{{Filename: "Movie.rar"}}},
+		"extras": {BaseName: "extras", ActualFilename: "Extras.rar", Type: storage.NZBFileTypeRar, Files: []manifest.File{{Filename: "Extras.rar"}}},
 	}
 	if got := p.mergeObfuscatedRarGroups(groups); len(got) != 2 {
 		t.Fatalf("named standalone RAR group count = %d, want 2", len(got))
+	}
+}
+
+func TestProcessFileGroupsUsesManifestOrderAndSortedGroups(t *testing.T) {
+	backend := &fakeArticleBackend{bodySize: 16}
+	p := NewParserWithSource(newArticleBroker(backend, 2, 1<<20), 2, zerolog.Nop())
+	groups := map[string]*FileGroup{
+		"a": {
+			BaseName: "a", ActualFilename: "a.mkv", Type: storage.NZBFileTypeMedia,
+			Files:  []manifest.File{{Order: 1, Number: 2, Filename: "a.mkv", Groups: []string{"z", "a"}, Segments: []manifest.Segment{{Number: 1, MessageID: "a.mkv", Bytes: 16}}}},
+			Groups: map[string]struct{}{"z": {}, "a": {}},
+		},
+		"b": {
+			BaseName: "b", ActualFilename: "b.mkv", Type: storage.NZBFileTypeMedia,
+			Files:  []manifest.File{{Order: 0, Number: 1, Filename: "b.mkv", Groups: []string{"z", "a"}, Segments: []manifest.Segment{{Number: 1, MessageID: "b.mkv", Bytes: 16}}}},
+			Groups: map[string]struct{}{"z": {}, "a": {}},
+		},
+	}
+	files, err := p.processFileGroups(t.Context(), groups, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || files[0].Name != "b.mkv" || files[1].Name != "a.mkv" {
+		t.Fatalf("logical file order = %#v", files)
+	}
+	if want := []string{"a", "z"}; !slices.Equal(files[0].Groups, want) || !slices.Equal(files[1].Groups, want) {
+		t.Fatalf("logical newsgroups = %v / %v, want %v", files[0].Groups, files[1].Groups, want)
 	}
 }

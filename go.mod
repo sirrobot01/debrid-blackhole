@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/Tensai75/nzbparser v0.1.0
+	github.com/Tensai75/subjectparser v0.1.0
 	github.com/anacrolix/torrent v1.61.0
 	github.com/bytedance/sonic v1.15.0
 	github.com/cavaliergopher/grab/v3 v3.0.1
@@ -37,7 +38,6 @@ require (
 
 require (
 	github.com/RoaringBitmap/roaring v1.2.3 // indirect
-	github.com/Tensai75/subjectparser v0.1.0 // indirect
 	github.com/alecthomas/atomic v0.1.0-alpha2 // indirect
 	github.com/anacrolix/btree v0.0.0-20251201064447-d86c3fa41bd8 // indirect
 	github.com/anacrolix/chansync v0.7.0 // indirect
