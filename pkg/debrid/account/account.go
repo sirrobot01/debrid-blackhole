@@ -49,6 +49,13 @@ func (a *Account) sliceFileLink(fileLink string) string {
 func (a *Account) GetDownloadLink(id string, file *types.File, fetcher LinkFetcher) (types.DownloadLink, error) {
 	slicedLink := a.sliceFileLink(file.Link)
 	dl, ok := a.links.Load(slicedLink)
+	if ok && dl.Expired() {
+		// The cache is keyed by file link, not by lifetime, so an entry can
+		// outlive the download URL it holds. Serving it only buys a doomed
+		// request downstream, so drop it and fetch a fresh one.
+		a.links.Delete(slicedLink)
+		ok = false
+	}
 	if !ok {
 		var err error
 		dl, err = fetcher(a, id, file)
